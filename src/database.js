@@ -1,11 +1,10 @@
 const Database = require('better-sqlite3');
 const path = require('path');
 
-const DB_PATH = path.join(__dirname, '..', 'data', 'padel.db');
-
-// Zorg dat de data map bestaat
+// DATA_DIR env var voor cloud deployments (bijv. Railway persistent volume)
 const fs = require('fs');
-const dataDir = path.join(__dirname, '..', 'data');
+const dataDir = process.env.DATA_DIR || path.join(__dirname, '..', 'data');
+const DB_PATH = path.join(dataDir, 'padel.db');
 if (!fs.existsSync(dataDir)) {
   fs.mkdirSync(dataDir, { recursive: true });
 }

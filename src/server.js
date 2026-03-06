@@ -5,8 +5,8 @@ const fs = require('fs');
 
 const app = express();
 
-// Zorg dat data map bestaat voor sessies
-const dataDir = path.join(__dirname, '..', 'data');
+// DATA_DIR env var voor cloud deployments (bijv. Railway persistent volume)
+const dataDir = process.env.DATA_DIR || path.join(__dirname, '..', 'data');
 if (!fs.existsSync(dataDir)) {
   fs.mkdirSync(dataDir, { recursive: true });
 }
