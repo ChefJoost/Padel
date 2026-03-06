@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Padel Planner</title>
+  <link rel="stylesheet" href="/css/style.css" />
+</head>
+<body>
+
+<!-- AUTH SCHERM -->
+<div id="auth-screen" class="screen">
+  <div class="auth-card">
+    <div class="logo">🎾</div>
+    <h1>Padel Planner</h1>
+    <p class="subtitle">Plan samen je padel potjes</p>
+
+    <div class="tab-bar">
+      <button class="tab active" onclick="showTab('login')">Inloggen</button>
+      <button class="tab" onclick="showTab('register')">Registreren</button>
+    </div>
+
+    <!-- Login form -->
+    <form id="login-form" onsubmit="handleLogin(event)">
+      <div class="form-group">
+        <label>Gebruikersnaam</label>
+        <input type="text" id="login-username" autocomplete="username" required />
+      </div>
+      <div class="form-group">
+        <label>Wachtwoord</label>
+        <input type="password" id="login-password" autocomplete="current-password" required />
+      </div>
+      <div id="login-error" class="error-msg hidden"></div>
+      <button type="submit" class="btn btn-primary btn-full">Inloggen</button>
+    </form>
+
+    <!-- Register form -->
+    <form id="register-form" class="hidden" onsubmit="handleRegister(event)">
+      <div class="form-group">
+        <label>Weergavenaam</label>
+        <input type="text" id="reg-display-name" placeholder="bijv. Joost" required />
+      </div>
+      <div class="form-group">
+        <label>Gebruikersnaam</label>
+        <input type="text" id="reg-username" autocomplete="username" placeholder="bijv. joost123" required />
+      </div>
+      <div class="form-group">
+        <label>Wachtwoord</label>
+        <input type="password" id="reg-password" autocomplete="new-password" minlength="6" required />
+      </div>
+      <div id="register-error" class="error-msg hidden"></div>
+      <button type="submit" class="btn btn-primary btn-full">Account aanmaken</button>
+    </form>
+  </div>
+</div>
+
+<!-- HOOFD APP -->
+<div id="app-screen" class="screen hidden">
+
+  <!-- Header -->
+  <header>
+    <div class="header-inner">
+      <h1>🎾 Padel Planner</h1>
+      <div class="header-user">
+        <span id="user-greeting"></span>
+        <button class="btn btn-outline btn-sm" onclick="handleLogout()">Uitloggen</button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Content -->
+  <main>
+    <div class="page-header">
+      <h2>Aankomende potjes</h2>
+      <button class="btn btn-primary" onclick="showNewBookingModal()">+ Nieuwe boeking</button>
+    </div>
+
+    <div id="bookings-empty" class="empty-state hidden">
+      <div class="empty-icon">🎾</div>
+      <p>Nog geen boekingen gepland.</p>
+      <p>Maak de eerste aan!</p>
+    </div>
+
+    <div id="bookings-list" class="bookings-grid"></div>
+  </main>
+</div>
+
+<!-- MODAL: Nieuwe boeking -->
+<div id="booking-modal" class="modal-overlay hidden" onclick="closeModal(event)">
+  <div class="modal">
+    <div class="modal-header">
+      <h2>Nieuwe boeking</h2>
+      <button class="modal-close" onclick="hideNewBookingModal()">✕</button>
+    </div>
+    <form onsubmit="handleCreateBooking(event)">
+      <div class="form-group">
+        <label>Titel <span class="required">*</span></label>
+        <input type="text" id="b-title" placeholder="bijv. Zaterdag potje" required />
+      </div>
+      <div class="form-group">
+        <label>Locatie <span class="required">*</span></label>
+        <input type="text" id="b-location" placeholder="bijv. SportCenter Amsterdam" required />
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Datum <span class="required">*</span></label>
+          <input type="date" id="b-date" required />
+        </div>
+        <div class="form-group">
+          <label>Starttijd <span class="required">*</span></label>
+          <input type="time" id="b-start" required />
+        </div>
+        <div class="form-group">
+          <label>Eindtijd <span class="required">*</span></label>
+          <input type="time" id="b-end" required />
+        </div>
+      </div>
+      <div class="form-group">
+        <label>Notities</label>
+        <textarea id="b-notes" rows="2" placeholder="Optionele opmerkingen..."></textarea>
+      </div>
+      <div id="booking-error" class="error-msg hidden"></div>
+      <div class="modal-actions">
+        <button type="button" class="btn btn-outline" onclick="hideNewBookingModal()">Annuleren</button>
+        <button type="submit" class="btn btn-primary">Boeking aanmaken</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- MODAL: Boeking details -->
+<div id="detail-modal" class="modal-overlay hidden" onclick="closeModal(event)">
+  <div class="modal">
+    <div class="modal-header">
+      <h2 id="detail-title"></h2>
+      <button class="modal-close" onclick="hideDetailModal()">✕</button>
+    </div>
+    <div id="detail-content"></div>
+    <div id="detail-error" class="error-msg hidden"></div>
+    <div class="modal-actions" id="detail-actions"></div>
+  </div>
+</div>
+
+<script src="/js/app.js"></script>
+</body>
+</html>
