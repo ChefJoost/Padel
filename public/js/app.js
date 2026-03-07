@@ -520,7 +520,6 @@ async function showDetailModal(id) {
         <div class="field-row">
           <button class="btn btn-primary btn-full" onclick="handleSetPaymentUrl()">Opslaan</button>
         </div>
-        <div class="field-row hint-row">Deelnemers ontvangen een pushbericht.</div>
       </div>
     `;
   }
@@ -528,7 +527,10 @@ async function showDetailModal(id) {
   // Deelnemers
   const playerRows = b.participants.map(p => {
     const lvl = p.level ? ` <span class="p-level">niv. ${p.level}</span>` : '';
-    return `<div class="field-row"><span class="p-icon">🎾</span> ${escHtml(p.display_name)}${lvl}</div>`;
+    const icon = p.avatar
+      ? `<span class="p-avatar" style="background-image:url('${escAttr(p.avatar)}')"></span>`
+      : `<span class="p-icon">🎾</span>`;
+    return `<div class="field-row">${icon} ${escHtml(p.display_name)}${lvl}</div>`;
   });
   for (let i = b.participants.length; i < 4; i++) {
     playerRows.push(`<div class="field-row p-empty"><span class="p-icon">○</span> Vrije plek</div>`);
@@ -604,13 +606,20 @@ async function handleLeaveBooking() {
   hideDetailModal(); loadBookings();
 }
 
-async function handleDeleteBooking() {
-  if (!confirm('Weet je zeker dat je deze boeking wilt verwijderen?')) return;
-  clearError('detail-error');
-  const res  = await api(`/api/bookings/${currentDetailId}`, { method: 'DELETE' });
-  const data = await res.json();
-  if (!res.ok) return showError('detail-error', data.error);
-  hideDetailModal(); loadBookings();
+function handleDeleteBooking() {
+  document.getElementById('confirm-ok-btn').onclick = async () => {
+    closeConfirm();
+    clearError('detail-error');
+    const res  = await api(`/api/bookings/${currentDetailId}`, { method: 'DELETE' });
+    const data = await res.json();
+    if (!res.ok) return showError('detail-error', data.error);
+    hideDetailModal(); loadBookings();
+  };
+  document.getElementById('confirm-modal').classList.remove('hidden');
+}
+
+function closeConfirm() {
+  document.getElementById('confirm-modal').classList.add('hidden');
 }
 
 async function handleSetPaymentUrl() {
@@ -633,8 +642,8 @@ function showNewBookingModal() {
   document.getElementById('booking-form').reset();
   document.getElementById('b-date').value = today;
   document.getElementById('b-date').min   = today;
-  setTimeSelect('b-start', '10:00');
-  setTimeSelect('b-end',   '11:00');
+  setTimeSelect('b-start', '20:00');
+  setTimeSelect('b-end',   '21:00');
   document.getElementById('booking-modal').classList.remove('hidden');
 }
 
@@ -791,5 +800,10 @@ function setTimeSelect(id, val) {
 document.addEventListener('DOMContentLoaded', () => {
   initSwipeDismiss();
   populateTimeSelects();
+  document.getElementById('b-start').addEventListener('change', function () {
+    const [h, m] = this.value.split(':').map(Number);
+    const endH = (h + 1) % 24;
+    setTimeSelect('b-end', `${String(endH).padStart(2,'0')}:${String(m).padStart(2,'0')}`);
+  });
 });
 init();

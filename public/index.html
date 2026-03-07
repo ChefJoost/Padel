@@ -337,6 +337,20 @@
   </div>
 </div>
 
+<!-- ══════════════════════════════════════════════
+     MODAL: Bevestiging verwijderen
+══════════════════════════════════════════════ -->
+<div id="confirm-modal" class="confirm-overlay hidden">
+  <div class="confirm-dialog">
+    <div class="confirm-title">Boeking verwijderen</div>
+    <div class="confirm-msg">Weet je zeker dat je deze boeking wilt verwijderen?</div>
+    <div class="confirm-actions">
+      <button class="confirm-btn confirm-cancel" onclick="closeConfirm()">Annuleren</button>
+      <button class="confirm-btn confirm-ok" id="confirm-ok-btn">Verwijderen</button>
+    </div>
+  </div>
+</div>
+
 <script src="/js/app.js"></script>
 </body>
 </html>

@@ -70,7 +70,7 @@ router.get('/:id', requireAuth, (req, res) => {
   if (!booking) return res.status(404).json({ error: 'Boeking niet gevonden' });
 
   const participants = db.prepare(`
-    SELECT u.display_name, u.level, p.joined_at
+    SELECT u.display_name, u.level, u.avatar, p.joined_at
     FROM participants p
     JOIN users u ON p.user_id = u.id
     WHERE p.booking_id = ?

@@ -534,6 +534,7 @@ body {
 .hint-row { font-size: .8rem; color: var(--text-2); font-style: italic; }
 
 .p-icon  { font-size: .95rem; flex-shrink: 0; }
+.p-avatar { display: inline-block; width: 24px; height: 24px; border-radius: 50%; background-size: cover; background-position: center; flex-shrink: 0; vertical-align: middle; }
 .p-level { margin-left: auto; font-size: .78rem; color: var(--text-2); background: var(--bg); padding: 2px 7px; border-radius: 10px; }
 .p-empty { color: var(--text-3); }
 
@@ -696,3 +697,39 @@ body {
   transition: opacity .15s;
 }
 .btn-pay-small:active { opacity: .8; }
+
+/* ══════════════════════════════════════════════
+   CONFIRM DIALOG
+══════════════════════════════════════════════ */
+.confirm-overlay {
+  position: fixed; inset: 0; z-index: 9999;
+  background: rgba(0,0,0,.45);
+  display: flex; align-items: center; justify-content: center;
+}
+.confirm-overlay.hidden { display: none; }
+.confirm-dialog {
+  background: var(--card);
+  border-radius: 16px;
+  width: min(320px, calc(100vw - 48px));
+  overflow: hidden;
+  box-shadow: 0 8px 32px rgba(0,0,0,.25);
+}
+.confirm-title {
+  font-size: 1.05rem; font-weight: 600;
+  text-align: center; padding: 20px 20px 4px;
+}
+.confirm-msg {
+  font-size: .9rem; color: var(--text-2);
+  text-align: center; padding: 0 20px 20px;
+  line-height: 1.4;
+}
+.confirm-actions {
+  display: flex; border-top: 1px solid var(--separator);
+}
+.confirm-btn {
+  flex: 1; border: none; background: none; padding: 14px;
+  font-size: 1rem; cursor: pointer; transition: background .15s;
+}
+.confirm-btn:active { background: var(--bg); }
+.confirm-cancel { color: var(--text-1); border-right: 1px solid var(--separator); }
+.confirm-ok     { color: var(--red); font-weight: 600; }
