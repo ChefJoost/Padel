@@ -230,7 +230,7 @@ body {
 
 .btn-primary            { background: var(--green); color: #fff; }
 .btn-outline            { background: transparent; color: var(--green); border: 1.5px solid var(--green); }
-.btn-destructive-outline { background: transparent; color: var(--red); border: 1.5px solid var(--red); }
+.btn-destructive-outline { background: rgba(255, 59, 48, 0.08); color: var(--red); border: 1.5px solid var(--red); }
 .btn-destructive        { background: none; border: none; color: var(--red); font-size: .95rem; font-weight: 500; font-family: inherit; cursor: pointer; padding: 0; }
 
 /* ══════════════════════════════════════════════
@@ -534,7 +534,7 @@ body {
 .hint-row { font-size: .8rem; color: var(--text-2); font-style: italic; }
 
 .p-icon  { font-size: .95rem; flex-shrink: 0; }
-.p-avatar { display: inline-block; width: 24px; height: 24px; border-radius: 50%; background-size: cover; background-position: center; flex-shrink: 0; vertical-align: middle; }
+.p-avatar { display: inline-block; width: 22px; height: 22px; min-width: 22px; min-height: 22px; border-radius: 50%; background-size: cover; background-position: center; flex: none !important; align-self: center; }
 .p-level { margin-left: auto; font-size: .78rem; color: var(--text-2); background: var(--bg); padding: 2px 7px; border-radius: 10px; }
 .p-empty { color: var(--text-3); }
 
