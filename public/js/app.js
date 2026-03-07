@@ -115,12 +115,10 @@ async function handleLogin(e) {
 async function handleRegister(e) {
   e.preventDefault();
   clearError('register-error');
-  const level = parseInt(document.getElementById('reg-level').value, 10);
-  if (!level) return showError('register-error', 'Kies een speelniveau');
   const display_name = document.getElementById('reg-display-name').value;
   const username     = document.getElementById('reg-username').value;
   const password     = document.getElementById('reg-password').value;
-  const res  = await api('/api/auth/register', { method: 'POST', body: { username, display_name, password, level } });
+  const res  = await api('/api/auth/register', { method: 'POST', body: { username, display_name, password } });
   const data = await res.json();
   if (!res.ok) return showError('register-error', data.error);
   setUser(data);

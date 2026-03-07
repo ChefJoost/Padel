@@ -104,7 +104,8 @@ body {
   padding: 10px 0 2px;
 }
 
-/* Level picker */
+/* Level picker — tijdelijk verborgen */
+.level-section, .level-pill, .status-level, .p-level { display: none !important; }
 .level-section { margin-bottom: 16px; }
 .level-label {
   font-size: .82rem;
