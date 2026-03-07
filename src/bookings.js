@@ -30,7 +30,7 @@ router.get('/', requireAuth, (req, res) => {
       MAX(CASE WHEN p.user_id = ? THEN p.paid_at END) AS user_paid_at,
       MIN(u2.level) AS min_level,
       MAX(u2.level) AS max_level,
-      (SELECT GROUP_CONCAT(u3.display_name, '||')
+      (SELECT GROUP_CONCAT(display_name, '||')
        FROM (SELECT u3.display_name FROM participants p3
              JOIN users u3 ON p3.user_id = u3.id
              WHERE p3.booking_id = b.id
