@@ -174,6 +174,19 @@ body {
 .field-row textarea::placeholder { color: var(--text-3); }
 .field-row textarea { resize: none; }
 .field-row span { flex: 1; text-align: right; font-size: .95rem; color: var(--text-2); }
+.time-select {
+  flex: 1;
+  border: none;
+  outline: none;
+  font-size: .95rem;
+  font-family: inherit;
+  color: var(--text);
+  background: transparent;
+  text-align: right;
+  -webkit-appearance: none;
+  appearance: none;
+  cursor: pointer;
+}
 
 .section-header {
   font-size: .78rem;
@@ -326,6 +339,41 @@ body {
 .tab-icon { width: 24px; height: 24px; }
 
 /* ══════════════════════════════════════════════
+   FILTER BAR
+══════════════════════════════════════════════ */
+.filter-bar {
+  display: flex;
+  gap: 8px;
+  padding: 10px 16px 6px;
+  flex-shrink: 0;
+}
+.filter-group {
+  display: flex;
+  background: var(--surface);
+  border-radius: 8px;
+  overflow: hidden;
+  border: 1px solid var(--separator-opaque);
+}
+.filter-btn {
+  flex: 1;
+  padding: 6px 12px;
+  border: none;
+  background: transparent;
+  color: var(--text-2);
+  font-size: .82rem;
+  font-weight: 500;
+  font-family: inherit;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background .12s, color .12s;
+}
+.filter-btn.active {
+  background: var(--green);
+  color: #fff;
+  font-weight: 600;
+}
+
+/* ══════════════════════════════════════════════
    BOOKING CARDS
 ══════════════════════════════════════════════ */
 .cards-list { display: flex; flex-direction: column; gap: 10px; }
@@ -383,10 +431,9 @@ body {
   font-size: .78rem;
   font-weight: 700;
 }
-.spot-filled    { background: var(--green);  color: #fff; }
+.spot-player    { background: var(--green-dark); color: #fff; font-size: .65rem; background-size: cover; background-position: center; }
 .spot-empty     { background: var(--bg); border: 1.5px solid var(--separator-opaque); color: var(--text-3); }
-.spot-extra     { background: var(--orange); color: #fff; font-size: .7rem; }
-.spot-open-extra { background: var(--bg); border: 1.5px dashed var(--separator-opaque); color: var(--text-3); font-size: .7rem; }
+.booking-card--full { opacity: 0.5; filter: saturate(0.3); }
 
 .card-tags { display: flex; gap: 6px; flex-wrap: wrap; }
 

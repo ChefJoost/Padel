@@ -12,25 +12,36 @@ function requireAuth(req, res, next) {
   next();
 }
 
-// Alle boekingen ophalen (toekomstig + vandaag)
+// Alle boekingen ophalen (toekomstig + vandaag, of verleden met ?past=1)
 router.get('/', requireAuth, (req, res) => {
+  const past = req.query.past === '1';
+  const dateFilter = past
+    ? `b.date < date('now', 'localtime')`
+    : `b.date >= date('now', 'localtime')`;
+  const order = past ? 'DESC' : 'ASC';
+
   const bookings = db.prepare(`
     SELECT
-      b.id, b.title, b.location, b.date, b.start_time, b.end_time, b.notes,
+      b.id, b.title, b.date, b.start_time, b.end_time, b.notes,
       b.created_by, b.payment_url,
       u.display_name AS creator_name,
       COUNT(p.id) AS player_count,
       MAX(CASE WHEN p.user_id = ? THEN 1 ELSE 0 END) AS user_joined,
       MAX(CASE WHEN p.user_id = ? THEN p.paid_at END) AS user_paid_at,
       MIN(u2.level) AS min_level,
-      MAX(u2.level) AS max_level
+      MAX(u2.level) AS max_level,
+      (SELECT GROUP_CONCAT(u3.display_name, '||')
+       FROM (SELECT u3.display_name FROM participants p3
+             JOIN users u3 ON p3.user_id = u3.id
+             WHERE p3.booking_id = b.id
+             ORDER BY p3.joined_at ASC)) AS participants_names
     FROM bookings b
     JOIN users u ON b.created_by = u.id
     LEFT JOIN participants p ON b.id = p.booking_id
     LEFT JOIN users u2 ON p.user_id = u2.id
-    WHERE b.date >= date('now', 'localtime')
+    WHERE ${dateFilter}
     GROUP BY b.id
-    ORDER BY b.date ASC, b.start_time ASC
+    ORDER BY b.date ${order}, b.start_time ${order}
   `).all(req.session.userId, req.session.userId);
 
   res.json(bookings);

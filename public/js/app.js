@@ -4,10 +4,13 @@
 
 let currentUser = null;
 let currentDetailId = null;
-let currentDetailBooking = null; // volledige boeking-data van detail-modal
+let currentDetailBooking = null;
 let currentTab = 'potjes';
 let pendingAvatar = undefined;
-let bookingEditId = null; // null = nieuw, number = boeking-id dat bewerkt wordt
+let bookingEditId = null;
+let allBookings   = [];
+let filterTime    = 'upcoming'; // 'upcoming' | 'past'
+let filterStatus  = 'open';     // 'open' | 'all'
 
 /* ── Init ─────────────────────────────────────────────────── */
 async function init() {
@@ -354,35 +357,68 @@ async function markPaid(bookingId) {
   setTimeout(loadUnpaid, 800);
 }
 
-/* ── Bookings list ────────────────────────────────────────── */
+/* ── Bookings list + filters ──────────────────────────────── */
 async function loadBookings() {
-  const res      = await api('/api/bookings');
-  const bookings = await res.json();
-  const list     = document.getElementById('bookings-list');
-  const empty    = document.getElementById('bookings-empty');
+  const url  = '/api/bookings' + (filterTime === 'past' ? '?past=1' : '');
+  const res  = await api(url);
+  allBookings = await res.json();
+  applyFilters();
+}
+
+function applyFilters() {
+  const list  = document.getElementById('bookings-list');
+  const empty = document.getElementById('bookings-empty');
   list.innerHTML = '';
 
-  if (!bookings.length) {
+  const visible = filterStatus === 'open'
+    ? allBookings.filter(b => (b.player_count || 0) < 4)
+    : allBookings;
+
+  if (!visible.length) {
     empty.classList.remove('hidden');
     return;
   }
   empty.classList.add('hidden');
-  bookings.forEach(b => list.appendChild(buildCard(b)));
+  visible.forEach(b => list.appendChild(buildCard(b)));
+}
+
+function setTimeFilter(val, btn) {
+  filterTime = val;
+  document.getElementById('filter-upcoming').classList.toggle('active', val === 'upcoming');
+  document.getElementById('filter-past').classList.toggle('active', val === 'past');
+  loadBookings();
+}
+
+function setStatusFilter(val, btn) {
+  filterStatus = val;
+  document.getElementById('filter-open').classList.toggle('active', val === 'open');
+  document.getElementById('filter-all-status').classList.toggle('active', val === 'all');
+  applyFilters();
+}
+
+function playerSpotHtml(name) {
+  const isMe     = name === currentUser?.display_name;
+  const initials = name.split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2);
+  if (isMe && currentUser?.avatar) {
+    return `<div class="spot spot-player" title="${escHtml(name)}" style="background-image:url('${currentUser.avatar}')"></div>`;
+  }
+  return `<div class="spot spot-player" title="${escHtml(name)}">${initials}</div>`;
 }
 
 function buildCard(b) {
   const playerCount = b.player_count || 0;
   const isFull      = playerCount >= 4;
+  const names       = (b.participants_names || '').split('||').filter(Boolean);
 
   const card = document.createElement('div');
-  card.className = 'booking-card';
+  card.className = isFull ? 'booking-card booking-card--full' : 'booking-card';
   card.onclick = () => showDetailModal(b.id);
 
   // Spots
   let spots = '';
   for (let i = 0; i < 4; i++) {
-    spots += i < playerCount
-      ? `<div class="spot spot-filled">✓</div>`
+    spots += i < names.length
+      ? playerSpotHtml(names[i])
       : `<div class="spot spot-empty"></div>`;
   }
 
@@ -599,6 +635,8 @@ function showNewBookingModal() {
   document.getElementById('booking-form').reset();
   document.getElementById('b-date').value = today;
   document.getElementById('b-date').min   = today;
+  setTimeSelect('b-start', '10:00');
+  setTimeSelect('b-end',   '11:00');
   document.getElementById('booking-modal').classList.remove('hidden');
 }
 
@@ -611,8 +649,8 @@ function showEditBookingModal() {
   document.getElementById('b-title').value = b.title;
   document.getElementById('b-date').value  = b.date;
   document.getElementById('b-date').min    = '';
-  document.getElementById('b-start').value = b.start_time;
-  document.getElementById('b-end').value   = b.end_time;
+  setTimeSelect('b-start', b.start_time);
+  setTimeSelect('b-end',   b.end_time);
   document.getElementById('b-notes').value = b.notes || '';
   hideDetailModal();
   document.getElementById('booking-modal').classList.remove('hidden');
@@ -726,6 +764,34 @@ function clearError(id) {
   el.classList.add('hidden');
 }
 
+/* ── Tijdselect opties ────────────────────────────────────── */
+function populateTimeSelects() {
+  ['b-start', 'b-end'].forEach(id => {
+    const sel = document.getElementById(id);
+    if (!sel || sel.options.length) return;
+    for (let h = 6; h <= 23; h++) {
+      for (let m = 0; m < 60; m += 30) {
+        const val = `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`;
+        const opt = document.createElement('option');
+        opt.value = opt.textContent = val;
+        sel.appendChild(opt);
+      }
+    }
+  });
+}
+
+function setTimeSelect(id, val) {
+  const sel = document.getElementById(id);
+  // Trim seconds if present (HH:MM:SS → HH:MM)
+  const v = val ? val.slice(0, 5) : '';
+  for (const opt of sel.options) {
+    if (opt.value === v) { opt.selected = true; break; }
+  }
+}
+
 /* ── Start ────────────────────────────────────────────────── */
-document.addEventListener('DOMContentLoaded', initSwipeDismiss);
+document.addEventListener('DOMContentLoaded', () => {
+  initSwipeDismiss();
+  populateTimeSelects();
+});
 init();

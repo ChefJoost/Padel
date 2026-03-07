@@ -116,10 +116,21 @@
       </button>
     </div>
 
+    <div class="filter-bar">
+      <div class="filter-group">
+        <button class="filter-btn active" id="filter-upcoming" onclick="setTimeFilter('upcoming', this)">Aankomend</button>
+        <button class="filter-btn" id="filter-past" onclick="setTimeFilter('past', this)">Verleden</button>
+      </div>
+      <div class="filter-group">
+        <button class="filter-btn active" id="filter-open" onclick="setStatusFilter('open', this)">Open</button>
+        <button class="filter-btn" id="filter-all-status" onclick="setStatusFilter('all', this)">Alle</button>
+      </div>
+    </div>
+
     <div class="scroll-area">
       <div id="bookings-empty" class="empty-state hidden">
         <div class="empty-icon">🎾</div>
-        <p class="empty-title">Geen aankomende potjes</p>
+        <p class="empty-title">Geen potjes gevonden</p>
         <p class="empty-sub">Maak de eerste boeking aan!</p>
         <button class="btn btn-primary" onclick="showNewBookingModal()">Nieuwe boeking</button>
       </div>
@@ -216,11 +227,11 @@
           </div>
           <div class="field-row">
             <label>Van</label>
-            <input type="time" id="b-start" step="1800" required />
+            <select id="b-start" required class="time-select"></select>
           </div>
           <div class="field-row">
             <label>Tot</label>
-            <input type="time" id="b-end" step="1800" required />
+            <select id="b-end" required class="time-select"></select>
           </div>
         </div>
         <div class="field-group">
