@@ -16,11 +16,6 @@ router.post('/register', async (req, res) => {
     return res.status(400).json({ error: 'Wachtwoord moet minimaal 6 tekens zijn' });
   }
 
-  const lvl = parseInt(level, 10);
-  if (!lvl || lvl < 1 || lvl > 9) {
-    return res.status(400).json({ error: 'Kies een niveau tussen 1 en 9' });
-  }
-
   const existing = db.prepare('SELECT id FROM users WHERE username = ?').get(username.toLowerCase());
   if (existing) {
     return res.status(409).json({ error: 'Gebruikersnaam is al in gebruik' });
@@ -30,14 +25,14 @@ router.post('/register', async (req, res) => {
     const hash = await bcrypt.hash(password, 12);
     const result = db.prepare(
       'INSERT INTO users (username, display_name, password_hash, level) VALUES (?, ?, ?, ?)'
-    ).run(username.toLowerCase(), display_name, hash, lvl);
+    ).run(username.toLowerCase(), display_name, hash, null);
 
     req.session.userId = result.lastInsertRowid;
     req.session.displayName = display_name;
     req.session.username = username.toLowerCase();
-    req.session.level = lvl;
+    req.session.level = null;
 
-    res.json({ success: true, userId: result.lastInsertRowid, display_name, username: username.toLowerCase(), level: lvl });
+    res.json({ success: true, userId: result.lastInsertRowid, display_name, username: username.toLowerCase(), level: null });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Server fout bij registreren' });
