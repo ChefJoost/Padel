@@ -34,9 +34,10 @@ router.post('/register', async (req, res) => {
 
     req.session.userId = result.lastInsertRowid;
     req.session.displayName = display_name;
+    req.session.username = username.toLowerCase();
     req.session.level = lvl;
 
-    res.json({ success: true, userId: result.lastInsertRowid, display_name, level: lvl });
+    res.json({ success: true, userId: result.lastInsertRowid, display_name, username: username.toLowerCase(), level: lvl });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Server fout bij registreren' });
@@ -64,9 +65,10 @@ router.post('/login', async (req, res) => {
 
     req.session.userId = user.id;
     req.session.displayName = user.display_name;
+    req.session.username = user.username;
     req.session.level = user.level;
 
-    res.json({ success: true, userId: user.id, display_name: user.display_name, level: user.level });
+    res.json({ success: true, userId: user.id, display_name: user.display_name, username: user.username, level: user.level });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Server fout bij inloggen' });
@@ -86,9 +88,10 @@ router.get('/me', (req, res) => {
     return res.status(401).json({ error: 'Niet ingelogd' });
   }
   res.json({
-    userId: req.session.userId,
+    userId:       req.session.userId,
     display_name: req.session.displayName,
-    level: req.session.level || null,
+    username:     req.session.username || null,
+    level:        req.session.level || null,
   });
 });
 
@@ -140,6 +143,7 @@ router.put('/profile', async (req, res) => {
 
     // Sessie bijwerken
     req.session.displayName = display_name || user.display_name;
+    req.session.username = username ? username.toLowerCase() : user.username;
     req.session.level = lvl || null;
 
     res.json({

@@ -155,11 +155,11 @@ body {
   font-family: inherit;
   color: var(--text);
   background: transparent;
-  text-align: right;
+  text-align: left;
 }
 .field-row input::placeholder,
 .field-row textarea::placeholder { color: var(--text-3); }
-.field-row textarea { text-align: left; resize: none; }
+.field-row textarea { resize: none; }
 .field-row span { flex: 1; text-align: right; font-size: .95rem; color: var(--text-2); }
 
 .section-header {
