@@ -5,7 +5,8 @@
 let currentUser = null;
 let currentDetailId = null;
 let currentTab = 'potjes';
-let pendingAvatar = undefined; // undefined = geen wijziging, null = verwijderen, string = nieuwe foto
+let pendingAvatar = undefined;
+let bookingEditId = null; // null = nieuw, number = boeking-id dat bewerkt wordt
 
 /* ── Init ─────────────────────────────────────────────────── */
 async function init() {
@@ -58,10 +59,40 @@ function setUser(data) {
 }
 
 function showTab(tab, btn) {
+  hideForgotPassword();
   document.getElementById('login-form').classList.toggle('hidden', tab !== 'login');
   document.getElementById('register-form').classList.toggle('hidden', tab !== 'register');
   document.querySelectorAll('.seg-btn').forEach(b => b.classList.remove('active'));
   btn.classList.add('active');
+}
+
+function showForgotPassword() {
+  document.getElementById('login-form').classList.add('hidden');
+  document.getElementById('forgot-form').classList.remove('hidden');
+  clearError('forgot-error');
+  document.getElementById('forgot-username').value    = '';
+  document.getElementById('forgot-display-name').value = '';
+  document.getElementById('forgot-new-pw').value      = '';
+}
+
+function hideForgotPassword() {
+  document.getElementById('forgot-form').classList.add('hidden');
+  document.getElementById('login-form').classList.remove('hidden');
+}
+
+async function handleResetPassword(e) {
+  e.preventDefault();
+  clearError('forgot-error');
+  const username     = document.getElementById('forgot-username').value.trim();
+  const display_name = document.getElementById('forgot-display-name').value.trim();
+  const new_password = document.getElementById('forgot-new-pw').value;
+  const res  = await api('/api/auth/reset-password', { method: 'POST', body: { username, display_name, new_password } });
+  const data = await res.json();
+  if (!res.ok) return showError('forgot-error', data.error);
+  hideForgotPassword();
+  showError('login-error', 'Wachtwoord gewijzigd. Je kunt nu inloggen.');
+  document.getElementById('login-error').style.color = 'var(--green)';
+  document.getElementById('login-username').value = username;
 }
 
 async function handleLogin(e) {
@@ -340,8 +371,7 @@ async function loadBookings() {
 
 function buildCard(b) {
   const playerCount = b.player_count || 0;
-  const extraCount  = b.extra_count  || 0;
-  const isFull      = playerCount >= 4 && extraCount >= 1;
+  const isFull      = playerCount >= 4;
 
   const card = document.createElement('div');
   card.className = 'booking-card';
@@ -354,15 +384,11 @@ function buildCard(b) {
       ? `<div class="spot spot-filled">✓</div>`
       : `<div class="spot spot-empty"></div>`;
   }
-  if (extraCount > 0) spots += `<div class="spot spot-extra">+1</div>`;
-  else if (playerCount >= 4) spots += `<div class="spot spot-open-extra">+1</div>`;
 
   // Status
   let statusTag = '';
   if (b.user_joined) {
-    statusTag = b.user_is_extra
-      ? `<span class="status-tag status-extra">Extra</span>`
-      : `<span class="status-tag status-joined">Meedoen</span>`;
+    statusTag = `<span class="status-tag status-joined">Meedoen</span>`;
   } else if (isFull) {
     statusTag = `<span class="status-tag status-full">Vol</span>`;
   } else {
@@ -406,8 +432,7 @@ async function showDetailModal(id) {
   document.getElementById('detail-title').textContent = b.title;
 
   const playerCount = b.player_count || 0;
-  const extraCount  = b.extra_count  || 0;
-  const isFull      = playerCount >= 4 && extraCount >= 1;
+  const isFull      = playerCount >= 4;
   const isCreator   = b.created_by === currentUser.userId;
 
   // Niveau range
@@ -465,33 +490,29 @@ async function showDetailModal(id) {
   }
 
   // Deelnemers
-  const players = b.participants.filter(p => !p.is_extra);
-  const extras  = b.participants.filter(p =>  p.is_extra);
-
-  const playerRows = players.map(p => {
+  const playerRows = b.participants.map(p => {
     const lvl = p.level ? ` <span class="p-level">niv. ${p.level}</span>` : '';
     return `<div class="field-row"><span class="p-icon">🎾</span> ${escHtml(p.display_name)}${lvl}</div>`;
   });
-  for (let i = players.length; i < 4; i++) {
+  for (let i = b.participants.length; i < 4; i++) {
     playerRows.push(`<div class="field-row p-empty"><span class="p-icon">○</span> Vrije plek</div>`);
   }
-
-  const extraRows = extras.length
-    ? extras.map(p => {
-        const lvl = p.level ? ` <span class="p-level">niv. ${p.level}</span>` : '';
-        return `<div class="field-row"><span class="p-icon">➕</span> ${escHtml(p.display_name)}${lvl}</div>`;
-      })
-    : [`<div class="field-row p-empty"><span class="p-icon">○</span> Vrij</div>`];
 
   const participantsHtml = `
     <div class="section-header">Spelers (${playerCount}/4)</div>
     <div class="field-group">${playerRows.join('')}</div>
-    <div class="section-header">Extra man</div>
-    <div class="field-group">${extraRows.join('')}</div>
   `;
 
   document.getElementById('detail-body').innerHTML =
     infoHtml + payHtml + payFormHtml + participantsHtml;
+
+  // Bewerk-knop in header voor organisator
+  const headerRight = document.getElementById('detail-header-right');
+  if (isCreator) {
+    headerRight.innerHTML = `<button class="sheet-done" onclick="showEditBookingModal(${JSON.stringify(b)})">Bewerk</button>`;
+  } else {
+    headerRight.innerHTML = '';
+  }
 
   // Actieknoppen
   const actions = document.getElementById('detail-actions');
@@ -512,7 +533,7 @@ async function showDetailModal(id) {
   } else if (!isFull) {
     const joinBtn = document.createElement('button');
     joinBtn.className = 'btn btn-primary btn-full';
-    joinBtn.textContent = playerCount >= 4 ? 'Inschrijven als extra' : 'Inschrijven';
+    joinBtn.textContent = 'Inschrijven';
     joinBtn.onclick = handleJoinBooking;
     actions.appendChild(joinBtn);
   }
@@ -566,19 +587,37 @@ async function handleSetPaymentUrl() {
   loadBookings();
 }
 
-/* ── New booking modal ────────────────────────────────────── */
+/* ── New / edit booking modal ─────────────────────────────── */
 function showNewBookingModal() {
+  bookingEditId = null;
+  document.getElementById('booking-modal-title').textContent = 'Nieuwe boeking';
+  document.getElementById('booking-modal-done').textContent  = 'Aanmaken';
   const today = new Date().toISOString().split('T')[0];
-  document.getElementById('b-date').value = today;
-  document.getElementById('b-date').min   = today;
   clearError('booking-error');
   document.getElementById('booking-form').reset();
   document.getElementById('b-date').value = today;
+  document.getElementById('b-date').min   = today;
+  document.getElementById('booking-modal').classList.remove('hidden');
+}
+
+function showEditBookingModal(b) {
+  bookingEditId = b.id;
+  document.getElementById('booking-modal-title').textContent = 'Boeking bewerken';
+  document.getElementById('booking-modal-done').textContent  = 'Opslaan';
+  clearError('booking-error');
+  document.getElementById('b-title').value = b.title;
+  document.getElementById('b-date').value  = b.date;
+  document.getElementById('b-date').min    = '';
+  document.getElementById('b-start').value = b.start_time;
+  document.getElementById('b-end').value   = b.end_time;
+  document.getElementById('b-notes').value = b.notes || '';
+  hideDetailModal();
   document.getElementById('booking-modal').classList.remove('hidden');
 }
 
 function hideNewBookingModal() {
   document.getElementById('booking-modal').classList.add('hidden');
+  bookingEditId = null;
 }
 
 async function handleCreateBooking(e) {
@@ -591,10 +630,18 @@ async function handleCreateBooking(e) {
     end_time:   document.getElementById('b-end').value,
     notes:      document.getElementById('b-notes').value,
   };
-  const res  = await api('/api/bookings', { method: 'POST', body });
-  const data = await res.json();
-  if (!res.ok) return showError('booking-error', data.error);
-  hideNewBookingModal(); loadBookings();
+
+  if (bookingEditId) {
+    const res  = await api(`/api/bookings/${bookingEditId}`, { method: 'PUT', body });
+    const data = await res.json();
+    if (!res.ok) return showError('booking-error', data.error);
+    hideNewBookingModal(); loadBookings();
+  } else {
+    const res  = await api('/api/bookings', { method: 'POST', body });
+    const data = await res.json();
+    if (!res.ok) return showError('booking-error', data.error);
+    hideNewBookingModal(); loadBookings();
+  }
 }
 
 /* ── Sheet backdrop click ─────────────────────────────────── */

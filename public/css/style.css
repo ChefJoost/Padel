@@ -91,6 +91,19 @@ body {
   box-shadow: 0 1px 4px rgba(0,0,0,.12);
 }
 
+.btn-forgot {
+  display: block;
+  width: 100%;
+  background: none;
+  border: none;
+  color: var(--blue);
+  font-size: .9rem;
+  font-family: inherit;
+  cursor: pointer;
+  text-align: center;
+  padding: 10px 0 2px;
+}
+
 /* Level picker */
 .level-section { margin-bottom: 16px; }
 .level-label {

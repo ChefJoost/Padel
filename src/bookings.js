@@ -19,13 +19,11 @@ router.get('/', requireAuth, (req, res) => {
       b.id, b.title, b.location, b.date, b.start_time, b.end_time, b.notes,
       b.created_by, b.payment_url,
       u.display_name AS creator_name,
-      COUNT(CASE WHEN p.is_extra = 0 THEN 1 END) AS player_count,
-      COUNT(CASE WHEN p.is_extra = 1 THEN 1 END) AS extra_count,
+      COUNT(p.id) AS player_count,
       MAX(CASE WHEN p.user_id = ? THEN 1 ELSE 0 END) AS user_joined,
-      MAX(CASE WHEN p.user_id = ? AND p.is_extra = 1 THEN 1 ELSE 0 END) AS user_is_extra,
       MAX(CASE WHEN p.user_id = ? THEN p.paid_at END) AS user_paid_at,
-      MIN(CASE WHEN p.is_extra = 0 THEN u2.level END) AS min_level,
-      MAX(CASE WHEN p.is_extra = 0 THEN u2.level END) AS max_level
+      MIN(u2.level) AS min_level,
+      MAX(u2.level) AS max_level
     FROM bookings b
     JOIN users u ON b.created_by = u.id
     LEFT JOIN participants p ON b.id = p.booking_id
@@ -33,7 +31,7 @@ router.get('/', requireAuth, (req, res) => {
     WHERE b.date >= date('now', 'localtime')
     GROUP BY b.id
     ORDER BY b.date ASC, b.start_time ASC
-  `).all(req.session.userId, req.session.userId, req.session.userId);
+  `).all(req.session.userId, req.session.userId);
 
   res.json(bookings);
 });
@@ -45,29 +43,27 @@ router.get('/:id', requireAuth, (req, res) => {
       b.id, b.title, b.location, b.date, b.start_time, b.end_time, b.notes,
       b.created_by, b.payment_url,
       u.display_name AS creator_name,
-      COUNT(CASE WHEN p.is_extra = 0 THEN 1 END) AS player_count,
-      COUNT(CASE WHEN p.is_extra = 1 THEN 1 END) AS extra_count,
+      COUNT(p.id) AS player_count,
       MAX(CASE WHEN p.user_id = ? THEN 1 ELSE 0 END) AS user_joined,
-      MAX(CASE WHEN p.user_id = ? AND p.is_extra = 1 THEN 1 ELSE 0 END) AS user_is_extra,
       MAX(CASE WHEN p.user_id = ? THEN p.paid_at END) AS user_paid_at,
-      MIN(CASE WHEN p.is_extra = 0 THEN u2.level END) AS min_level,
-      MAX(CASE WHEN p.is_extra = 0 THEN u2.level END) AS max_level
+      MIN(u2.level) AS min_level,
+      MAX(u2.level) AS max_level
     FROM bookings b
     JOIN users u ON b.created_by = u.id
     LEFT JOIN participants p ON b.id = p.booking_id
     LEFT JOIN users u2 ON p.user_id = u2.id
     WHERE b.id = ?
     GROUP BY b.id
-  `).get(req.session.userId, req.session.userId, req.session.userId, req.params.id);
+  `).get(req.session.userId, req.session.userId, req.params.id);
 
   if (!booking) return res.status(404).json({ error: 'Boeking niet gevonden' });
 
   const participants = db.prepare(`
-    SELECT u.display_name, u.level, p.is_extra, p.joined_at
+    SELECT u.display_name, u.level, p.joined_at
     FROM participants p
     JOIN users u ON p.user_id = u.id
     WHERE p.booking_id = ?
-    ORDER BY p.is_extra ASC, p.joined_at ASC
+    ORDER BY p.joined_at ASC
   `).all(req.params.id);
 
   res.json({ ...booking, participants });
@@ -117,6 +113,29 @@ router.post('/', requireAuth, (req, res) => {
   `).run(result.lastInsertRowid, req.session.userId);
 
   res.status(201).json({ id: result.lastInsertRowid });
+});
+
+// Boeking bewerken (alleen aanmaker)
+router.put('/:id', requireAuth, (req, res) => {
+  const bookingId = req.params.id;
+  const userId = req.session.userId;
+  const { title, date, start_time, end_time, notes, min_level, max_level } = req.body;
+
+  const booking = db.prepare('SELECT * FROM bookings WHERE id = ?').get(bookingId);
+  if (!booking) return res.status(404).json({ error: 'Boeking niet gevonden' });
+  if (booking.created_by !== userId) {
+    return res.status(403).json({ error: 'Alleen de aanmaker kan de boeking bewerken' });
+  }
+
+  if (!title || !date || !start_time || !end_time) {
+    return res.status(400).json({ error: 'Vul alle verplichte velden in' });
+  }
+
+  db.prepare(`
+    UPDATE bookings SET title=?, date=?, start_time=?, end_time=?, notes=? WHERE id=?
+  `).run(title, date, start_time, end_time, notes || null, bookingId);
+
+  res.json({ success: true });
 });
 
 // Betaallink instellen/bijwerken (alleen aanmaker)
@@ -200,30 +219,21 @@ router.post('/:id/join', requireAuth, (req, res) => {
 
   // Tel huidige spelers
   const counts = db.prepare(`
-    SELECT
-      COUNT(CASE WHEN is_extra = 0 THEN 1 END) AS players,
-      COUNT(CASE WHEN is_extra = 1 THEN 1 END) AS extras
-    FROM participants WHERE booking_id = ?
+    SELECT COUNT(*) AS players FROM participants WHERE booking_id = ?
   `).get(bookingId);
 
-  let isExtra = 0;
   if (counts.players >= 4) {
-    if (counts.extras >= 1) {
-      return res.status(409).json({ error: 'De boeking is vol (4 spelers + 1 extra)' });
-    }
-    isExtra = 1;
+    return res.status(409).json({ error: 'De boeking is vol (4 spelers)' });
   }
 
   // Niveau-check: max 2 aansluitende niveaus toegestaan
   const user = db.prepare('SELECT level FROM users WHERE id = ?').get(userId);
   if (user.level) {
     const levelRange = db.prepare(`
-      SELECT
-        MIN(u.level) AS min_level,
-        MAX(u.level) AS max_level
+      SELECT MIN(u.level) AS min_level, MAX(u.level) AS max_level
       FROM participants p
       JOIN users u ON p.user_id = u.id
-      WHERE p.booking_id = ? AND p.is_extra = 0 AND u.level IS NOT NULL
+      WHERE p.booking_id = ? AND u.level IS NOT NULL
     `).get(bookingId);
 
     if (levelRange.min_level !== null) {
@@ -238,10 +248,10 @@ router.post('/:id/join', requireAuth, (req, res) => {
   }
 
   db.prepare(
-    'INSERT INTO participants (booking_id, user_id, is_extra) VALUES (?, ?, ?)'
-  ).run(bookingId, userId, isExtra);
+    'INSERT INTO participants (booking_id, user_id, is_extra) VALUES (?, ?, 0)'
+  ).run(bookingId, userId);
 
-  res.json({ success: true, is_extra: isExtra === 1 });
+  res.json({ success: true });
 });
 
 // Uitschrijven uit een boeking
@@ -262,15 +272,6 @@ router.delete('/:id/join', requireAuth, (req, res) => {
 
   if (result.changes === 0) {
     return res.status(404).json({ error: 'Je bent niet ingeschreven voor deze boeking' });
-  }
-
-  // Als een reguliere speler uitschrijft, promoveer extra naar regulier
-  const extra = db.prepare(
-    'SELECT * FROM participants WHERE booking_id = ? AND is_extra = 1 ORDER BY joined_at ASC LIMIT 1'
-  ).get(bookingId);
-
-  if (extra) {
-    db.prepare('UPDATE participants SET is_extra = 0 WHERE id = ?').run(extra.id);
   }
 
   res.json({ success: true });
