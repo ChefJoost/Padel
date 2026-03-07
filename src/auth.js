@@ -87,11 +87,13 @@ router.get('/me', (req, res) => {
   if (!req.session.userId) {
     return res.status(401).json({ error: 'Niet ingelogd' });
   }
+  const user = db.prepare('SELECT avatar FROM users WHERE id = ?').get(req.session.userId);
   res.json({
     userId:       req.session.userId,
     display_name: req.session.displayName,
     username:     req.session.username || null,
     level:        req.session.level || null,
+    avatar:       user?.avatar || null,
   });
 });
 
@@ -99,7 +101,7 @@ router.get('/me', (req, res) => {
 router.put('/profile', async (req, res) => {
   if (!req.session.userId) return res.status(401).json({ error: 'Niet ingelogd' });
 
-  const { display_name, username, level, current_password, new_password } = req.body;
+  const { display_name, username, level, current_password, new_password, avatar } = req.body;
   const userId = req.session.userId;
 
   const user = db.prepare('SELECT * FROM users WHERE id = ?').get(userId);
@@ -128,16 +130,18 @@ router.put('/profile', async (req, res) => {
 
     db.prepare(`
       UPDATE users SET
-        display_name = ?,
-        username     = ?,
-        level        = ?,
-        password_hash = ?
+        display_name  = ?,
+        username      = ?,
+        level         = ?,
+        password_hash = ?,
+        avatar        = ?
       WHERE id = ?
     `).run(
       display_name || user.display_name,
       username ? username.toLowerCase() : user.username,
       lvl || null,
       hash,
+      avatar !== undefined ? avatar : user.avatar,
       userId
     );
 

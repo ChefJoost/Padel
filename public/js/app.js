@@ -5,6 +5,7 @@
 let currentUser = null;
 let currentDetailId = null;
 let currentTab = 'potjes';
+let pendingAvatar = undefined; // undefined = geen wijziging, null = verwijderen, string = nieuwe foto
 
 /* ── Init ─────────────────────────────────────────────────── */
 async function init() {
@@ -52,6 +53,7 @@ function setUser(data) {
     display_name: data.display_name,
     username:     data.username,
     level:        data.level,
+    avatar:       data.avatar || null,
   };
 }
 
@@ -167,11 +169,23 @@ function urlBase64ToUint8Array(base64String) {
 }
 
 /* ── Profiel ──────────────────────────────────────────────── */
+function renderAvatarEl(el, avatarUrl, displayName) {
+  if (avatarUrl) {
+    el.style.backgroundImage = `url('${avatarUrl}')`;
+    el.style.backgroundSize  = 'cover';
+    el.style.backgroundPosition = 'center';
+    el.textContent = '';
+  } else {
+    el.style.backgroundImage = '';
+    const initials = displayName
+      .split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2);
+    el.textContent = initials;
+  }
+}
+
 function renderProfile() {
   if (!currentUser) return;
-  const initials = currentUser.display_name
-    .split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2);
-  document.getElementById('profile-avatar').textContent = initials;
+  renderAvatarEl(document.getElementById('profile-avatar'), currentUser.avatar, currentUser.display_name);
   document.getElementById('profile-name').textContent    = currentUser.display_name;
   document.getElementById('profile-username').textContent = `@${currentUser.username || ''}`;
   const pill = document.getElementById('profile-level-pill');
@@ -185,11 +199,14 @@ function renderProfile() {
 
 function showProfileEdit() {
   clearError('profile-error');
+  pendingAvatar = undefined;
   document.getElementById('edit-display-name').value = currentUser.display_name;
   document.getElementById('edit-username').value     = currentUser.username || '';
   document.getElementById('edit-current-pw').value   = '';
   document.getElementById('edit-new-pw').value       = '';
+  document.getElementById('avatar-file-input').value = '';
   setLevelPicker('edit-level-picker', 'edit-level', currentUser.level);
+  renderAvatarEl(document.getElementById('edit-avatar-preview'), currentUser.avatar, currentUser.display_name);
   document.getElementById('profile-modal').classList.remove('hidden');
 }
 
@@ -197,16 +214,41 @@ function hideProfileEdit() {
   document.getElementById('profile-modal').classList.add('hidden');
 }
 
+function handleAvatarChange(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = (ev) => {
+    const img = new Image();
+    img.onload = () => {
+      const canvas = document.createElement('canvas');
+      const size = 300;
+      canvas.width = canvas.height = size;
+      const ctx = canvas.getContext('2d');
+      const min = Math.min(img.width, img.height);
+      const sx = (img.width  - min) / 2;
+      const sy = (img.height - min) / 2;
+      ctx.drawImage(img, sx, sy, min, min, 0, 0, size, size);
+      pendingAvatar = canvas.toDataURL('image/jpeg', 0.8);
+      renderAvatarEl(document.getElementById('edit-avatar-preview'), pendingAvatar,
+        document.getElementById('edit-display-name').value || currentUser.display_name);
+    };
+    img.src = ev.target.result;
+  };
+  reader.readAsDataURL(file);
+}
+
 async function handleSaveProfile() {
   clearError('profile-error');
-  const display_name    = document.getElementById('edit-display-name').value.trim();
-  const username        = document.getElementById('edit-username').value.trim();
-  const level           = parseInt(document.getElementById('edit-level').value, 10) || null;
+  const display_name     = document.getElementById('edit-display-name').value.trim();
+  const username         = document.getElementById('edit-username').value.trim();
+  const level            = parseInt(document.getElementById('edit-level').value, 10) || null;
   const current_password = document.getElementById('edit-current-pw').value;
-  const new_password    = document.getElementById('edit-new-pw').value;
+  const new_password     = document.getElementById('edit-new-pw').value;
 
   const body = { display_name, username, level };
   if (new_password) { body.current_password = current_password; body.new_password = new_password; }
+  if (pendingAvatar !== undefined) body.avatar = pendingAvatar;
 
   const res  = await api('/api/auth/profile', { method: 'PUT', body });
   const data = await res.json();
@@ -215,6 +257,7 @@ async function handleSaveProfile() {
   currentUser.display_name = data.display_name;
   currentUser.username     = data.username;
   currentUser.level        = data.level;
+  if (pendingAvatar !== undefined) currentUser.avatar = pendingAvatar;
 
   hideProfileEdit();
   renderProfile();
@@ -235,7 +278,7 @@ async function loadHistory() {
     <div class="field-row history-row">
       <div class="history-info">
         <div class="history-title">${escHtml(b.title)}</div>
-        <div class="history-meta">${formatDate(b.date)} · ${escHtml(b.location)}</div>
+        <div class="history-meta">${formatDate(b.date)}</div>
       </div>
       ${b.is_extra ? '<span class="role-tag role-extra">Extra</span>' : '<span class="role-tag role-player">Gespeeld</span>'}
     </div>
@@ -264,7 +307,7 @@ async function loadUnpaid() {
     <div class="field-row unpaid-row">
       <div class="unpaid-info">
         <div class="unpaid-title">${escHtml(b.title)}</div>
-        <div class="unpaid-meta">${formatDate(b.date)} · ${escHtml(b.location)}</div>
+        <div class="unpaid-meta">${formatDate(b.date)}</div>
       </div>
       <div class="unpaid-actions">
         <a href="${escAttr(b.payment_url)}" target="_blank" rel="noopener"
@@ -345,7 +388,6 @@ function buildCard(b) {
     <div class="card-meta">
       <span>📅 ${formatDate(b.date)}</span>
       <span>🕐 ${b.start_time} – ${b.end_time}</span>
-      <span>📍 ${escHtml(b.location)}</span>
     </div>
     <div class="card-spots">${spots}</div>
     <div class="card-tags">${statusTag}${levelTag}</div>
@@ -381,7 +423,6 @@ async function showDetailModal(id) {
     <div class="field-group">
       <div class="field-row"><label>Datum</label><span>${formatDate(b.date)}</span></div>
       <div class="field-row"><label>Tijd</label><span>${b.start_time} – ${b.end_time}</span></div>
-      <div class="field-row"><label>Locatie</label><span>${escHtml(b.location)}</span></div>
       <div class="field-row"><label>Organisator</label><span>${escHtml(b.creator_name)}</span></div>
       ${levelRow}
       ${b.notes ? `<div class="field-row"><label>Notities</label><span>${escHtml(b.notes)}</span></div>` : ''}
@@ -545,7 +586,6 @@ async function handleCreateBooking(e) {
   clearError('booking-error');
   const body = {
     title:      document.getElementById('b-title').value,
-    location:   document.getElementById('b-location').value,
     date:       document.getElementById('b-date').value,
     start_time: document.getElementById('b-start').value,
     end_time:   document.getElementById('b-end').value,
@@ -564,6 +604,39 @@ function closeSheet(e) {
     hideDetailModal();
     hideProfileEdit();
   }
+}
+
+/* ── Swipe-to-dismiss voor alle sheets ────────────────────── */
+function initSwipeDismiss() {
+  document.querySelectorAll('.sheet').forEach(sheet => {
+    let startY = 0, currentDy = 0, dragging = false;
+
+    const onStart = (clientY) => {
+      startY = clientY;
+      currentDy = 0;
+      dragging = true;
+      sheet.style.transition = 'none';
+    };
+    const onMove = (clientY) => {
+      if (!dragging) return;
+      currentDy = clientY - startY;
+      if (currentDy > 0) sheet.style.transform = `translateY(${currentDy}px)`;
+    };
+    const onEnd = () => {
+      if (!dragging) return;
+      dragging = false;
+      sheet.style.transition = '';
+      sheet.style.transform  = '';
+      if (currentDy > 80) {
+        const overlay = sheet.closest('.sheet-overlay');
+        if (overlay) closeSheet({ target: overlay, currentTarget: overlay });
+      }
+    };
+
+    sheet.addEventListener('touchstart', e => onStart(e.touches[0].clientY), { passive: true });
+    sheet.addEventListener('touchmove',  e => onMove(e.touches[0].clientY),  { passive: true });
+    sheet.addEventListener('touchend',   onEnd, { passive: true });
+  });
 }
 
 /* ── Helpers ──────────────────────────────────────────────── */
@@ -596,4 +669,5 @@ function clearError(id) {
 }
 
 /* ── Start ────────────────────────────────────────────────── */
+document.addEventListener('DOMContentLoaded', initSwipeDismiss);
 init();

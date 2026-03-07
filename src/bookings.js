@@ -96,9 +96,9 @@ router.get('/history', requireAuth, (req, res) => {
 
 // Nieuwe boeking aanmaken
 router.post('/', requireAuth, (req, res) => {
-  const { title, location, date, start_time, end_time, notes } = req.body;
+  const { title, date, start_time, end_time, notes } = req.body;
 
-  if (!title || !location || !date || !start_time || !end_time) {
+  if (!title || !date || !start_time || !end_time) {
     return res.status(400).json({ error: 'Vul alle verplichte velden in' });
   }
 
@@ -109,7 +109,7 @@ router.post('/', requireAuth, (req, res) => {
   const result = db.prepare(`
     INSERT INTO bookings (title, location, date, start_time, end_time, notes, created_by)
     VALUES (?, ?, ?, ?, ?, ?, ?)
-  `).run(title, location, date, start_time, end_time, notes || null, req.session.userId);
+  `).run(title, '', date, start_time, end_time, notes || null, req.session.userId);
 
   // Aanmaker automatisch inschrijven als eerste speler
   db.prepare(`

@@ -556,6 +556,55 @@ body {
   white-space: nowrap;
 }
 
+/* Avatar edit sectie */
+.avatar-edit-section {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 20px 0 16px;
+  gap: 10px;
+}
+.avatar-edit-wrap {
+  position: relative;
+  width: 80px;
+  height: 80px;
+  border-radius: 50%;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.avatar-edit-preview {
+  width: 80px;
+  height: 80px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--green) 0%, var(--green-dark) 100%);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.6rem;
+  font-weight: 700;
+  background-size: cover;
+  background-position: center;
+}
+.avatar-edit-overlay {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: rgba(0,0,0,.35);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.avatar-edit-btn {
+  background: none;
+  border: none;
+  color: var(--blue);
+  font-size: .9rem;
+  font-family: inherit;
+  cursor: pointer;
+  padding: 0;
+}
+
 /* Geschiedenis */
 .history-row  { display: flex; align-items: center; gap: 10px; }
 .history-info { flex: 1; min-width: 0; }
