@@ -13,6 +13,7 @@ async function init() {
       const data = await res.json();
       setUser(data);
       showApp();
+      setupPush();
     } else {
       showAuth();
     }
@@ -40,12 +41,13 @@ function showAuth() {
 function showApp() {
   document.getElementById('auth-screen').classList.add('hidden');
   document.getElementById('app-screen').classList.remove('hidden');
-  document.getElementById('user-greeting').textContent = `Hoi, ${currentUser.display_name}!`;
+  const lvl = currentUser.level ? ` · niveau ${currentUser.level}` : '';
+  document.getElementById('user-greeting').textContent = `Hoi, ${currentUser.display_name}!${lvl}`;
   loadBookings();
 }
 
 function setUser(data) {
-  currentUser = { userId: data.userId, display_name: data.display_name };
+  currentUser = { userId: data.userId, display_name: data.display_name, level: data.level };
 }
 
 function showTab(tab) {
@@ -67,27 +69,85 @@ async function handleLogin(e) {
 
   setUser(data);
   showApp();
+  setupPush();
 }
 
 async function handleRegister(e) {
   e.preventDefault();
   clearError('register-error');
+
+  const level = parseInt(document.getElementById('reg-level').value, 10);
+  if (!level) return showError('register-error', 'Kies een speelniveau');
+
   const display_name = document.getElementById('reg-display-name').value;
   const username     = document.getElementById('reg-username').value;
   const password     = document.getElementById('reg-password').value;
 
-  const res = await api('/api/auth/register', { method: 'POST', body: { username, display_name, password } });
+  const res = await api('/api/auth/register', { method: 'POST', body: { username, display_name, password, level } });
   const data = await res.json();
   if (!res.ok) return showError('register-error', data.error);
 
   setUser(data);
   showApp();
+  setupPush();
 }
 
 async function handleLogout() {
   await api('/api/auth/logout', { method: 'POST' });
   currentUser = null;
   showAuth();
+}
+
+/* ── Level picker ─────────────────────────────────────────── */
+document.addEventListener('DOMContentLoaded', () => {
+  document.querySelectorAll('#reg-level-picker .level-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('#reg-level-picker .level-btn').forEach(b => b.classList.remove('selected'));
+      btn.classList.add('selected');
+      document.getElementById('reg-level').value = btn.dataset.level;
+    });
+  });
+});
+
+/* ── Push notifications ───────────────────────────────────── */
+async function setupPush() {
+  if (!('serviceWorker' in navigator) || !('PushManager' in window)) return;
+
+  try {
+    const reg = await navigator.serviceWorker.register('/sw.js');
+    await navigator.serviceWorker.ready;
+
+    // Vraag toestemming
+    const permission = await Notification.requestPermission();
+    if (permission !== 'granted') return;
+
+    // Haal VAPID public key op
+    const keyRes = await api('/api/push/vapid-public-key');
+    const { key } = await keyRes.json();
+
+    const sub = await reg.pushManager.subscribe({
+      userVisibleOnly: true,
+      applicationServerKey: urlBase64ToUint8Array(key),
+    });
+
+    await api('/api/push/subscribe', {
+      method: 'POST',
+      body: {
+        endpoint: sub.endpoint,
+        p256dh: btoa(String.fromCharCode(...new Uint8Array(sub.getKey('p256dh')))),
+        auth:    btoa(String.fromCharCode(...new Uint8Array(sub.getKey('auth')))),
+      },
+    });
+  } catch (err) {
+    console.log('Push niet beschikbaar:', err.message);
+  }
+}
+
+function urlBase64ToUint8Array(base64String) {
+  const padding = '='.repeat((4 - base64String.length % 4) % 4);
+  const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+  const rawData = window.atob(base64);
+  return Uint8Array.from([...rawData].map(c => c.charCodeAt(0)));
 }
 
 /* ── Bookings list ────────────────────────────────────────── */
@@ -145,17 +205,27 @@ function buildCard(b) {
     badge = `<span class="booking-badge badge-open">${free} plek${free > 1 ? 'ken' : ''} vrij</span>`;
   }
 
+  // Niveau badge
+  let levelBadge = '';
+  if (b.min_level !== null && b.min_level !== undefined) {
+    const lvlText = b.min_level === b.max_level ? `Niveau ${b.min_level}` : `Niveau ${b.min_level}–${b.max_level}`;
+    levelBadge = `<span class="level-badge">${lvlText}</span>`;
+  }
+
+  // Betaallink indicator
+  const payIcon = b.payment_url ? `<span class="pay-icon" title="Betaallink beschikbaar">💳</span>` : '';
+
   const dateStr = formatDate(b.date);
 
   card.innerHTML = `
-    <div class="booking-card-title">${escHtml(b.title)}</div>
+    <div class="booking-card-title">${escHtml(b.title)} ${payIcon}</div>
     <div class="booking-card-meta">
       <span>📅 ${dateStr}</span>
       <span>🕐 ${b.start_time} – ${b.end_time}</span>
       <span>📍 ${escHtml(b.location)}</span>
     </div>
     <div class="spots-bar">${spots}</div>
-    <div>${badge}</div>
+    <div class="card-footer">${badge}${levelBadge}</div>
   `;
 
   return card;
@@ -174,17 +244,52 @@ async function showDetailModal(id) {
   const playerCount = b.player_count || 0;
   const extraCount  = b.extra_count  || 0;
   const isFull      = playerCount >= 4 && extraCount >= 1;
+  const isCreator   = b.created_by === currentUser.userId;
 
   // Info
+  let levelInfo = '';
+  if (b.min_level !== null && b.min_level !== undefined) {
+    const lvlText = b.min_level === b.max_level ? `${b.min_level}` : `${b.min_level}–${b.max_level}`;
+    levelInfo = `<dt>Niveau</dt><dd>${lvlText}</dd>`;
+  }
+
   let infoHtml = `
     <dl class="detail-info">
       <dt>Datum</dt>      <dd>${formatDate(b.date)}</dd>
       <dt>Tijd</dt>       <dd>${b.start_time} – ${b.end_time}</dd>
       <dt>Locatie</dt>    <dd>${escHtml(b.location)}</dd>
       <dt>Aangemaakt door</dt> <dd>${escHtml(b.creator_name)}</dd>
+      ${levelInfo}
       ${b.notes ? `<dt>Notities</dt><dd>${escHtml(b.notes)}</dd>` : ''}
     </dl>
   `;
+
+  // Betaallink knop (zichtbaar voor alle deelnemers)
+  let payHtml = '';
+  if (b.payment_url) {
+    payHtml = `
+      <div class="pay-section">
+        <a href="${escAttr(b.payment_url)}" target="_blank" rel="noopener noreferrer" class="btn btn-pay btn-full">
+          💳 Betaal hier
+        </a>
+      </div>
+    `;
+  }
+
+  // Betaallink invoer (alleen aanmaker)
+  let payFormHtml = '';
+  if (isCreator) {
+    payFormHtml = `
+      <div class="pay-form-section">
+        <h3>Betaallink</h3>
+        <div class="pay-input-row">
+          <input type="url" id="payment-url-input" placeholder="https://tikkie.me/..." value="${escAttr(b.payment_url || '')}" />
+          <button class="btn btn-primary btn-sm" onclick="handleSetPaymentUrl()">Opslaan</button>
+        </div>
+        <p class="pay-hint">Deelnemers ontvangen een pushbericht zodra je een link toevoegt.</p>
+      </div>
+    `;
+  }
 
   // Deelnemers
   const players = b.participants.filter(p => !p.is_extra);
@@ -198,33 +303,32 @@ async function showDetailModal(id) {
     partHtml += `<li><span class="picon">➖</span> Nog niemand</li>`;
   } else {
     players.forEach(p => {
-      partHtml += `<li><span class="picon">🎾</span> ${escHtml(p.display_name)}</li>`;
+      const lvl = p.level ? `<span class="participant-level">niv. ${p.level}</span>` : '';
+      partHtml += `<li><span class="picon">🎾</span> ${escHtml(p.display_name)}${lvl}</li>`;
     });
   }
-  // Lege plekken
   for (let i = players.length; i < 4; i++) {
     partHtml += `<li style="opacity:.4"><span class="picon">⬜</span> Vrije plek</li>`;
   }
   partHtml += `</ul>`;
 
-  // Extra man
   partHtml += `<h3>Extra man</h3><ul class="participant-list">`;
   if (extras.length > 0) {
     extras.forEach(p => {
-      partHtml += `<li><span class="picon">➕</span> ${escHtml(p.display_name)}</li>`;
+      const lvl = p.level ? `<span class="participant-level">niv. ${p.level}</span>` : '';
+      partHtml += `<li><span class="picon">➕</span> ${escHtml(p.display_name)}${lvl}</li>`;
     });
   } else {
     partHtml += `<li style="opacity:.4"><span class="picon">⬜</span> Vrij</li>`;
   }
   partHtml += `</ul></div>`;
 
-  document.getElementById('detail-content').innerHTML = infoHtml + partHtml;
+  document.getElementById('detail-content').innerHTML =
+    infoHtml + payHtml + payFormHtml + partHtml;
 
   // Actieknoppen
   const actions = document.getElementById('detail-actions');
   actions.innerHTML = '';
-
-  const isCreator = b.created_by === currentUser.userId;
 
   if (isCreator) {
     const delBtn = document.createElement('button');
@@ -291,9 +395,24 @@ async function handleDeleteBooking() {
   loadBookings();
 }
 
+async function handleSetPaymentUrl() {
+  clearError('detail-error');
+  const payment_url = document.getElementById('payment-url-input').value.trim();
+
+  const res = await api(`/api/bookings/${currentDetailId}/payment`, {
+    method: 'PUT',
+    body: { payment_url },
+  });
+  const data = await res.json();
+  if (!res.ok) return showError('detail-error', data.error);
+
+  // Herlaad detail om knop te tonen
+  await showDetailModal(currentDetailId);
+  loadBookings();
+}
+
 /* ── New booking modal ────────────────────────────────────── */
 function showNewBookingModal() {
-  // Datum op vandaag zetten als standaard
   const today = new Date().toISOString().split('T')[0];
   document.getElementById('b-date').value = today;
   document.getElementById('b-date').min = today;
@@ -344,6 +463,11 @@ function escHtml(str) {
   if (!str) return '';
   return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
             .replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
+
+function escAttr(str) {
+  if (!str) return '';
+  return str.replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
 }
 
 function showError(id, msg) {

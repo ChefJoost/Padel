@@ -48,6 +48,23 @@
         <label>Wachtwoord</label>
         <input type="password" id="reg-password" autocomplete="new-password" minlength="6" required />
       </div>
+      <div class="form-group">
+        <label>Speelniveau <span class="required">*</span>
+          <span class="level-hint">1 = beginner · 9 = pro</span>
+        </label>
+        <div class="level-picker" id="reg-level-picker">
+          <button type="button" class="level-btn" data-level="1">1</button>
+          <button type="button" class="level-btn" data-level="2">2</button>
+          <button type="button" class="level-btn" data-level="3">3</button>
+          <button type="button" class="level-btn" data-level="4">4</button>
+          <button type="button" class="level-btn" data-level="5">5</button>
+          <button type="button" class="level-btn" data-level="6">6</button>
+          <button type="button" class="level-btn" data-level="7">7</button>
+          <button type="button" class="level-btn" data-level="8">8</button>
+          <button type="button" class="level-btn" data-level="9">9</button>
+        </div>
+        <input type="hidden" id="reg-level" required />
+      </div>
       <div id="register-error" class="error-msg hidden"></div>
       <button type="submit" class="btn btn-primary btn-full">Account aanmaken</button>
     </form>

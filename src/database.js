@@ -45,6 +45,20 @@ db.exec(`
     joined_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     UNIQUE(booking_id, user_id)
   );
+
+  CREATE TABLE IF NOT EXISTS push_subscriptions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    endpoint TEXT NOT NULL UNIQUE,
+    p256dh TEXT NOT NULL,
+    auth TEXT NOT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  );
 `);
+
+// Migraties: nieuwe kolommen toevoegen aan bestaande tabellen
+const migrate = (sql) => { try { db.exec(sql); } catch (_) {} };
+migrate('ALTER TABLE users ADD COLUMN level INTEGER');
+migrate('ALTER TABLE bookings ADD COLUMN payment_url TEXT');
 
 module.exports = db;

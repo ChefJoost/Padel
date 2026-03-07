@@ -359,3 +359,123 @@ main {
   margin-bottom: 1rem;
 }
 .spots-summary strong { color: var(--text); }
+
+/* ── Card footer (badge + niveau) ────────────────────────── */
+.card-footer {
+  display: flex;
+  align-items: center;
+  gap: .5rem;
+  flex-wrap: wrap;
+}
+
+/* ── Niveau picker (registratie) ─────────────────────────── */
+.level-hint {
+  font-weight: 400;
+  font-size: .8rem;
+  color: var(--text-muted);
+  margin-left: .4rem;
+}
+
+.level-picker {
+  display: flex;
+  gap: .35rem;
+  flex-wrap: wrap;
+}
+
+.level-btn {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  border: 2px solid var(--border);
+  background: var(--bg);
+  color: var(--text);
+  font-size: .9rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background .12s, border-color .12s, color .12s;
+}
+.level-btn:hover     { border-color: var(--green); color: var(--green); }
+.level-btn.selected  { background: var(--green); border-color: var(--green); color: #fff; }
+
+/* ── Niveau badge (kaart) ────────────────────────────────── */
+.level-badge {
+  display: inline-block;
+  padding: .2rem .55rem;
+  border-radius: 20px;
+  font-size: .75rem;
+  font-weight: 700;
+  background: #e3f2fd;
+  color: #1565c0;
+}
+
+/* ── Niveau in deelnemerslijst ───────────────────────────── */
+.participant-level {
+  margin-left: auto;
+  font-size: .78rem;
+  color: var(--text-muted);
+  background: var(--bg);
+  border-radius: 10px;
+  padding: .1rem .4rem;
+}
+
+/* ── Betaallink sectie ───────────────────────────────────── */
+.pay-section {
+  margin-bottom: 1.25rem;
+}
+
+.btn-pay {
+  background: #2e7d32;
+  color: #fff;
+  font-size: 1rem;
+  padding: .75rem 1.5rem;
+  border-radius: 10px;
+  text-align: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: .5rem;
+  text-decoration: none;
+  transition: background .15s;
+}
+.btn-pay:hover { background: var(--green-dark); }
+
+.pay-form-section {
+  margin-bottom: 1.25rem;
+  padding: 1rem;
+  background: var(--bg);
+  border-radius: 10px;
+}
+.pay-form-section h3 {
+  font-size: .9rem;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: .05em;
+  margin-bottom: .6rem;
+}
+.pay-input-row {
+  display: flex;
+  gap: .5rem;
+  align-items: center;
+}
+.pay-input-row input {
+  flex: 1;
+  padding: .5rem .75rem;
+  border: 1.5px solid var(--border);
+  border-radius: 8px;
+  font-size: .9rem;
+  font-family: inherit;
+  background: var(--surface);
+  color: var(--text);
+}
+.pay-input-row input:focus {
+  outline: none;
+  border-color: var(--green);
+}
+.pay-hint {
+  margin-top: .5rem;
+  font-size: .78rem;
+  color: var(--text-muted);
+}
+
+/* Betaallink icoontje op kaart */
+.pay-icon { font-size: .9rem; }

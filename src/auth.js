@@ -6,7 +6,7 @@ const router = express.Router();
 
 // Registreren
 router.post('/register', async (req, res) => {
-  const { username, display_name, password } = req.body;
+  const { username, display_name, password, level } = req.body;
 
   if (!username || !display_name || !password) {
     return res.status(400).json({ error: 'Vul alle velden in' });
@@ -14,6 +14,11 @@ router.post('/register', async (req, res) => {
 
   if (password.length < 6) {
     return res.status(400).json({ error: 'Wachtwoord moet minimaal 6 tekens zijn' });
+  }
+
+  const lvl = parseInt(level, 10);
+  if (!lvl || lvl < 1 || lvl > 9) {
+    return res.status(400).json({ error: 'Kies een niveau tussen 1 en 9' });
   }
 
   const existing = db.prepare('SELECT id FROM users WHERE username = ?').get(username.toLowerCase());
@@ -24,13 +29,14 @@ router.post('/register', async (req, res) => {
   try {
     const hash = await bcrypt.hash(password, 12);
     const result = db.prepare(
-      'INSERT INTO users (username, display_name, password_hash) VALUES (?, ?, ?)'
-    ).run(username.toLowerCase(), display_name, hash);
+      'INSERT INTO users (username, display_name, password_hash, level) VALUES (?, ?, ?, ?)'
+    ).run(username.toLowerCase(), display_name, hash, lvl);
 
     req.session.userId = result.lastInsertRowid;
     req.session.displayName = display_name;
+    req.session.level = lvl;
 
-    res.json({ success: true, userId: result.lastInsertRowid, display_name });
+    res.json({ success: true, userId: result.lastInsertRowid, display_name, level: lvl });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Server fout bij registreren' });
@@ -58,8 +64,9 @@ router.post('/login', async (req, res) => {
 
     req.session.userId = user.id;
     req.session.displayName = user.display_name;
+    req.session.level = user.level;
 
-    res.json({ success: true, userId: user.id, display_name: user.display_name });
+    res.json({ success: true, userId: user.id, display_name: user.display_name, level: user.level });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Server fout bij inloggen' });
@@ -78,7 +85,11 @@ router.get('/me', (req, res) => {
   if (!req.session.userId) {
     return res.status(401).json({ error: 'Niet ingelogd' });
   }
-  res.json({ userId: req.session.userId, display_name: req.session.displayName });
+  res.json({
+    userId: req.session.userId,
+    display_name: req.session.displayName,
+    level: req.session.level || null,
+  });
 });
 
 module.exports = router;

@@ -1,5 +1,6 @@
 const express = require('express');
 const db = require('./database');
+const { sendPushToUser } = require('./push');
 
 const router = express.Router();
 
@@ -15,15 +16,19 @@ function requireAuth(req, res, next) {
 router.get('/', requireAuth, (req, res) => {
   const bookings = db.prepare(`
     SELECT
-      b.*,
+      b.id, b.title, b.location, b.date, b.start_time, b.end_time, b.notes,
+      b.created_by, b.payment_url,
       u.display_name AS creator_name,
       COUNT(CASE WHEN p.is_extra = 0 THEN 1 END) AS player_count,
       COUNT(CASE WHEN p.is_extra = 1 THEN 1 END) AS extra_count,
       MAX(CASE WHEN p.user_id = ? THEN 1 ELSE 0 END) AS user_joined,
-      MAX(CASE WHEN p.user_id = ? AND p.is_extra = 1 THEN 1 ELSE 0 END) AS user_is_extra
+      MAX(CASE WHEN p.user_id = ? AND p.is_extra = 1 THEN 1 ELSE 0 END) AS user_is_extra,
+      MIN(CASE WHEN p.is_extra = 0 THEN u2.level END) AS min_level,
+      MAX(CASE WHEN p.is_extra = 0 THEN u2.level END) AS max_level
     FROM bookings b
     JOIN users u ON b.created_by = u.id
     LEFT JOIN participants p ON b.id = p.booking_id
+    LEFT JOIN users u2 ON p.user_id = u2.id
     WHERE b.date >= date('now', 'localtime')
     GROUP BY b.id
     ORDER BY b.date ASC, b.start_time ASC
@@ -36,15 +41,19 @@ router.get('/', requireAuth, (req, res) => {
 router.get('/:id', requireAuth, (req, res) => {
   const booking = db.prepare(`
     SELECT
-      b.*,
+      b.id, b.title, b.location, b.date, b.start_time, b.end_time, b.notes,
+      b.created_by, b.payment_url,
       u.display_name AS creator_name,
       COUNT(CASE WHEN p.is_extra = 0 THEN 1 END) AS player_count,
       COUNT(CASE WHEN p.is_extra = 1 THEN 1 END) AS extra_count,
       MAX(CASE WHEN p.user_id = ? THEN 1 ELSE 0 END) AS user_joined,
-      MAX(CASE WHEN p.user_id = ? AND p.is_extra = 1 THEN 1 ELSE 0 END) AS user_is_extra
+      MAX(CASE WHEN p.user_id = ? AND p.is_extra = 1 THEN 1 ELSE 0 END) AS user_is_extra,
+      MIN(CASE WHEN p.is_extra = 0 THEN u2.level END) AS min_level,
+      MAX(CASE WHEN p.is_extra = 0 THEN u2.level END) AS max_level
     FROM bookings b
     JOIN users u ON b.created_by = u.id
     LEFT JOIN participants p ON b.id = p.booking_id
+    LEFT JOIN users u2 ON p.user_id = u2.id
     WHERE b.id = ?
     GROUP BY b.id
   `).get(req.session.userId, req.session.userId, req.params.id);
@@ -52,7 +61,7 @@ router.get('/:id', requireAuth, (req, res) => {
   if (!booking) return res.status(404).json({ error: 'Boeking niet gevonden' });
 
   const participants = db.prepare(`
-    SELECT u.display_name, p.is_extra, p.joined_at
+    SELECT u.display_name, u.level, p.is_extra, p.joined_at
     FROM participants p
     JOIN users u ON p.user_id = u.id
     WHERE p.booking_id = ?
@@ -70,7 +79,6 @@ router.post('/', requireAuth, (req, res) => {
     return res.status(400).json({ error: 'Vul alle verplichte velden in' });
   }
 
-  // Datum mag niet in het verleden liggen
   if (date < new Date().toISOString().split('T')[0]) {
     return res.status(400).json({ error: 'Datum mag niet in het verleden liggen' });
   }
@@ -86,6 +94,54 @@ router.post('/', requireAuth, (req, res) => {
   `).run(result.lastInsertRowid, req.session.userId);
 
   res.status(201).json({ id: result.lastInsertRowid });
+});
+
+// Betaallink instellen/bijwerken (alleen aanmaker)
+router.put('/:id/payment', requireAuth, async (req, res) => {
+  const bookingId = req.params.id;
+  const userId = req.session.userId;
+  const { payment_url } = req.body;
+
+  const booking = db.prepare('SELECT * FROM bookings WHERE id = ?').get(bookingId);
+  if (!booking) return res.status(404).json({ error: 'Boeking niet gevonden' });
+  if (booking.created_by !== userId) {
+    return res.status(403).json({ error: 'Alleen de aanmaker kan de betaallink instellen' });
+  }
+
+  // Valideer URL
+  if (payment_url) {
+    try {
+      const url = new URL(payment_url);
+      if (!['http:', 'https:'].includes(url.protocol)) throw new Error();
+    } catch {
+      return res.status(400).json({ error: 'Ongeldige URL. Gebruik https://...' });
+    }
+  }
+
+  db.prepare('UPDATE bookings SET payment_url = ? WHERE id = ?')
+    .run(payment_url || null, bookingId);
+
+  // Stuur push-notificatie naar alle andere deelnemers als er een URL is ingesteld
+  if (payment_url) {
+    const participants = db.prepare(`
+      SELECT DISTINCT user_id FROM participants WHERE booking_id = ? AND user_id != ?
+    `).all(bookingId, userId);
+
+    const creatorName = db.prepare('SELECT display_name FROM users WHERE id = ?')
+      .get(userId)?.display_name || 'De organisator';
+
+    await Promise.allSettled(
+      participants.map(p =>
+        sendPushToUser(p.user_id, {
+          title: '💳 Betaallink beschikbaar',
+          body: `${creatorName} heeft een betaallink toegevoegd voor "${booking.title}"`,
+          url: '/',
+        })
+      )
+    );
+  }
+
+  res.json({ success: true });
 });
 
 // Inschrijven voor een boeking
@@ -111,12 +167,34 @@ router.post('/:id/join', requireAuth, (req, res) => {
   `).get(bookingId);
 
   let isExtra = 0;
-
   if (counts.players >= 4) {
     if (counts.extras >= 1) {
       return res.status(409).json({ error: 'De boeking is vol (4 spelers + 1 extra)' });
     }
     isExtra = 1;
+  }
+
+  // Niveau-check: max 2 aansluitende niveaus toegestaan
+  const user = db.prepare('SELECT level FROM users WHERE id = ?').get(userId);
+  if (user.level) {
+    const levelRange = db.prepare(`
+      SELECT
+        MIN(u.level) AS min_level,
+        MAX(u.level) AS max_level
+      FROM participants p
+      JOIN users u ON p.user_id = u.id
+      WHERE p.booking_id = ? AND p.is_extra = 0 AND u.level IS NOT NULL
+    `).get(bookingId);
+
+    if (levelRange.min_level !== null) {
+      const newMin = Math.min(user.level, levelRange.min_level);
+      const newMax = Math.max(user.level, levelRange.max_level);
+      if (newMax - newMin > 1) {
+        return res.status(400).json({
+          error: `Jouw niveau (${user.level}) past niet bij dit potje (niveaus ${levelRange.min_level}–${levelRange.max_level}). Maximaal 2 aansluitende niveaus toegestaan.`,
+        });
+      }
+    }
   }
 
   db.prepare(
@@ -134,7 +212,6 @@ router.delete('/:id/join', requireAuth, (req, res) => {
   const booking = db.prepare('SELECT * FROM bookings WHERE id = ?').get(bookingId);
   if (!booking) return res.status(404).json({ error: 'Boeking niet gevonden' });
 
-  // Aanmaker mag niet uitschrijven (moet boeking verwijderen)
   if (booking.created_by === userId) {
     return res.status(400).json({ error: 'Als aanmaker kun je niet uitschrijven. Verwijder de boeking.' });
   }
@@ -153,9 +230,7 @@ router.delete('/:id/join', requireAuth, (req, res) => {
   ).get(bookingId);
 
   if (extra) {
-    db.prepare(
-      'UPDATE participants SET is_extra = 0 WHERE id = ?'
-    ).run(extra.id);
+    db.prepare('UPDATE participants SET is_extra = 0 WHERE id = ?').run(extra.id);
   }
 
   res.json({ success: true });
