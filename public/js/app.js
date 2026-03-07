@@ -4,6 +4,7 @@
 
 let currentUser = null;
 let currentDetailId = null;
+let currentTab = 'potjes';
 
 /* ── Init ─────────────────────────────────────────────────── */
 async function init() {
@@ -41,20 +42,24 @@ function showAuth() {
 function showApp() {
   document.getElementById('auth-screen').classList.add('hidden');
   document.getElementById('app-screen').classList.remove('hidden');
-  const lvl = currentUser.level ? ` · niveau ${currentUser.level}` : '';
-  document.getElementById('user-greeting').textContent = `Hoi, ${currentUser.display_name}!${lvl}`;
   loadBookings();
+  renderProfile();
 }
 
 function setUser(data) {
-  currentUser = { userId: data.userId, display_name: data.display_name, level: data.level };
+  currentUser = {
+    userId:       data.userId,
+    display_name: data.display_name,
+    username:     data.username,
+    level:        data.level,
+  };
 }
 
-function showTab(tab) {
+function showTab(tab, btn) {
   document.getElementById('login-form').classList.toggle('hidden', tab !== 'login');
   document.getElementById('register-form').classList.toggle('hidden', tab !== 'register');
-  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-  event.target.classList.add('active');
+  document.querySelectorAll('.seg-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
 }
 
 async function handleLogin(e) {
@@ -62,11 +67,9 @@ async function handleLogin(e) {
   clearError('login-error');
   const username = document.getElementById('login-username').value;
   const password = document.getElementById('login-password').value;
-
-  const res = await api('/api/auth/login', { method: 'POST', body: { username, password } });
+  const res  = await api('/api/auth/login', { method: 'POST', body: { username, password } });
   const data = await res.json();
   if (!res.ok) return showError('login-error', data.error);
-
   setUser(data);
   showApp();
   setupPush();
@@ -75,18 +78,14 @@ async function handleLogin(e) {
 async function handleRegister(e) {
   e.preventDefault();
   clearError('register-error');
-
   const level = parseInt(document.getElementById('reg-level').value, 10);
   if (!level) return showError('register-error', 'Kies een speelniveau');
-
   const display_name = document.getElementById('reg-display-name').value;
   const username     = document.getElementById('reg-username').value;
   const password     = document.getElementById('reg-password').value;
-
-  const res = await api('/api/auth/register', { method: 'POST', body: { username, display_name, password, level } });
+  const res  = await api('/api/auth/register', { method: 'POST', body: { username, display_name, password, level } });
   const data = await res.json();
   if (!res.ok) return showError('register-error', data.error);
-
   setUser(data);
   showApp();
   setupPush();
@@ -98,44 +97,62 @@ async function handleLogout() {
   showAuth();
 }
 
+/* ── Tab navigatie ────────────────────────────────────────── */
+function switchTab(tab) {
+  currentTab = tab;
+  document.getElementById('tab-potjes').classList.toggle('hidden', tab !== 'potjes');
+  document.getElementById('tab-profiel').classList.toggle('hidden', tab !== 'profiel');
+  document.getElementById('tab-btn-potjes').classList.toggle('active', tab === 'potjes');
+  document.getElementById('tab-btn-profiel').classList.toggle('active', tab === 'profiel');
+  if (tab === 'profiel') {
+    loadHistory();
+    loadUnpaid();
+  }
+}
+
 /* ── Level picker ─────────────────────────────────────────── */
-document.addEventListener('DOMContentLoaded', () => {
-  document.querySelectorAll('#reg-level-picker .level-btn').forEach(btn => {
+function initLevelPicker(pickerId, hiddenId) {
+  document.querySelectorAll(`#${pickerId} .level-btn`).forEach(btn => {
     btn.addEventListener('click', () => {
-      document.querySelectorAll('#reg-level-picker .level-btn').forEach(b => b.classList.remove('selected'));
+      document.querySelectorAll(`#${pickerId} .level-btn`).forEach(b => b.classList.remove('selected'));
       btn.classList.add('selected');
-      document.getElementById('reg-level').value = btn.dataset.level;
+      document.getElementById(hiddenId).value = btn.dataset.level;
     });
   });
+}
+
+function setLevelPicker(pickerId, hiddenId, level) {
+  document.querySelectorAll(`#${pickerId} .level-btn`).forEach(b => {
+    b.classList.toggle('selected', parseInt(b.dataset.level) === level);
+  });
+  if (level) document.getElementById(hiddenId).value = level;
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  initLevelPicker('reg-level-picker',  'reg-level');
+  initLevelPicker('edit-level-picker', 'edit-level');
 });
 
 /* ── Push notifications ───────────────────────────────────── */
 async function setupPush() {
   if (!('serviceWorker' in navigator) || !('PushManager' in window)) return;
-
   try {
     const reg = await navigator.serviceWorker.register('/sw.js');
     await navigator.serviceWorker.ready;
-
-    // Vraag toestemming
     const permission = await Notification.requestPermission();
     if (permission !== 'granted') return;
-
-    // Haal VAPID public key op
     const keyRes = await api('/api/push/vapid-public-key');
     const { key } = await keyRes.json();
-
     const sub = await reg.pushManager.subscribe({
       userVisibleOnly: true,
       applicationServerKey: urlBase64ToUint8Array(key),
     });
-
     await api('/api/push/subscribe', {
       method: 'POST',
       body: {
         endpoint: sub.endpoint,
-        p256dh: btoa(String.fromCharCode(...new Uint8Array(sub.getKey('p256dh')))),
-        auth:    btoa(String.fromCharCode(...new Uint8Array(sub.getKey('auth')))),
+        p256dh:   btoa(String.fromCharCode(...new Uint8Array(sub.getKey('p256dh')))),
+        auth:     btoa(String.fromCharCode(...new Uint8Array(sub.getKey('auth')))),
       },
     });
   } catch (err) {
@@ -146,17 +163,128 @@ async function setupPush() {
 function urlBase64ToUint8Array(base64String) {
   const padding = '='.repeat((4 - base64String.length % 4) % 4);
   const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
-  const rawData = window.atob(base64);
-  return Uint8Array.from([...rawData].map(c => c.charCodeAt(0)));
+  return Uint8Array.from([...window.atob(base64)].map(c => c.charCodeAt(0)));
+}
+
+/* ── Profiel ──────────────────────────────────────────────── */
+function renderProfile() {
+  if (!currentUser) return;
+  const initials = currentUser.display_name
+    .split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2);
+  document.getElementById('profile-avatar').textContent = initials;
+  document.getElementById('profile-name').textContent    = currentUser.display_name;
+  document.getElementById('profile-username').textContent = `@${currentUser.username || ''}`;
+  const pill = document.getElementById('profile-level-pill');
+  if (currentUser.level) {
+    pill.textContent = `Niveau ${currentUser.level}`;
+    pill.classList.remove('hidden');
+  } else {
+    pill.classList.add('hidden');
+  }
+}
+
+function showProfileEdit() {
+  clearError('profile-error');
+  document.getElementById('edit-display-name').value = currentUser.display_name;
+  document.getElementById('edit-username').value     = currentUser.username || '';
+  document.getElementById('edit-current-pw').value   = '';
+  document.getElementById('edit-new-pw').value       = '';
+  setLevelPicker('edit-level-picker', 'edit-level', currentUser.level);
+  document.getElementById('profile-modal').classList.remove('hidden');
+}
+
+function hideProfileEdit() {
+  document.getElementById('profile-modal').classList.add('hidden');
+}
+
+async function handleSaveProfile() {
+  clearError('profile-error');
+  const display_name    = document.getElementById('edit-display-name').value.trim();
+  const username        = document.getElementById('edit-username').value.trim();
+  const level           = parseInt(document.getElementById('edit-level').value, 10) || null;
+  const current_password = document.getElementById('edit-current-pw').value;
+  const new_password    = document.getElementById('edit-new-pw').value;
+
+  const body = { display_name, username, level };
+  if (new_password) { body.current_password = current_password; body.new_password = new_password; }
+
+  const res  = await api('/api/auth/profile', { method: 'PUT', body });
+  const data = await res.json();
+  if (!res.ok) return showError('profile-error', data.error);
+
+  currentUser.display_name = data.display_name;
+  currentUser.username     = data.username;
+  currentUser.level        = data.level;
+
+  hideProfileEdit();
+  renderProfile();
+}
+
+/* ── Geschiedenis ─────────────────────────────────────────── */
+async function loadHistory() {
+  const res      = await api('/api/bookings/history');
+  const bookings = await res.json();
+  const list     = document.getElementById('history-list');
+
+  if (!bookings.length) {
+    list.innerHTML = '<div class="field-row history-empty">Nog geen gespeelde potjes.</div>';
+    return;
+  }
+
+  list.innerHTML = bookings.map(b => `
+    <div class="field-row history-row">
+      <div class="history-info">
+        <div class="history-title">${escHtml(b.title)}</div>
+        <div class="history-meta">${formatDate(b.date)} · ${escHtml(b.location)}</div>
+      </div>
+      ${b.is_extra ? '<span class="role-tag role-extra">Extra</span>' : '<span class="role-tag role-player">Gespeeld</span>'}
+    </div>
+  `).join('');
+}
+
+/* ── Niet-betaald ─────────────────────────────────────────── */
+async function loadUnpaid() {
+  const res      = await api('/api/bookings');
+  const bookings = await res.json();
+
+  // Toon boekingen met betaallink waarbij gebruiker nog niet betaald heeft en geen aanmaker is
+  const unpaid = bookings.filter(b =>
+    b.payment_url && !b.user_paid_at && b.user_joined && b.created_by !== currentUser.userId
+  );
+
+  const section = document.getElementById('unpaid-section');
+  const list    = document.getElementById('unpaid-list');
+
+  if (!unpaid.length) {
+    section.classList.add('hidden');
+    return;
+  }
+  section.classList.remove('hidden');
+  list.innerHTML = unpaid.map(b => `
+    <div class="field-row unpaid-row">
+      <div class="unpaid-info">
+        <div class="unpaid-title">${escHtml(b.title)}</div>
+        <div class="unpaid-meta">${formatDate(b.date)} · ${escHtml(b.location)}</div>
+      </div>
+      <div class="unpaid-actions">
+        <a href="${escAttr(b.payment_url)}" target="_blank" rel="noopener"
+           class="btn-pay-small" onclick="markPaid(${b.id})">Betaal</a>
+      </div>
+    </div>
+  `).join('');
+}
+
+async function markPaid(bookingId) {
+  await api(`/api/bookings/${bookingId}/pay`, { method: 'POST' });
+  setTimeout(loadUnpaid, 800);
 }
 
 /* ── Bookings list ────────────────────────────────────────── */
 async function loadBookings() {
-  const res = await api('/api/bookings');
+  const res      = await api('/api/bookings');
   const bookings = await res.json();
-
-  const list = document.getElementById('bookings-list');
-  const empty = document.getElementById('bookings-empty');
+  const list     = document.getElementById('bookings-list');
+  const empty    = document.getElementById('bookings-empty');
   list.innerHTML = '';
 
   if (!bookings.length) {
@@ -164,70 +292,64 @@ async function loadBookings() {
     return;
   }
   empty.classList.add('hidden');
-
-  bookings.forEach(b => {
-    list.appendChild(buildCard(b));
-  });
+  bookings.forEach(b => list.appendChild(buildCard(b)));
 }
 
 function buildCard(b) {
   const playerCount = b.player_count || 0;
   const extraCount  = b.extra_count  || 0;
   const isFull      = playerCount >= 4 && extraCount >= 1;
-  const hasExtra    = extraCount > 0;
 
   const card = document.createElement('div');
-  card.className = `booking-card${isFull ? ' full' : hasExtra ? ' has-extra' : ''}`;
+  card.className = 'booking-card';
   card.onclick = () => showDetailModal(b.id);
 
-  // Spots visualisatie
+  // Spots
   let spots = '';
   for (let i = 0; i < 4; i++) {
-    if (i < playerCount) spots += `<div class="spot filled" title="Speler ${i + 1}">✓</div>`;
-    else spots += `<div class="spot empty" title="Vrije plek">${i + 1}</div>`;
+    spots += i < playerCount
+      ? `<div class="spot spot-filled">✓</div>`
+      : `<div class="spot spot-empty"></div>`;
   }
-  if (extraCount > 0) {
-    spots += `<div class="spot extra" title="Extra man">+1</div>`;
-  } else if (playerCount >= 4) {
-    spots += `<div class="spot empty" title="Extra man (vrij)">+1</div>`;
-  }
+  if (extraCount > 0) spots += `<div class="spot spot-extra">+1</div>`;
+  else if (playerCount >= 4) spots += `<div class="spot spot-open-extra">+1</div>`;
 
-  // Badge
-  let badge = '';
+  // Status
+  let statusTag = '';
   if (b.user_joined) {
-    badge = b.user_is_extra
-      ? `<span class="booking-badge badge-extra">Jij bent extra</span>`
-      : `<span class="booking-badge badge-joined">Jij speelt mee</span>`;
+    statusTag = b.user_is_extra
+      ? `<span class="status-tag status-extra">Extra</span>`
+      : `<span class="status-tag status-joined">Meedoen</span>`;
   } else if (isFull) {
-    badge = `<span class="booking-badge badge-full">Vol</span>`;
+    statusTag = `<span class="status-tag status-full">Vol</span>`;
   } else {
-    const free = 4 - playerCount;
-    badge = `<span class="booking-badge badge-open">${free} plek${free > 1 ? 'ken' : ''} vrij</span>`;
+    statusTag = `<span class="status-tag status-open">${4 - playerCount} plek${4 - playerCount > 1 ? 'ken' : ''} vrij</span>`;
   }
 
-  // Niveau badge
-  let levelBadge = '';
-  if (b.min_level !== null && b.min_level !== undefined) {
-    const lvlText = b.min_level === b.max_level ? `Niveau ${b.min_level}` : `Niveau ${b.min_level}–${b.max_level}`;
-    levelBadge = `<span class="level-badge">${lvlText}</span>`;
+  // Niveau
+  let levelTag = '';
+  if (b.min_level != null) {
+    const txt = b.min_level === b.max_level ? `Niv. ${b.min_level}` : `Niv. ${b.min_level}–${b.max_level}`;
+    levelTag = `<span class="status-tag status-level">${txt}</span>`;
   }
 
   // Betaallink indicator
-  const payIcon = b.payment_url ? `<span class="pay-icon" title="Betaallink beschikbaar">💳</span>` : '';
-
-  const dateStr = formatDate(b.date);
+  const payDot = b.payment_url && b.user_joined && !b.user_paid_at && b.created_by !== currentUser?.userId
+    ? `<span class="pay-dot" title="Betaling openstaand"></span>` : '';
 
   card.innerHTML = `
-    <div class="booking-card-title">${escHtml(b.title)} ${payIcon}</div>
-    <div class="booking-card-meta">
-      <span>📅 ${dateStr}</span>
+    <div class="card-top">
+      <div class="card-title">${escHtml(b.title)}${payDot}</div>
+      <div class="card-chevron">›</div>
+    </div>
+    <div class="card-meta">
+      <span>📅 ${formatDate(b.date)}</span>
       <span>🕐 ${b.start_time} – ${b.end_time}</span>
       <span>📍 ${escHtml(b.location)}</span>
     </div>
-    <div class="spots-bar">${spots}</div>
-    <div class="card-footer">${badge}${levelBadge}</div>
+    <div class="card-spots">${spots}</div>
+    <div class="card-tags">${statusTag}${levelTag}</div>
   `;
-
   return card;
 }
 
@@ -237,7 +359,7 @@ async function showDetailModal(id) {
   clearError('detail-error');
 
   const res = await api(`/api/bookings/${id}`);
-  const b = await res.json();
+  const b   = await res.json();
 
   document.getElementById('detail-title').textContent = b.title;
 
@@ -246,85 +368,89 @@ async function showDetailModal(id) {
   const isFull      = playerCount >= 4 && extraCount >= 1;
   const isCreator   = b.created_by === currentUser.userId;
 
-  // Info
-  let levelInfo = '';
-  if (b.min_level !== null && b.min_level !== undefined) {
-    const lvlText = b.min_level === b.max_level ? `${b.min_level}` : `${b.min_level}–${b.max_level}`;
-    levelInfo = `<dt>Niveau</dt><dd>${lvlText}</dd>`;
+  // Niveau range
+  let levelRow = '';
+  if (b.min_level != null) {
+    const txt = b.min_level === b.max_level ? `${b.min_level}` : `${b.min_level}–${b.max_level}`;
+    levelRow = `<div class="field-row"><label>Niveau</label><span>${txt}</span></div>`;
   }
 
-  let infoHtml = `
-    <dl class="detail-info">
-      <dt>Datum</dt>      <dd>${formatDate(b.date)}</dd>
-      <dt>Tijd</dt>       <dd>${b.start_time} – ${b.end_time}</dd>
-      <dt>Locatie</dt>    <dd>${escHtml(b.location)}</dd>
-      <dt>Aangemaakt door</dt> <dd>${escHtml(b.creator_name)}</dd>
-      ${levelInfo}
-      ${b.notes ? `<dt>Notities</dt><dd>${escHtml(b.notes)}</dd>` : ''}
-    </dl>
+  // Info sectie
+  const infoHtml = `
+    <div class="section-header">Details</div>
+    <div class="field-group">
+      <div class="field-row"><label>Datum</label><span>${formatDate(b.date)}</span></div>
+      <div class="field-row"><label>Tijd</label><span>${b.start_time} – ${b.end_time}</span></div>
+      <div class="field-row"><label>Locatie</label><span>${escHtml(b.location)}</span></div>
+      <div class="field-row"><label>Organisator</label><span>${escHtml(b.creator_name)}</span></div>
+      ${levelRow}
+      ${b.notes ? `<div class="field-row"><label>Notities</label><span>${escHtml(b.notes)}</span></div>` : ''}
+    </div>
   `;
 
-  // Betaallink knop (zichtbaar voor alle deelnemers)
+  // Betaallink (voor deelnemers)
   let payHtml = '';
-  if (b.payment_url) {
+  if (b.payment_url && !isCreator && b.user_joined) {
+    const paid = b.user_paid_at;
     payHtml = `
-      <div class="pay-section">
-        <a href="${escAttr(b.payment_url)}" target="_blank" rel="noopener noreferrer" class="btn btn-pay btn-full">
-          💳 Betaal hier
-        </a>
+      <div class="section-header">Betaling</div>
+      <div class="field-group">
+        <div class="field-row">
+          ${paid
+            ? `<span class="paid-badge">✓ Betaald</span>`
+            : `<a href="${escAttr(b.payment_url)}" target="_blank" rel="noopener" class="btn-pay-full" onclick="markPaidAndRefresh(${id})">💳 Betaal hier</a>`
+          }
+        </div>
+        ${paid ? '' : `<div class="field-row"><button class="btn-mark-paid" onclick="markPaidAndRefresh(${id})">Markeer als betaald</button></div>`}
       </div>
     `;
   }
 
-  // Betaallink invoer (alleen aanmaker)
+  // Betaallink beheer (voor organisator)
   let payFormHtml = '';
   if (isCreator) {
     payFormHtml = `
-      <div class="pay-form-section">
-        <h3>Betaallink</h3>
-        <div class="pay-input-row">
-          <input type="url" id="payment-url-input" placeholder="https://tikkie.me/..." value="${escAttr(b.payment_url || '')}" />
-          <button class="btn btn-primary btn-sm" onclick="handleSetPaymentUrl()">Opslaan</button>
+      <div class="section-header">Betaallink instellen</div>
+      <div class="field-group">
+        <div class="field-row">
+          <input type="url" id="payment-url-input" placeholder="https://tikkie.me/..." value="${escAttr(b.payment_url || '')}" style="flex:1" />
         </div>
-        <p class="pay-hint">Deelnemers ontvangen een pushbericht zodra je een link toevoegt.</p>
+        <div class="field-row">
+          <button class="btn btn-primary btn-full" onclick="handleSetPaymentUrl()">Opslaan</button>
+        </div>
+        <div class="field-row hint-row">Deelnemers ontvangen een pushbericht.</div>
       </div>
     `;
   }
 
   // Deelnemers
   const players = b.participants.filter(p => !p.is_extra);
-  const extras  = b.participants.filter(p => p.is_extra);
+  const extras  = b.participants.filter(p =>  p.is_extra);
 
-  let partHtml = `<div class="participants-section">
-    <h3>Spelers (${playerCount}/4)</h3>
-    <ul class="participant-list">`;
-
-  if (players.length === 0) {
-    partHtml += `<li><span class="picon">➖</span> Nog niemand</li>`;
-  } else {
-    players.forEach(p => {
-      const lvl = p.level ? `<span class="participant-level">niv. ${p.level}</span>` : '';
-      partHtml += `<li><span class="picon">🎾</span> ${escHtml(p.display_name)}${lvl}</li>`;
-    });
-  }
+  const playerRows = players.map(p => {
+    const lvl = p.level ? ` <span class="p-level">niv. ${p.level}</span>` : '';
+    return `<div class="field-row"><span class="p-icon">🎾</span> ${escHtml(p.display_name)}${lvl}</div>`;
+  });
   for (let i = players.length; i < 4; i++) {
-    partHtml += `<li style="opacity:.4"><span class="picon">⬜</span> Vrije plek</li>`;
+    playerRows.push(`<div class="field-row p-empty"><span class="p-icon">○</span> Vrije plek</div>`);
   }
-  partHtml += `</ul>`;
 
-  partHtml += `<h3>Extra man</h3><ul class="participant-list">`;
-  if (extras.length > 0) {
-    extras.forEach(p => {
-      const lvl = p.level ? `<span class="participant-level">niv. ${p.level}</span>` : '';
-      partHtml += `<li><span class="picon">➕</span> ${escHtml(p.display_name)}${lvl}</li>`;
-    });
-  } else {
-    partHtml += `<li style="opacity:.4"><span class="picon">⬜</span> Vrij</li>`;
-  }
-  partHtml += `</ul></div>`;
+  const extraRows = extras.length
+    ? extras.map(p => {
+        const lvl = p.level ? ` <span class="p-level">niv. ${p.level}</span>` : '';
+        return `<div class="field-row"><span class="p-icon">➕</span> ${escHtml(p.display_name)}${lvl}</div>`;
+      })
+    : [`<div class="field-row p-empty"><span class="p-icon">○</span> Vrij</div>`];
 
-  document.getElementById('detail-content').innerHTML =
-    infoHtml + payHtml + payFormHtml + partHtml;
+  const participantsHtml = `
+    <div class="section-header">Spelers (${playerCount}/4)</div>
+    <div class="field-group">${playerRows.join('')}</div>
+    <div class="section-header">Extra man</div>
+    <div class="field-group">${extraRows.join('')}</div>
+  `;
+
+  document.getElementById('detail-body').innerHTML =
+    infoHtml + payHtml + payFormHtml + participantsHtml;
 
   // Actieknoppen
   const actions = document.getElementById('detail-actions');
@@ -332,29 +458,23 @@ async function showDetailModal(id) {
 
   if (isCreator) {
     const delBtn = document.createElement('button');
-    delBtn.className = 'btn btn-danger';
+    delBtn.className = 'btn btn-destructive-outline btn-full';
     delBtn.textContent = 'Boeking verwijderen';
     delBtn.onclick = handleDeleteBooking;
     actions.appendChild(delBtn);
   } else if (b.user_joined) {
     const leaveBtn = document.createElement('button');
-    leaveBtn.className = 'btn btn-outline';
+    leaveBtn.className = 'btn btn-outline btn-full';
     leaveBtn.textContent = 'Uitschrijven';
     leaveBtn.onclick = handleLeaveBooking;
     actions.appendChild(leaveBtn);
   } else if (!isFull) {
     const joinBtn = document.createElement('button');
-    joinBtn.className = 'btn btn-primary';
+    joinBtn.className = 'btn btn-primary btn-full';
     joinBtn.textContent = playerCount >= 4 ? 'Inschrijven als extra' : 'Inschrijven';
     joinBtn.onclick = handleJoinBooking;
     actions.appendChild(joinBtn);
   }
-
-  const closeBtn = document.createElement('button');
-  closeBtn.className = 'btn btn-outline';
-  closeBtn.textContent = 'Sluiten';
-  closeBtn.onclick = hideDetailModal;
-  actions.appendChild(closeBtn);
 
   document.getElementById('detail-modal').classList.remove('hidden');
 }
@@ -364,49 +484,43 @@ function hideDetailModal() {
   currentDetailId = null;
 }
 
+async function markPaidAndRefresh(id) {
+  await api(`/api/bookings/${id}/pay`, { method: 'POST' });
+  await showDetailModal(id);
+  loadUnpaid();
+}
+
 async function handleJoinBooking() {
   clearError('detail-error');
-  const res = await api(`/api/bookings/${currentDetailId}/join`, { method: 'POST' });
+  const res  = await api(`/api/bookings/${currentDetailId}/join`, { method: 'POST' });
   const data = await res.json();
   if (!res.ok) return showError('detail-error', data.error);
-
-  hideDetailModal();
-  loadBookings();
+  hideDetailModal(); loadBookings();
 }
 
 async function handleLeaveBooking() {
   clearError('detail-error');
-  const res = await api(`/api/bookings/${currentDetailId}/join`, { method: 'DELETE' });
+  const res  = await api(`/api/bookings/${currentDetailId}/join`, { method: 'DELETE' });
   const data = await res.json();
   if (!res.ok) return showError('detail-error', data.error);
-
-  hideDetailModal();
-  loadBookings();
+  hideDetailModal(); loadBookings();
 }
 
 async function handleDeleteBooking() {
   if (!confirm('Weet je zeker dat je deze boeking wilt verwijderen?')) return;
   clearError('detail-error');
-  const res = await api(`/api/bookings/${currentDetailId}`, { method: 'DELETE' });
+  const res  = await api(`/api/bookings/${currentDetailId}`, { method: 'DELETE' });
   const data = await res.json();
   if (!res.ok) return showError('detail-error', data.error);
-
-  hideDetailModal();
-  loadBookings();
+  hideDetailModal(); loadBookings();
 }
 
 async function handleSetPaymentUrl() {
   clearError('detail-error');
   const payment_url = document.getElementById('payment-url-input').value.trim();
-
-  const res = await api(`/api/bookings/${currentDetailId}/payment`, {
-    method: 'PUT',
-    body: { payment_url },
-  });
+  const res  = await api(`/api/bookings/${currentDetailId}/payment`, { method: 'PUT', body: { payment_url } });
   const data = await res.json();
   if (!res.ok) return showError('detail-error', data.error);
-
-  // Herlaad detail om knop te tonen
   await showDetailModal(currentDetailId);
   loadBookings();
 }
@@ -415,8 +529,10 @@ async function handleSetPaymentUrl() {
 function showNewBookingModal() {
   const today = new Date().toISOString().split('T')[0];
   document.getElementById('b-date').value = today;
-  document.getElementById('b-date').min = today;
+  document.getElementById('b-date').min   = today;
   clearError('booking-error');
+  document.getElementById('booking-form').reset();
+  document.getElementById('b-date').value = today;
   document.getElementById('booking-modal').classList.remove('hidden');
 }
 
@@ -427,7 +543,6 @@ function hideNewBookingModal() {
 async function handleCreateBooking(e) {
   e.preventDefault();
   clearError('booking-error');
-
   const body = {
     title:      document.getElementById('b-title').value,
     location:   document.getElementById('b-location').value,
@@ -436,27 +551,25 @@ async function handleCreateBooking(e) {
     end_time:   document.getElementById('b-end').value,
     notes:      document.getElementById('b-notes').value,
   };
-
-  const res = await api('/api/bookings', { method: 'POST', body });
+  const res  = await api('/api/bookings', { method: 'POST', body });
   const data = await res.json();
   if (!res.ok) return showError('booking-error', data.error);
-
-  hideNewBookingModal();
-  loadBookings();
+  hideNewBookingModal(); loadBookings();
 }
 
-/* ── Modal backdrop click ─────────────────────────────────── */
-function closeModal(e) {
+/* ── Sheet backdrop click ─────────────────────────────────── */
+function closeSheet(e) {
   if (e.target === e.currentTarget) {
     hideNewBookingModal();
     hideDetailModal();
+    hideProfileEdit();
   }
 }
 
 /* ── Helpers ──────────────────────────────────────────────── */
 function formatDate(dateStr) {
-  const d = new Date(dateStr + 'T12:00:00');
-  return d.toLocaleDateString('nl-NL', { weekday: 'short', day: 'numeric', month: 'long' });
+  return new Date(dateStr + 'T12:00:00')
+    .toLocaleDateString('nl-NL', { weekday: 'short', day: 'numeric', month: 'long' });
 }
 
 function escHtml(str) {

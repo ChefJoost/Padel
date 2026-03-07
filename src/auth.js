@@ -92,4 +92,66 @@ router.get('/me', (req, res) => {
   });
 });
 
+// Profiel bijwerken
+router.put('/profile', async (req, res) => {
+  if (!req.session.userId) return res.status(401).json({ error: 'Niet ingelogd' });
+
+  const { display_name, username, level, current_password, new_password } = req.body;
+  const userId = req.session.userId;
+
+  const user = db.prepare('SELECT * FROM users WHERE id = ?').get(userId);
+  if (!user) return res.status(404).json({ error: 'Gebruiker niet gevonden' });
+
+  // Wachtwoord wijzigen vereist huidig wachtwoord
+  if (new_password) {
+    if (!current_password) return res.status(400).json({ error: 'Voer je huidige wachtwoord in' });
+    const match = await bcrypt.compare(current_password, user.password_hash);
+    if (!match) return res.status(401).json({ error: 'Huidig wachtwoord is onjuist' });
+    if (new_password.length < 6) return res.status(400).json({ error: 'Nieuw wachtwoord moet minimaal 6 tekens zijn' });
+  }
+
+  // Gebruikersnaam uniekheidscheck
+  if (username && username.toLowerCase() !== user.username) {
+    const existing = db.prepare('SELECT id FROM users WHERE username = ? AND id != ?').get(username.toLowerCase(), userId);
+    if (existing) return res.status(409).json({ error: 'Gebruikersnaam is al in gebruik' });
+  }
+
+  const lvl = level ? parseInt(level, 10) : user.level;
+  if (lvl && (lvl < 1 || lvl > 9)) return res.status(400).json({ error: 'Niveau moet tussen 1 en 9 zijn' });
+
+  try {
+    let hash = user.password_hash;
+    if (new_password) hash = await bcrypt.hash(new_password, 12);
+
+    db.prepare(`
+      UPDATE users SET
+        display_name = ?,
+        username     = ?,
+        level        = ?,
+        password_hash = ?
+      WHERE id = ?
+    `).run(
+      display_name || user.display_name,
+      username ? username.toLowerCase() : user.username,
+      lvl || null,
+      hash,
+      userId
+    );
+
+    // Sessie bijwerken
+    req.session.displayName = display_name || user.display_name;
+    req.session.level = lvl || null;
+
+    res.json({
+      success: true,
+      display_name: req.session.displayName,
+      username: username ? username.toLowerCase() : user.username,
+      level: req.session.level,
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Server fout bij opslaan' });
+  }
+});
+
 module.exports = router;

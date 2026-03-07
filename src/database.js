@@ -60,5 +60,6 @@ db.exec(`
 const migrate = (sql) => { try { db.exec(sql); } catch (_) {} };
 migrate('ALTER TABLE users ADD COLUMN level INTEGER');
 migrate('ALTER TABLE bookings ADD COLUMN payment_url TEXT');
+migrate('ALTER TABLE participants ADD COLUMN paid_at DATETIME');
 
 module.exports = db;

@@ -23,6 +23,7 @@ router.get('/', requireAuth, (req, res) => {
       COUNT(CASE WHEN p.is_extra = 1 THEN 1 END) AS extra_count,
       MAX(CASE WHEN p.user_id = ? THEN 1 ELSE 0 END) AS user_joined,
       MAX(CASE WHEN p.user_id = ? AND p.is_extra = 1 THEN 1 ELSE 0 END) AS user_is_extra,
+      MAX(CASE WHEN p.user_id = ? THEN p.paid_at END) AS user_paid_at,
       MIN(CASE WHEN p.is_extra = 0 THEN u2.level END) AS min_level,
       MAX(CASE WHEN p.is_extra = 0 THEN u2.level END) AS max_level
     FROM bookings b
@@ -32,7 +33,7 @@ router.get('/', requireAuth, (req, res) => {
     WHERE b.date >= date('now', 'localtime')
     GROUP BY b.id
     ORDER BY b.date ASC, b.start_time ASC
-  `).all(req.session.userId, req.session.userId);
+  `).all(req.session.userId, req.session.userId, req.session.userId);
 
   res.json(bookings);
 });
@@ -48,6 +49,7 @@ router.get('/:id', requireAuth, (req, res) => {
       COUNT(CASE WHEN p.is_extra = 1 THEN 1 END) AS extra_count,
       MAX(CASE WHEN p.user_id = ? THEN 1 ELSE 0 END) AS user_joined,
       MAX(CASE WHEN p.user_id = ? AND p.is_extra = 1 THEN 1 ELSE 0 END) AS user_is_extra,
+      MAX(CASE WHEN p.user_id = ? THEN p.paid_at END) AS user_paid_at,
       MIN(CASE WHEN p.is_extra = 0 THEN u2.level END) AS min_level,
       MAX(CASE WHEN p.is_extra = 0 THEN u2.level END) AS max_level
     FROM bookings b
@@ -56,7 +58,7 @@ router.get('/:id', requireAuth, (req, res) => {
     LEFT JOIN users u2 ON p.user_id = u2.id
     WHERE b.id = ?
     GROUP BY b.id
-  `).get(req.session.userId, req.session.userId, req.params.id);
+  `).get(req.session.userId, req.session.userId, req.session.userId, req.params.id);
 
   if (!booking) return res.status(404).json({ error: 'Boeking niet gevonden' });
 
@@ -69,6 +71,27 @@ router.get('/:id', requireAuth, (req, res) => {
   `).all(req.params.id);
 
   res.json({ ...booking, participants });
+});
+
+// Geschiedenis: afgelopen potjes van de ingelogde gebruiker
+router.get('/history', requireAuth, (req, res) => {
+  const bookings = db.prepare(`
+    SELECT
+      b.id, b.title, b.location, b.date, b.start_time, b.end_time,
+      b.created_by, b.payment_url,
+      u.display_name AS creator_name,
+      p.is_extra, p.paid_at,
+      COUNT(CASE WHEN p2.is_extra = 0 THEN 1 END) AS player_count
+    FROM bookings b
+    JOIN participants p ON b.id = p.booking_id AND p.user_id = ?
+    JOIN users u ON b.created_by = u.id
+    LEFT JOIN participants p2 ON b.id = p2.booking_id
+    WHERE b.date < date('now', 'localtime')
+    GROUP BY b.id
+    ORDER BY b.date DESC, b.start_time DESC
+  `).all(req.session.userId);
+
+  res.json(bookings);
 });
 
 // Nieuwe boeking aanmaken
@@ -140,6 +163,23 @@ router.put('/:id/payment', requireAuth, async (req, res) => {
       )
     );
   }
+
+  res.json({ success: true });
+});
+
+// Betaling markeren als voldaan
+router.post('/:id/pay', requireAuth, (req, res) => {
+  const bookingId = req.params.id;
+  const userId = req.session.userId;
+
+  const participant = db.prepare(
+    'SELECT * FROM participants WHERE booking_id = ? AND user_id = ?'
+  ).get(bookingId, userId);
+
+  if (!participant) return res.status(404).json({ error: 'Je bent niet ingeschreven voor deze boeking' });
+
+  db.prepare('UPDATE participants SET paid_at = CURRENT_TIMESTAMP WHERE booking_id = ? AND user_id = ?')
+    .run(bookingId, userId);
 
   res.json({ success: true });
 });
