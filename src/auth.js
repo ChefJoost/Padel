@@ -30,7 +30,7 @@ router.post('/register', async (req, res) => {
     req.session.userId = result.lastInsertRowid;
     req.session.displayName = display_name;
 
-    res.json({ success: true, display_name });
+    res.json({ success: true, userId: result.lastInsertRowid, display_name });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Server fout bij registreren' });
@@ -59,7 +59,7 @@ router.post('/login', async (req, res) => {
     req.session.userId = user.id;
     req.session.displayName = user.display_name;
 
-    res.json({ success: true, display_name: user.display_name });
+    res.json({ success: true, userId: user.id, display_name: user.display_name });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Server fout bij inloggen' });
