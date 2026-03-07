@@ -533,6 +533,7 @@ body {
 ══════════════════════════════════════════════ */
 .hint-row { font-size: .8rem; color: var(--text-2); font-style: italic; }
 
+.p-player { display: flex; align-items: center; justify-content: flex-end; gap: 8px; }
 .p-icon  { font-size: .95rem; flex-shrink: 0; }
 .p-avatar { display: inline-block; width: 22px; height: 22px; min-width: 22px; min-height: 22px; border-radius: 50%; background-size: cover; background-position: center; flex: none !important; align-self: center; }
 .p-level { margin-left: auto; font-size: .78rem; color: var(--text-2); background: var(--bg); padding: 2px 7px; border-radius: 10px; }
@@ -708,7 +709,7 @@ body {
 }
 .confirm-overlay.hidden { display: none; }
 .confirm-dialog {
-  background: var(--card);
+  background: var(--surface);
   border-radius: 16px;
   width: min(320px, calc(100vw - 48px));
   overflow: hidden;

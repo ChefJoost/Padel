@@ -526,11 +526,10 @@ async function showDetailModal(id) {
 
   // Deelnemers
   const playerRows = b.participants.map(p => {
-    const lvl = p.level ? ` <span class="p-level">niv. ${p.level}</span>` : '';
     const icon = p.avatar
       ? `<span class="p-avatar" style="background-image:url('${escAttr(p.avatar)}')"></span>`
-      : `<span class="p-icon">🎾</span>`;
-    return `<div class="field-row">${icon} ${escHtml(p.display_name)}${lvl}</div>`;
+      : `🎾`;
+    return `<div class="field-row"><span class="p-player">${icon} ${escHtml(p.display_name)}</span></div>`;
   });
   for (let i = b.participants.length; i < 4; i++) {
     playerRows.push(`<div class="field-row p-empty"><span class="p-icon">○</span> Vrije plek</div>`);
