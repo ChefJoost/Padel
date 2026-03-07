@@ -4,6 +4,7 @@
 
 let currentUser = null;
 let currentDetailId = null;
+let currentDetailBooking = null; // volledige boeking-data van detail-modal
 let currentTab = 'potjes';
 let pendingAvatar = undefined;
 let bookingEditId = null; // null = nieuw, number = boeking-id dat bewerkt wordt
@@ -428,6 +429,7 @@ async function showDetailModal(id) {
 
   const res = await api(`/api/bookings/${id}`);
   const b   = await res.json();
+  currentDetailBooking = b;
 
   document.getElementById('detail-title').textContent = b.title;
 
@@ -509,7 +511,7 @@ async function showDetailModal(id) {
   // Bewerk-knop in header voor organisator
   const headerRight = document.getElementById('detail-header-right');
   if (isCreator) {
-    headerRight.innerHTML = `<button class="sheet-done" onclick="showEditBookingModal(${JSON.stringify(b)})">Bewerk</button>`;
+    headerRight.innerHTML = `<button class="sheet-done" onclick="showEditBookingModal()">Bewerk</button>`;
   } else {
     headerRight.innerHTML = '';
   }
@@ -600,7 +602,8 @@ function showNewBookingModal() {
   document.getElementById('booking-modal').classList.remove('hidden');
 }
 
-function showEditBookingModal(b) {
+function showEditBookingModal() {
+  const b = currentDetailBooking;
   bookingEditId = b.id;
   document.getElementById('booking-modal-title').textContent = 'Boeking bewerken';
   document.getElementById('booking-modal-done').textContent  = 'Opslaan';
@@ -656,14 +659,11 @@ function closeSheet(e) {
 /* ── Swipe-to-dismiss voor alle sheets ────────────────────── */
 function initSwipeDismiss() {
   document.querySelectorAll('.sheet').forEach(sheet => {
+    const handle = sheet.querySelector('.sheet-handle');
+    if (!handle) return;
+
     let startY = 0, currentDy = 0, dragging = false;
 
-    const onStart = (clientY) => {
-      startY = clientY;
-      currentDy = 0;
-      dragging = true;
-      sheet.style.transition = 'none';
-    };
     const onMove = (clientY) => {
       if (!dragging) return;
       currentDy = clientY - startY;
@@ -680,9 +680,20 @@ function initSwipeDismiss() {
       }
     };
 
-    sheet.addEventListener('touchstart', e => onStart(e.touches[0].clientY), { passive: true });
-    sheet.addEventListener('touchmove',  e => onMove(e.touches[0].clientY),  { passive: true });
-    sheet.addEventListener('touchend',   onEnd, { passive: true });
+    // Swipe begint alleen op de handle (niet op scrollbare content)
+    handle.addEventListener('touchstart', (e) => {
+      startY = e.touches[0].clientY;
+      currentDy = 0;
+      dragging = true;
+      sheet.style.transition = 'none';
+    }, { passive: true });
+
+    document.addEventListener('touchmove', (e) => {
+      if (!dragging) return;
+      onMove(e.touches[0].clientY);
+    }, { passive: true });
+
+    document.addEventListener('touchend', onEnd, { passive: true });
   });
 }
 
