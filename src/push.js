@@ -6,16 +6,30 @@ const db = require('./database');
 
 const router = express.Router();
 
-// VAPID keys: genereer eenmalig en sla op in data-dir
+// VAPID keys: gebruik env vars (aanbevolen voor Railway), anders genereer en sla op
 const dataDir = process.env.DATA_DIR || path.join(__dirname, '..', 'data');
 const vapidFile = path.join(dataDir, 'vapid.json');
 
 let vapidKeys;
-if (fs.existsSync(vapidFile)) {
+
+if (process.env.VAPID_PUBLIC_KEY && process.env.VAPID_PRIVATE_KEY) {
+  // Productie: gebruik env vars (stabiel over deploys heen)
+  vapidKeys = {
+    publicKey:  process.env.VAPID_PUBLIC_KEY,
+    privateKey: process.env.VAPID_PRIVATE_KEY,
+  };
+} else if (fs.existsSync(vapidFile)) {
+  // Bestaand bestand (alleen als DATA_DIR persistent volume is)
   vapidKeys = JSON.parse(fs.readFileSync(vapidFile, 'utf8'));
 } else {
+  // Eerste keer: genereer en sla op (werkt alleen met persistent volume)
   vapidKeys = webpush.generateVAPIDKeys();
-  fs.writeFileSync(vapidFile, JSON.stringify(vapidKeys));
+  try { fs.writeFileSync(vapidFile, JSON.stringify(vapidKeys)); } catch (_) {}
+  console.log('=== VAPID keys gegenereerd ===');
+  console.log('Stel deze in als Railway environment variables om ze te bewaren:');
+  console.log('VAPID_PUBLIC_KEY=' + vapidKeys.publicKey);
+  console.log('VAPID_PRIVATE_KEY=' + vapidKeys.privateKey);
+  console.log('==============================');
 }
 
 webpush.setVapidDetails(
