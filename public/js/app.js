@@ -312,6 +312,7 @@ async function handleSaveProfile() {
 
   hideProfileEdit();
   renderProfile();
+  showToast('Profiel opgeslagen');
 }
 
 /* ── Geschiedenis ─────────────────────────────────────────── */
@@ -647,6 +648,7 @@ async function handleSetPaymentUrl() {
   if (!res.ok) return showError('detail-error', data.error);
   await showDetailModal(currentDetailId);
   loadBookings();
+  showToast(payment_url ? 'Betaallink opgeslagen' : 'Betaallink verwijderd');
 }
 
 /* ── New / edit booking modal ─────────────────────────────── */
@@ -774,6 +776,18 @@ function escHtml(str) {
 function escAttr(str) {
   if (!str) return '';
   return str.replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
+
+let toastTimer;
+function showToast(msg) {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.classList.remove('hidden', 'fade-out');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => {
+    el.classList.add('fade-out');
+    setTimeout(() => el.classList.add('hidden'), 400);
+  }, 2500);
 }
 
 function showError(id, msg) {
