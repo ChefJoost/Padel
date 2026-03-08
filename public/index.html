@@ -122,8 +122,8 @@
     <input type="file" id="welcome-avatar-input" accept="image/*" style="display:none" onchange="handleWelcomeAvatarChange(event)">
 
     <div style="display:flex;flex-direction:column;gap:10px;margin-top:20px">
-      <button class="btn btn-primary btn-full" onclick="handleWelcomeDone()">Doorgaan</button>
-      <button class="btn btn-outline btn-full" onclick="handleWelcomeSkip()">Overslaan</button>
+      <button class="btn btn-primary btn-full" id="welcome-photo-btn" onclick="document.getElementById('welcome-avatar-input').click()">Foto toevoegen</button>
+      <button class="btn btn-outline btn-full" onclick="handleWelcomeDone()">Opslaan</button>
     </div>
   </div>
 </div>

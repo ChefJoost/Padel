@@ -188,6 +188,7 @@ function handleWelcomeAvatarChange(e) {
       ctx.drawImage(img, (img.width - min) / 2, (img.height - min) / 2, min, min, 0, 0, 300, 300);
       pendingWelcomeAvatar = canvas.toDataURL('image/jpeg', 0.8);
       renderAvatarEl(document.getElementById('welcome-avatar-preview'), pendingWelcomeAvatar, currentUser.display_name);
+      document.getElementById('welcome-photo-btn').textContent = 'Foto wijzigen';
     };
     img.src = ev.target.result;
   };
@@ -206,12 +207,6 @@ async function handleWelcomeDone() {
   handleDeepLink();
 }
 
-function handleWelcomeSkip() {
-  document.getElementById('welcome-screen').classList.add('hidden');
-  showApp();
-  setupPush();
-  handleDeepLink();
-}
 
 async function handleLogout() {
   await api('/api/auth/logout', { method: 'POST' });
