@@ -198,6 +198,18 @@ body {
   padding: 0 4px 6px;
   margin: 8px 0 4px;
 }
+.section-header-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  padding: 0 4px 6px;
+  margin: 8px 0 4px;
+}
+.history-count {
+  font-size: .75rem;
+  font-weight: 500;
+  color: var(--text-2);
+}
 
 .inline-error {
   background: rgba(255, 59, 48, .1);
@@ -752,12 +764,46 @@ body {
   padding: 0;
 }
 
+/* Welkomst avatar upload */
+.welcome-avatar-wrap {
+  position: relative;
+  width: 110px;
+  height: 110px;
+  border-radius: 50%;
+  cursor: pointer;
+  margin: 24px auto 0;
+}
+.welcome-avatar-preview {
+  width: 110px;
+  height: 110px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--green) 0%, var(--green-dark) 100%);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 2.2rem;
+  font-weight: 700;
+  background-size: cover;
+  background-position: center;
+}
+.welcome-avatar-overlay {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: rgba(0,0,0,.28);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.6rem;
+}
+
 /* Geschiedenis */
 .history-row  { display: flex; align-items: center; gap: 10px; }
-.history-info { flex: 1; min-width: 0; }
-.history-title { font-size: .92rem; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.history-meta    { font-size: .78rem; color: var(--text-2); margin-top: 2px; }
-.history-players { font-size: .75rem; color: var(--text-2); margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.history-info    { flex: 1; min-width: 0; padding: 2px 0; }
+.history-title   { font-size: .95rem; font-weight: 600; }
+.history-meta    { font-size: .8rem; color: var(--text-2); margin-top: 3px; }
+.history-players { font-size: .78rem; color: var(--text-2); margin-top: 3px; overflow: hidden; text-overflow: ellipsis; }
 .history-empty   { color: var(--text-2); font-size: .9rem; }
 
 .role-tag    { font-size: .72rem; font-weight: 700; padding: 3px 8px; border-radius: 20px; white-space: nowrap; }

@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-  <title>Padel Planner</title>
+  <title>PadelBuddy</title>
   <link rel="stylesheet" href="/css/style.css" />
 </head>
 <body>
@@ -14,7 +14,7 @@
 <div id="auth-screen" class="screen">
   <div class="auth-card">
     <div class="auth-logo">🎾</div>
-    <h1 class="auth-title">Padel Planner</h1>
+    <h1 class="auth-title">PadelBuddy</h1>
     <p class="auth-subtitle">Plan samen je padel potjes</p>
 
     <div class="seg-control">
@@ -107,6 +107,28 @@
 </div>
 
 <!-- ══════════════════════════════════════════════
+     WELKOMST SCHERM (na registratie)
+══════════════════════════════════════════════ -->
+<div id="welcome-screen" class="screen hidden">
+  <div class="auth-card">
+    <div class="auth-logo">🎾</div>
+    <h1 class="auth-title">Welkom bij PadelBuddy!</h1>
+    <p class="auth-subtitle">Voeg een profielfoto toe zodat je mede-spelers je herkennen</p>
+
+    <div class="welcome-avatar-wrap" onclick="document.getElementById('welcome-avatar-input').click()">
+      <div class="welcome-avatar-preview" id="welcome-avatar-preview"></div>
+      <div class="welcome-avatar-overlay">📷</div>
+    </div>
+    <input type="file" id="welcome-avatar-input" accept="image/*" style="display:none" onchange="handleWelcomeAvatarChange(event)">
+
+    <div style="display:flex;flex-direction:column;gap:10px;margin-top:20px">
+      <button class="btn btn-primary btn-full" onclick="handleWelcomeDone()">Doorgaan</button>
+      <button class="btn btn-outline btn-full" onclick="handleWelcomeSkip()">Overslaan</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════
      HOOFD APP
 ══════════════════════════════════════════════ -->
 <div id="app-screen" class="screen hidden">
@@ -174,7 +196,10 @@
 
       <!-- Geschiedenis -->
       <div id="history-section">
-        <div class="section-header">Gespeelde potjes</div>
+        <div class="section-header-row">
+          <span class="section-header" style="margin:0">Gespeelde potjes</span>
+          <span class="history-count" id="history-count"></span>
+        </div>
         <div id="history-list" class="field-group">
           <div class="field-row history-empty">Nog geen gespeelde potjes.</div>
         </div>

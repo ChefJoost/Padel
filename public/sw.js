@@ -1,4 +1,4 @@
-/* Service Worker — Padel Planner Push Notifications */
+/* Service Worker — PadelBuddy Push Notifications */
 
 self.addEventListener('push', event => {
   if (!event.data) return;

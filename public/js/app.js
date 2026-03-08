@@ -163,6 +163,51 @@ async function handleRegister(e) {
   const data = await res.json();
   if (!res.ok) return showError('register-error', data.error);
   setUser(data);
+  showWelcomeScreen();
+}
+
+let pendingWelcomeAvatar = undefined;
+
+function showWelcomeScreen() {
+  document.getElementById('auth-screen').classList.add('hidden');
+  document.getElementById('welcome-screen').classList.remove('hidden');
+  renderAvatarEl(document.getElementById('welcome-avatar-preview'), null, currentUser.display_name);
+}
+
+function handleWelcomeAvatarChange(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = (ev) => {
+    const img = new Image();
+    img.onload = () => {
+      const canvas = document.createElement('canvas');
+      canvas.width = canvas.height = 300;
+      const ctx = canvas.getContext('2d');
+      const min = Math.min(img.width, img.height);
+      ctx.drawImage(img, (img.width - min) / 2, (img.height - min) / 2, min, min, 0, 0, 300, 300);
+      pendingWelcomeAvatar = canvas.toDataURL('image/jpeg', 0.8);
+      renderAvatarEl(document.getElementById('welcome-avatar-preview'), pendingWelcomeAvatar, currentUser.display_name);
+    };
+    img.src = ev.target.result;
+  };
+  reader.readAsDataURL(file);
+}
+
+async function handleWelcomeDone() {
+  if (pendingWelcomeAvatar) {
+    await api('/api/auth/profile', { method: 'PUT', body: { avatar: pendingWelcomeAvatar } });
+    currentUser.avatar = pendingWelcomeAvatar;
+    pendingWelcomeAvatar = undefined;
+  }
+  document.getElementById('welcome-screen').classList.add('hidden');
+  showApp();
+  setupPush();
+  handleDeepLink();
+}
+
+function handleWelcomeSkip() {
+  document.getElementById('welcome-screen').classList.add('hidden');
   showApp();
   setupPush();
   handleDeepLink();
@@ -349,6 +394,9 @@ async function loadHistory() {
   const res      = await api('/api/bookings/history');
   const bookings = await res.json();
   const list     = document.getElementById('history-list');
+  const countEl  = document.getElementById('history-count');
+
+  if (countEl) countEl.textContent = bookings.length ? `${bookings.length} totaal` : '';
 
   const recent = bookings.slice(0, 3);
   if (!recent.length) {
@@ -367,7 +415,6 @@ async function loadHistory() {
         <div class="history-meta">${formatDate(b.date)}</div>
         ${names ? `<div class="history-players">${names}</div>` : ''}
       </div>
-      ${b.is_extra ? '<span class="role-tag role-extra">Extra</span>' : '<span class="role-tag role-player">Gespeeld</span>'}
     </div>`;
   }).join('');
 }
@@ -535,6 +582,10 @@ async function showDetailModal(id) {
   clearError('detail-error');
 
   const res = await api(`/api/bookings/${id}`);
+  if (res.status === 403) {
+    showToast('Dit is een privé potje. Je hebt een uitnodigingslink nodig om mee te doen.');
+    return;
+  }
   const b   = await res.json();
   currentDetailBooking = b;
 
@@ -907,7 +958,10 @@ function shareWhatsApp(b) {
   const datum = new Date(b.date + 'T12:00:00')
     .toLocaleDateString('nl-NL', { weekday: 'long', day: 'numeric', month: 'long' });
   const datumKap = datum.charAt(0).toUpperCase() + datum.slice(1);
-  const url = `${location.origin}/?potje=${b.id}`;
+  // Privé potjes: gebruik uitnodigingslink zodat ontvangers kunnen inschrijven
+  const url = (b.is_private && b.invite_token)
+    ? `${location.origin}/?invite=${b.invite_token}`
+    : `${location.origin}/?potje=${b.id}`;
   const msg = `🎾 ${b.title}\n\n${datumKap}, ${b.start_time} - ${b.end_time}\n\nDoe mee:\n${url}`;
   window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`, '_blank');
 }
