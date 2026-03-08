@@ -260,6 +260,7 @@ body {
 .btn-outline            { background: transparent; color: var(--green); border: 1.5px solid var(--green); }
 .btn-destructive-outline { background: rgba(255, 59, 48, 0.08); color: var(--red); border: 1.5px solid var(--red); }
 .btn-destructive        { background: none; border: none; color: var(--red); font-size: .95rem; font-weight: 500; font-family: inherit; cursor: pointer; padding: 0; }
+.btn-whatsapp           { background: #25D366; color: #fff; }
 
 /* ══════════════════════════════════════════════
    APP LAYOUT
