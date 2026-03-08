@@ -38,7 +38,7 @@ router.get('/', requireAuth, (req, res) => {
     JOIN users u ON b.created_by = u.id
     LEFT JOIN participants p ON b.id = p.booking_id
     LEFT JOIN users u2 ON p.user_id = u2.id
-    WHERE b.date >= date('now', 'localtime')
+    WHERE datetime(b.date || ' ' || b.end_time) >= datetime('now', 'localtime')
       AND (b.is_private = 0
            OR b.created_by = ?
            OR EXISTS (SELECT 1 FROM participants WHERE booking_id = b.id AND user_id = ?))
@@ -147,7 +147,7 @@ router.get('/history', requireAuth, (req, res) => {
     JOIN users u ON b.created_by = u.id
     LEFT JOIN participants p ON b.id = p.booking_id AND p.user_id = ?
     LEFT JOIN participants p2 ON b.id = p2.booking_id
-    WHERE b.date < date('now', 'localtime')
+    WHERE datetime(b.date || ' ' || b.end_time) < datetime('now', 'localtime')
       AND (p.user_id IS NOT NULL OR b.created_by = ?)
     GROUP BY b.id
     ORDER BY b.date DESC, b.start_time DESC
