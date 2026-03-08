@@ -81,6 +81,28 @@ router.get('/invite/:token', requireAuth, (req, res) => {
   res.json({ ...booking, participants });
 });
 
+// Geschiedenis: afgelopen potjes van de ingelogde gebruiker
+router.get('/history', requireAuth, (req, res) => {
+  const bookings = db.prepare(`
+    SELECT
+      b.id, b.title, b.location, b.date, b.start_time, b.end_time,
+      b.created_by, b.payment_url,
+      u.display_name AS creator_name,
+      p.is_extra, p.paid_at,
+      COUNT(CASE WHEN p2.is_extra = 0 THEN 1 END) AS player_count
+    FROM bookings b
+    JOIN users u ON b.created_by = u.id
+    LEFT JOIN participants p ON b.id = p.booking_id AND p.user_id = ?
+    LEFT JOIN participants p2 ON b.id = p2.booking_id
+    WHERE datetime(b.date || ' ' || b.end_time) < datetime('now', 'localtime')
+      AND (p.user_id IS NOT NULL OR b.created_by = ?)
+    GROUP BY b.id
+    ORDER BY b.date DESC, b.start_time DESC
+  `).all(req.session.userId, req.session.userId);
+
+  res.json(bookings);
+});
+
 // Eén boeking ophalen met deelnemers
 router.get('/:id', requireAuth, (req, res) => {
   const userId = req.session.userId;
@@ -132,28 +154,6 @@ router.get('/:id', requireAuth, (req, res) => {
     .map(p => p.is_guest ? { ...p, display_name: p.guest_name } : p);
 
   res.json({ ...booking, participants });
-});
-
-// Geschiedenis: afgelopen potjes van de ingelogde gebruiker
-router.get('/history', requireAuth, (req, res) => {
-  const bookings = db.prepare(`
-    SELECT
-      b.id, b.title, b.location, b.date, b.start_time, b.end_time,
-      b.created_by, b.payment_url,
-      u.display_name AS creator_name,
-      p.is_extra, p.paid_at,
-      COUNT(CASE WHEN p2.is_extra = 0 THEN 1 END) AS player_count
-    FROM bookings b
-    JOIN users u ON b.created_by = u.id
-    LEFT JOIN participants p ON b.id = p.booking_id AND p.user_id = ?
-    LEFT JOIN participants p2 ON b.id = p2.booking_id
-    WHERE datetime(b.date || ' ' || b.end_time) < datetime('now', 'localtime')
-      AND (p.user_id IS NOT NULL OR b.created_by = ?)
-    GROUP BY b.id
-    ORDER BY b.date DESC, b.start_time DESC
-  `).all(req.session.userId, req.session.userId);
-
-  res.json(bookings);
 });
 
 // Nieuwe boeking aanmaken
