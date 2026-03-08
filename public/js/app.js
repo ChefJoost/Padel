@@ -12,6 +12,15 @@ let allBookings   = [];
 let filterTime    = 'upcoming'; // 'upcoming' | 'past'
 let filterStatus  = 'open';     // 'open' | 'all'
 
+/* ── Wachtwoordvalidatie ──────────────────────────────────── */
+function validatePassword(pw) {
+  if (pw.length < 8)        return 'Wachtwoord moet minimaal 8 tekens zijn';
+  if (!/[A-Z]/.test(pw))    return 'Wachtwoord moet minimaal 1 hoofdletter bevatten';
+  if (!/[a-z]/.test(pw))    return 'Wachtwoord moet minimaal 1 kleine letter bevatten';
+  if (!/[0-9]/.test(pw))    return 'Wachtwoord moet minimaal 1 cijfer bevatten';
+  return null;
+}
+
 /* ── Init ─────────────────────────────────────────────────── */
 async function init() {
   try {
@@ -90,6 +99,8 @@ async function handleResetPassword(e) {
   const username     = document.getElementById('forgot-username').value.trim();
   const display_name = document.getElementById('forgot-display-name').value.trim();
   const new_password = document.getElementById('forgot-new-pw').value;
+  const pwError = validatePassword(new_password);
+  if (pwError) return showError('forgot-error', pwError);
   const res  = await api('/api/auth/reset-password', { method: 'POST', body: { username, display_name, new_password } });
   const data = await res.json();
   if (!res.ok) return showError('forgot-error', data.error);
@@ -118,6 +129,8 @@ async function handleRegister(e) {
   const display_name = document.getElementById('reg-display-name').value;
   const username     = document.getElementById('reg-username').value;
   const password     = document.getElementById('reg-password').value;
+  const pwError = validatePassword(password);
+  if (pwError) return showError('register-error', pwError);
   const res  = await api('/api/auth/register', { method: 'POST', body: { username, display_name, password } });
   const data = await res.json();
   if (!res.ok) return showError('register-error', data.error);
@@ -278,6 +291,11 @@ async function handleSaveProfile() {
   const level            = parseInt(document.getElementById('edit-level').value, 10) || null;
   const current_password = document.getElementById('edit-current-pw').value;
   const new_password     = document.getElementById('edit-new-pw').value;
+
+  if (new_password) {
+    const pwError = validatePassword(new_password);
+    if (pwError) return showError('profile-error', pwError);
+  }
 
   const body = { display_name, username, level };
   if (new_password) { body.current_password = current_password; body.new_password = new_password; }

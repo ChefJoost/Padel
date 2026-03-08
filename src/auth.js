@@ -4,6 +4,14 @@ const db = require('./database');
 
 const router = express.Router();
 
+function validatePassword(pw) {
+  if (pw.length < 8)          return 'Wachtwoord moet minimaal 8 tekens zijn';
+  if (!/[A-Z]/.test(pw))      return 'Wachtwoord moet minimaal 1 hoofdletter bevatten';
+  if (!/[a-z]/.test(pw))      return 'Wachtwoord moet minimaal 1 kleine letter bevatten';
+  if (!/[0-9]/.test(pw))      return 'Wachtwoord moet minimaal 1 cijfer bevatten';
+  return null;
+}
+
 // Registreren
 router.post('/register', async (req, res) => {
   const { username, display_name, password, level } = req.body;
@@ -12,9 +20,8 @@ router.post('/register', async (req, res) => {
     return res.status(400).json({ error: 'Vul alle velden in' });
   }
 
-  if (password.length < 6) {
-    return res.status(400).json({ error: 'Wachtwoord moet minimaal 6 tekens zijn' });
-  }
+  const pwError = validatePassword(password);
+  if (pwError) return res.status(400).json({ error: pwError });
 
   const existing = db.prepare('SELECT id FROM users WHERE username = ?').get(username.toLowerCase());
   if (existing) {
@@ -107,7 +114,8 @@ router.put('/profile', async (req, res) => {
     if (!current_password) return res.status(400).json({ error: 'Voer je huidige wachtwoord in' });
     const match = await bcrypt.compare(current_password, user.password_hash);
     if (!match) return res.status(401).json({ error: 'Huidig wachtwoord is onjuist' });
-    if (new_password.length < 6) return res.status(400).json({ error: 'Nieuw wachtwoord moet minimaal 6 tekens zijn' });
+    const pwError = validatePassword(new_password);
+    if (pwError) return res.status(400).json({ error: pwError });
   }
 
   // Gebruikersnaam uniekheidscheck
@@ -164,9 +172,8 @@ router.post('/reset-password', async (req, res) => {
   if (!username || !display_name || !new_password) {
     return res.status(400).json({ error: 'Vul alle velden in' });
   }
-  if (new_password.length < 6) {
-    return res.status(400).json({ error: 'Nieuw wachtwoord moet minimaal 6 tekens zijn' });
-  }
+  const pwError = validatePassword(new_password);
+  if (pwError) return res.status(400).json({ error: pwError });
 
   const user = db.prepare('SELECT * FROM users WHERE username = ?').get(username.toLowerCase());
 
