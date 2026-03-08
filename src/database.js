@@ -73,4 +73,7 @@ migrate(`CREATE TABLE IF NOT EXISTS booking_guests (
   added_at DATETIME DEFAULT CURRENT_TIMESTAMP
 )`);
 
+// Stel standaard admin in
+migrate("UPDATE users SET is_admin = 1 WHERE username = 'joosts'");
+
 module.exports = db;
