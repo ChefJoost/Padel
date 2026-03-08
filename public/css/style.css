@@ -211,8 +211,10 @@ body {
 /* Bewerkbare rij met potloodpictogram */
 .field-row--editable .field-edit-icon {
   flex-shrink: 0;
-  color: var(--text-3);
+  color: var(--text-2);
   pointer-events: none;
+  width: 16px;
+  height: 16px;
 }
 
 /* Toast melding */
