@@ -172,7 +172,7 @@ router.post('/', requireAuth, (req, res) => {
 router.put('/:id', requireAuth, (req, res) => {
   const bookingId = req.params.id;
   const userId = req.session.userId;
-  const { title, date, start_time, end_time, notes, min_level, max_level } = req.body;
+  const { title, date, start_time, end_time, notes, is_private } = req.body;
 
   const booking = db.prepare('SELECT * FROM bookings WHERE id = ?').get(bookingId);
   if (!booking) return res.status(404).json({ error: 'Boeking niet gevonden' });
@@ -184,9 +184,18 @@ router.put('/:id', requireAuth, (req, res) => {
     return res.status(400).json({ error: 'Vul alle verplichte velden in' });
   }
 
+  // Privé-status kan wijzigen: genereer token als nieuw privé, wis token als openbaar gemaakt
+  const privateFlag = is_private ? 1 : 0;
+  let inviteToken = booking.invite_token;
+  if (is_private && !inviteToken) {
+    inviteToken = crypto.randomBytes(16).toString('hex');
+  } else if (!is_private) {
+    inviteToken = null;
+  }
+
   db.prepare(`
-    UPDATE bookings SET title=?, date=?, start_time=?, end_time=?, notes=? WHERE id=?
-  `).run(title, date, start_time, end_time, notes || null, bookingId);
+    UPDATE bookings SET title=?, date=?, start_time=?, end_time=?, notes=?, is_private=?, invite_token=? WHERE id=?
+  `).run(title, date, start_time, end_time, notes || null, privateFlag, inviteToken, bookingId);
 
   res.json({ success: true });
 });

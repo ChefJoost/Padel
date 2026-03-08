@@ -733,8 +733,9 @@ function showEditBookingModal() {
   document.getElementById('b-date').min    = '';
   setTimeSelect('b-start', b.start_time);
   setTimeSelect('b-end',   b.end_time);
-  document.getElementById('b-notes').value = b.notes || '';
-  document.getElementById('b-private').closest('.field-group').style.display = 'none';
+  document.getElementById('b-notes').value   = b.notes || '';
+  document.getElementById('b-private').checked = !!b.is_private;
+  document.getElementById('b-private').closest('.field-group').style.display = '';
   hideDetailModal();
   document.getElementById('booking-modal').classList.remove('hidden');
 }

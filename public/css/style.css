@@ -154,7 +154,7 @@ body {
 }
 .field-row:last-child { border-bottom: none; }
 
-.field-row label {
+.field-row label:not(.toggle) {
   font-size: .95rem;
   color: var(--text);
   min-width: 120px;
@@ -486,7 +486,7 @@ body {
 .status-private { background: rgba(60,60,67,.08);         color: var(--text-2); }
 
 /* Toggle switch (iOS-stijl) */
-.toggle { position: relative; display: inline-block; width: 51px; height: 31px; flex-shrink: 0; }
+.toggle { position: relative; display: inline-block; width: 51px; height: 31px; flex-shrink: 0; margin-left: auto; }
 .toggle input { opacity: 0; width: 0; height: 0; position: absolute; }
 .toggle-track {
   position: absolute; inset: 0; border-radius: 16px;
