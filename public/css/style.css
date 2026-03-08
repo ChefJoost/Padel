@@ -756,8 +756,9 @@ body {
 .history-row  { display: flex; align-items: center; gap: 10px; }
 .history-info { flex: 1; min-width: 0; }
 .history-title { font-size: .92rem; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.history-meta  { font-size: .78rem; color: var(--text-2); margin-top: 2px; }
-.history-empty { color: var(--text-2); font-size: .9rem; }
+.history-meta    { font-size: .78rem; color: var(--text-2); margin-top: 2px; }
+.history-players { font-size: .75rem; color: var(--text-2); margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.history-empty   { color: var(--text-2); font-size: .9rem; }
 
 .role-tag    { font-size: .72rem; font-weight: 700; padding: 3px 8px; border-radius: 20px; white-space: nowrap; }
 .role-player { background: var(--green-tint);   color: var(--green-dark); }

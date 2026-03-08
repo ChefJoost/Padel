@@ -89,11 +89,13 @@ router.get('/history', requireAuth, (req, res) => {
       b.created_by, b.payment_url,
       u.display_name AS creator_name,
       p.is_extra, p.paid_at,
-      COUNT(CASE WHEN p2.is_extra = 0 THEN 1 END) AS player_count
+      COUNT(CASE WHEN p2.is_extra = 0 THEN 1 END) AS player_count,
+      GROUP_CONCAT(u2.display_name, '||') AS participants_names
     FROM bookings b
     JOIN users u ON b.created_by = u.id
     LEFT JOIN participants p ON b.id = p.booking_id AND p.user_id = ?
     LEFT JOIN participants p2 ON b.id = p2.booking_id
+    LEFT JOIN users u2 ON p2.user_id = u2.id AND p2.is_extra = 0
     WHERE datetime(b.date || ' ' || b.end_time) < datetime('now', 'localtime')
       AND (p.user_id IS NOT NULL OR b.created_by = ?)
     GROUP BY b.id
@@ -164,8 +166,9 @@ router.post('/', requireAuth, (req, res) => {
     return res.status(400).json({ error: 'Vul alle verplichte velden in' });
   }
 
-  if (date < new Date().toISOString().split('T')[0]) {
-    return res.status(400).json({ error: 'Datum mag niet in het verleden liggen' });
+  const nowStr = db.prepare("SELECT datetime('now','localtime') AS n").get().n;
+  if ((date + ' ' + start_time) <= nowStr.slice(0, 16)) {
+    return res.status(400).json({ error: 'Starttijd mag niet in het verleden liggen' });
   }
 
   const privateFlag = is_private ? 1 : 0;
@@ -198,6 +201,11 @@ router.put('/:id', requireAuth, (req, res) => {
 
   if (!title || !date || !start_time || !end_time) {
     return res.status(400).json({ error: 'Vul alle verplichte velden in' });
+  }
+
+  const nowStr = db.prepare("SELECT datetime('now','localtime') AS n").get().n;
+  if ((date + ' ' + start_time) <= nowStr.slice(0, 16)) {
+    return res.status(400).json({ error: 'Starttijd mag niet in het verleden liggen' });
   }
 
   // Privé-status kan wijzigen: genereer token als nieuw privé, wis token als openbaar gemaakt

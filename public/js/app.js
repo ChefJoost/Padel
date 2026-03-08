@@ -154,9 +154,11 @@ async function handleRegister(e) {
   clearError('register-error');
   const display_name = document.getElementById('reg-display-name').value;
   const username     = document.getElementById('reg-username').value;
-  const password     = document.getElementById('reg-password').value;
+  const password        = document.getElementById('reg-password').value;
+  const passwordConfirm = document.getElementById('reg-password-confirm').value;
   const pwError = validatePassword(password);
   if (pwError) return showError('register-error', pwError);
+  if (password !== passwordConfirm) return showError('register-error', 'Wachtwoorden komen niet overeen');
   const res  = await api('/api/auth/register', { method: 'POST', body: { username, display_name, password } });
   const data = await res.json();
   if (!res.ok) return showError('register-error', data.error);
@@ -354,15 +356,20 @@ async function loadHistory() {
     return;
   }
 
-  list.innerHTML = recent.map(b => `
+  list.innerHTML = recent.map(b => {
+    const names = b.participants_names
+      ? b.participants_names.split('||').map(escHtml).join(', ')
+      : '';
+    return `
     <div class="field-row history-row">
       <div class="history-info">
         <div class="history-title">${escHtml(b.title)}</div>
         <div class="history-meta">${formatDate(b.date)}</div>
+        ${names ? `<div class="history-players">${names}</div>` : ''}
       </div>
       ${b.is_extra ? '<span class="role-tag role-extra">Extra</span>' : '<span class="role-tag role-player">Gespeeld</span>'}
-    </div>
-  `).join('');
+    </div>`;
+  }).join('');
 }
 
 /* ── Niet-betaald ─────────────────────────────────────────── */
@@ -793,7 +800,7 @@ function showEditBookingModal() {
   clearError('booking-error');
   document.getElementById('b-title').value = b.title;
   document.getElementById('b-date').value  = b.date;
-  document.getElementById('b-date').min    = '';
+  document.getElementById('b-date').min    = new Date().toISOString().split('T')[0];
   setTimeSelect('b-start', b.start_time);
   setTimeSelect('b-end',   b.end_time);
   document.getElementById('b-notes').value   = b.notes || '';
@@ -819,6 +826,13 @@ async function handleCreateBooking(e) {
     notes:      document.getElementById('b-notes').value,
     is_private: document.getElementById('b-private').checked,
   };
+
+  // Valideer dat starttijd niet in het verleden ligt
+  const now = new Date();
+  const nowStr = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')} ${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
+  if ((body.date + ' ' + body.start_time) <= nowStr) {
+    return showError('booking-error', 'Starttijd mag niet in het verleden liggen');
+  }
 
   if (bookingEditId) {
     const res  = await api(`/api/bookings/${bookingEditId}`, { method: 'PUT', body });
