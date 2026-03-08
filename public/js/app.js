@@ -82,7 +82,7 @@ function showAuth() {
 function showApp() {
   document.getElementById('auth-screen').classList.add('hidden');
   document.getElementById('app-screen').classList.remove('hidden');
-  loadBookings();
+  switchTab('potjes');
   renderProfile();
 }
 
