@@ -878,3 +878,94 @@ body {
 .confirm-btn:active { background: var(--bg); }
 .confirm-cancel { color: var(--text-1); border-right: 1px solid var(--separator); }
 .confirm-ok     { color: var(--red); font-weight: 600; }
+
+/* ══════════════════════════════════════════════
+   ADMIN PANEL
+══════════════════════════════════════════════ */
+.admin-stats {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-bottom: 20px;
+}
+.stat-card {
+  background: var(--surface);
+  border-radius: var(--radius);
+  padding: 16px;
+  text-align: center;
+  box-shadow: 0 1px 0 var(--separator);
+}
+.stat-number {
+  font-size: 1.8rem;
+  font-weight: 800;
+  color: var(--green-dark);
+  letter-spacing: -.02em;
+}
+.stat-label {
+  font-size: .78rem;
+  color: var(--text-2);
+  font-weight: 500;
+  margin-top: 2px;
+}
+
+.admin-user-card {
+  background: var(--surface);
+  border-radius: var(--radius);
+  padding: 14px 16px;
+  margin-bottom: 8px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.admin-user-info { flex: 1; min-width: 0; }
+.admin-user-name { font-size: .95rem; font-weight: 600; }
+.admin-user-meta { font-size: .78rem; color: var(--text-2); margin-top: 2px; }
+.admin-user-actions { display: flex; gap: 6px; flex-shrink: 0; }
+.admin-btn-sm {
+  background: none;
+  border: 1.5px solid var(--separator-opaque);
+  border-radius: 8px;
+  padding: 6px 10px;
+  font-size: .78rem;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  transition: all .12s;
+}
+.admin-btn-sm:active { opacity: .7; }
+.admin-btn-reset { color: var(--blue); border-color: var(--blue); }
+.admin-btn-delete { color: var(--red); border-color: var(--red); }
+.admin-badge {
+  font-size: .68rem;
+  font-weight: 700;
+  background: rgba(88,86,214,.12);
+  color: var(--indigo);
+  padding: 2px 7px;
+  border-radius: 8px;
+  margin-left: 6px;
+}
+
+.admin-booking-card {
+  background: var(--surface);
+  border-radius: var(--radius);
+  padding: 14px 16px;
+  margin-bottom: 8px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  transition: transform .1s;
+}
+.admin-booking-card:active { transform: scale(.985); }
+.admin-booking-info { flex: 1; min-width: 0; }
+.admin-booking-title { font-size: .95rem; font-weight: 600; }
+.admin-booking-meta { font-size: .78rem; color: var(--text-2); margin-top: 2px; }
+.admin-booking-count {
+  font-size: .82rem;
+  font-weight: 700;
+  color: var(--green-dark);
+  background: var(--green-tint);
+  padding: 4px 10px;
+  border-radius: 20px;
+  flex-shrink: 0;
+}

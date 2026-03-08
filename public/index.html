@@ -216,6 +216,48 @@
     </div>
   </div>
 
+  <!-- ── TAB: ADMIN ── -->
+  <div id="tab-admin" class="tab-content hidden">
+    <div class="nav-bar">
+      <h1 class="nav-title">Admin</h1>
+    </div>
+
+    <div class="scroll-area">
+      <!-- Stats -->
+      <div class="admin-stats" id="admin-stats">
+        <div class="stat-card">
+          <div class="stat-number" id="stat-users">-</div>
+          <div class="stat-label">Gebruikers</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-number" id="stat-total">-</div>
+          <div class="stat-label">Totaal potjes</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-number" id="stat-past">-</div>
+          <div class="stat-label">Gespeeld</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-number" id="stat-upcoming">-</div>
+          <div class="stat-label">Gepland</div>
+        </div>
+      </div>
+
+      <!-- Gebruikers -->
+      <div class="section-header">Gebruikers</div>
+      <div class="field-group">
+        <div class="field-row">
+          <input type="text" id="admin-user-search" placeholder="Zoek op naam of gebruikersnaam..." oninput="adminSearchUsers()" />
+        </div>
+      </div>
+      <div id="admin-users-list"></div>
+
+      <!-- Boekingen -->
+      <div class="section-header" style="margin-top:16px">Alle boekingen</div>
+      <div id="admin-bookings-list"></div>
+    </div>
+  </div>
+
   <!-- ── BOTTOM TAB BAR ── -->
   <nav class="bottom-tab-bar">
     <button class="tab-item active" id="tab-btn-potjes" onclick="switchTab('potjes')">
@@ -231,6 +273,13 @@
         <path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/>
       </svg>
       <span>Profiel</span>
+    </button>
+    <button class="tab-item hidden" id="tab-btn-admin" onclick="switchTab('admin')">
+      <svg class="tab-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <circle cx="12" cy="12" r="3"/>
+        <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+      </svg>
+      <span>Admin</span>
     </button>
   </nav>
 </div>
@@ -390,6 +439,76 @@
     <div class="confirm-actions">
       <button class="confirm-btn confirm-cancel" onclick="closeConfirm()">Annuleren</button>
       <button class="confirm-btn confirm-ok" id="confirm-ok-btn">Verwijderen</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════
+     MODAL: Admin boeking detail
+══════════════════════════════════════════════ -->
+<div id="admin-detail-modal" class="sheet-overlay hidden" onclick="closeSheet(event)">
+  <div class="sheet sheet-tall">
+    <div class="sheet-handle"></div>
+    <div class="sheet-header">
+      <button class="sheet-cancel" onclick="hideAdminDetailModal()">Sluiten</button>
+      <h2 class="sheet-title" id="admin-detail-title"></h2>
+      <button class="sheet-done" onclick="showAdminEditBooking()">Bewerk</button>
+    </div>
+    <div class="sheet-body" id="admin-detail-body"></div>
+    <div class="sheet-actions" id="admin-detail-actions"></div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════
+     MODAL: Admin boeking bewerken
+══════════════════════════════════════════════ -->
+<div id="admin-edit-modal" class="sheet-overlay hidden" onclick="closeSheet(event)">
+  <div class="sheet">
+    <div class="sheet-handle"></div>
+    <div class="sheet-header">
+      <button class="sheet-cancel" onclick="hideAdminEditModal()">Annuleer</button>
+      <h2 class="sheet-title">Boeking bewerken</h2>
+      <button class="sheet-done" onclick="handleAdminSaveBooking()">Opslaan</button>
+    </div>
+    <div class="sheet-body">
+      <form id="admin-edit-form" onsubmit="event.preventDefault(); handleAdminSaveBooking()">
+        <div class="field-group">
+          <div class="field-row"><label>Titel</label><input type="text" id="ae-title" required /></div>
+        </div>
+        <div class="field-group">
+          <div class="field-row"><label>Datum</label><input type="date" id="ae-date" required /></div>
+          <div class="field-row"><label>Van</label><select id="ae-start" class="time-select"></select></div>
+          <div class="field-row"><label>Tot</label><select id="ae-end" class="time-select"></select></div>
+        </div>
+        <div class="field-group">
+          <div class="field-row"><label>Notities</label><textarea id="ae-notes" rows="2"></textarea></div>
+        </div>
+        <div id="admin-edit-error" class="inline-error hidden"></div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════
+     MODAL: Admin wachtwoord resetten
+══════════════════════════════════════════════ -->
+<div id="admin-pw-modal" class="sheet-overlay hidden" onclick="closeSheet(event)">
+  <div class="sheet">
+    <div class="sheet-handle"></div>
+    <div class="sheet-header">
+      <button class="sheet-cancel" onclick="hideAdminPwModal()">Annuleer</button>
+      <h2 class="sheet-title">Wachtwoord resetten</h2>
+      <button class="sheet-done" onclick="handleAdminResetPassword()">Opslaan</button>
+    </div>
+    <div class="sheet-body">
+      <p style="color:var(--text-2);font-size:.9rem;margin-bottom:16px" id="admin-pw-user-label"></p>
+      <div class="field-group">
+        <div class="field-row">
+          <label>Nieuw wachtwoord</label>
+          <input type="password" id="admin-pw-input" placeholder="min. 8 tekens" />
+        </div>
+      </div>
+      <div id="admin-pw-error" class="inline-error hidden"></div>
     </div>
   </div>
 </div>

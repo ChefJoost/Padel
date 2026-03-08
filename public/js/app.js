@@ -93,7 +93,11 @@ function setUser(data) {
     username:     data.username,
     level:        data.level,
     avatar:       data.avatar || null,
+    is_admin:     !!data.is_admin,
   };
+  // Toon/verberg admin tab
+  const adminBtn = document.getElementById('tab-btn-admin');
+  if (adminBtn) adminBtn.classList.toggle('hidden', !currentUser.is_admin);
 }
 
 function showTab(tab, btn) {
@@ -219,11 +223,19 @@ function switchTab(tab) {
   currentTab = tab;
   document.getElementById('tab-potjes').classList.toggle('hidden', tab !== 'potjes');
   document.getElementById('tab-profiel').classList.toggle('hidden', tab !== 'profiel');
+  document.getElementById('tab-admin').classList.toggle('hidden', tab !== 'admin');
   document.getElementById('tab-btn-potjes').classList.toggle('active', tab === 'potjes');
   document.getElementById('tab-btn-profiel').classList.toggle('active', tab === 'profiel');
+  const adminBtn = document.getElementById('tab-btn-admin');
+  if (adminBtn) adminBtn.classList.toggle('active', tab === 'admin');
   if (tab === 'profiel') {
     loadHistory();
     loadUnpaid();
+  }
+  if (tab === 'admin') {
+    loadAdminStats();
+    adminSearchUsers();
+    loadAdminBookings();
   }
 }
 
@@ -908,6 +920,9 @@ function closeSheet(e) {
     hideNewBookingModal();
     hideDetailModal();
     hideProfileEdit();
+    hideAdminDetailModal();
+    hideAdminEditModal();
+    hideAdminPwModal();
   }
 }
 
@@ -1007,7 +1022,7 @@ function clearError(id) {
 
 /* ── Tijdselect opties ────────────────────────────────────── */
 function populateTimeSelects() {
-  ['b-start', 'b-end'].forEach(id => {
+  ['b-start', 'b-end', 'ae-start', 'ae-end'].forEach(id => {
     const sel = document.getElementById(id);
     if (!sel || sel.options.length) return;
     for (let h = 6; h <= 23; h++) {
@@ -1028,6 +1043,210 @@ function setTimeSelect(id, val) {
   for (const opt of sel.options) {
     if (opt.value === v) { opt.selected = true; break; }
   }
+}
+
+/* ── Admin ────────────────────────────────────────────────── */
+let adminCurrentBooking = null;
+let adminPwUserId = null;
+
+async function loadAdminStats() {
+  const res = await api('/api/admin/stats');
+  if (!res.ok) return;
+  const s = await res.json();
+  document.getElementById('stat-users').textContent = s.totalUsers;
+  document.getElementById('stat-total').textContent = s.totalBookings;
+  document.getElementById('stat-past').textContent = s.pastBookings;
+  document.getElementById('stat-upcoming').textContent = s.upcomingBookings;
+}
+
+let adminSearchTimer;
+function adminSearchUsers() {
+  clearTimeout(adminSearchTimer);
+  adminSearchTimer = setTimeout(async () => {
+    const q = (document.getElementById('admin-user-search')?.value || '').trim();
+    const res = await api(`/api/admin/users?q=${encodeURIComponent(q)}`);
+    if (!res.ok) return;
+    const users = await res.json();
+    const list = document.getElementById('admin-users-list');
+    if (!users.length) {
+      list.innerHTML = '<div class="field-group"><div class="field-row" style="color:var(--text-2)">Geen gebruikers gevonden</div></div>';
+      return;
+    }
+    list.innerHTML = users.map(u => `
+      <div class="admin-user-card">
+        <div class="admin-user-info">
+          <div class="admin-user-name">${escHtml(u.display_name)}${u.is_admin ? '<span class="admin-badge">Admin</span>' : ''}</div>
+          <div class="admin-user-meta">@${escHtml(u.username)} · ${u.booking_count} potjes</div>
+        </div>
+        <div class="admin-user-actions">
+          <button class="admin-btn-sm admin-btn-reset" onclick="showAdminPwModal(${u.id}, '${escAttr(u.display_name)}')">Wachtwoord</button>
+          ${u.id !== currentUser.userId ? `<button class="admin-btn-sm admin-btn-delete" onclick="adminDeleteUser(${u.id}, '${escAttr(u.display_name)}')">Verwijder</button>` : ''}
+        </div>
+      </div>
+    `).join('');
+  }, 300);
+}
+
+function adminDeleteUser(userId, name) {
+  document.getElementById('confirm-title').textContent = 'Gebruiker verwijderen';
+  document.getElementById('confirm-msg').textContent = `Weet je zeker dat je "${name}" wilt verwijderen? Dit verwijdert ook alle boekingen en deelnames.`;
+  document.getElementById('confirm-ok-btn').textContent = 'Verwijderen';
+  document.getElementById('confirm-ok-btn').onclick = async () => {
+    closeConfirm();
+    const res = await api(`/api/admin/users/${userId}`, { method: 'DELETE' });
+    if (res.ok) {
+      showToast('Gebruiker verwijderd');
+      adminSearchUsers();
+      loadAdminStats();
+      loadAdminBookings();
+    }
+  };
+  document.getElementById('confirm-modal').classList.remove('hidden');
+}
+
+function showAdminPwModal(userId, name) {
+  adminPwUserId = userId;
+  document.getElementById('admin-pw-user-label').textContent = `Wachtwoord resetten voor: ${name}`;
+  document.getElementById('admin-pw-input').value = '';
+  clearError('admin-pw-error');
+  document.getElementById('admin-pw-modal').classList.remove('hidden');
+}
+function hideAdminPwModal() {
+  document.getElementById('admin-pw-modal').classList.add('hidden');
+}
+async function handleAdminResetPassword() {
+  clearError('admin-pw-error');
+  const pw = document.getElementById('admin-pw-input').value;
+  if (!pw || pw.length < 8) return showError('admin-pw-error', 'Wachtwoord moet minimaal 8 tekens zijn');
+  const res = await api(`/api/admin/users/${adminPwUserId}/reset-password`, { method: 'POST', body: { new_password: pw } });
+  const data = await res.json();
+  if (!res.ok) return showError('admin-pw-error', data.error);
+  hideAdminPwModal();
+  showToast('Wachtwoord gewijzigd');
+}
+
+async function loadAdminBookings() {
+  const res = await api('/api/admin/bookings');
+  if (!res.ok) return;
+  const bookings = await res.json();
+  const list = document.getElementById('admin-bookings-list');
+  if (!bookings.length) {
+    list.innerHTML = '<div class="field-group"><div class="field-row" style="color:var(--text-2)">Geen boekingen</div></div>';
+    return;
+  }
+  list.innerHTML = bookings.map(b => `
+    <div class="admin-booking-card" onclick="showAdminDetailModal(${b.id})">
+      <div class="admin-booking-info">
+        <div class="admin-booking-title">${escHtml(b.title)}${b.is_private ? ' 🔒' : ''}</div>
+        <div class="admin-booking-meta">${formatDate(b.date)} · ${b.start_time}–${b.end_time} · ${escHtml(b.creator_name)}</div>
+      </div>
+      <div class="admin-booking-count">${b.player_count}/4</div>
+    </div>
+  `).join('');
+}
+
+async function showAdminDetailModal(id) {
+  const res = await api(`/api/admin/bookings/${id}`);
+  if (!res.ok) return;
+  const b = await res.json();
+  adminCurrentBooking = b;
+
+  document.getElementById('admin-detail-title').textContent = b.title;
+
+  const infoHtml = `
+    <div class="section-header">Details</div>
+    <div class="field-group">
+      <div class="field-row"><label>Datum</label><span>${formatDate(b.date)}</span></div>
+      <div class="field-row"><label>Tijd</label><span>${b.start_time} – ${b.end_time}</span></div>
+      <div class="field-row"><label>Organisator</label><span>${escHtml(b.creator_name)}</span></div>
+      ${b.notes ? `<div class="field-row"><label>Notities</label><span>${escHtml(b.notes)}</span></div>` : ''}
+    </div>
+  `;
+
+  const playerRows = b.participants.map(p => {
+    const name = p.is_guest ? `👤 ${escHtml(p.display_name)} <span class="guest-badge">Gast</span>` : `🎾 ${escHtml(p.display_name)}`;
+    return `<div class="field-row">
+      <span class="p-player">${name}</span>
+      <button class="admin-btn-sm admin-btn-delete" onclick="adminRemoveParticipant(${b.id}, ${p.id}, ${p.is_guest ? 1 : 0})">Verwijder</button>
+    </div>`;
+  });
+  for (let i = b.participants.length; i < 4; i++) {
+    playerRows.push(`<div class="field-row p-empty"><span class="p-icon">○</span> Vrije plek</div>`);
+  }
+
+  const participantsHtml = `
+    <div class="section-header">Spelers (${b.participants.length}/4)</div>
+    <div class="field-group">${playerRows.join('')}</div>
+  `;
+
+  document.getElementById('admin-detail-body').innerHTML = infoHtml + participantsHtml;
+
+  const actions = document.getElementById('admin-detail-actions');
+  actions.innerHTML = `<button class="btn btn-destructive-outline btn-full" onclick="adminDeleteBooking(${b.id})">Boeking verwijderen</button>`;
+
+  document.getElementById('admin-detail-modal').classList.remove('hidden');
+}
+
+function hideAdminDetailModal() {
+  document.getElementById('admin-detail-modal').classList.add('hidden');
+  adminCurrentBooking = null;
+}
+
+async function adminRemoveParticipant(bookingId, participantId, isGuest) {
+  await api(`/api/admin/bookings/${bookingId}/participants/${participantId}`, { method: 'DELETE' });
+  showAdminDetailModal(bookingId);
+  loadAdminBookings();
+}
+
+function adminDeleteBooking(bookingId) {
+  document.getElementById('confirm-title').textContent = 'Boeking verwijderen';
+  document.getElementById('confirm-msg').textContent = 'Weet je zeker dat je deze boeking wilt verwijderen?';
+  document.getElementById('confirm-ok-btn').textContent = 'Verwijderen';
+  document.getElementById('confirm-ok-btn').onclick = async () => {
+    closeConfirm();
+    await api(`/api/admin/bookings/${bookingId}`, { method: 'DELETE' });
+    hideAdminDetailModal();
+    loadAdminBookings();
+    loadAdminStats();
+    loadBookings();
+    showToast('Boeking verwijderd');
+  };
+  document.getElementById('confirm-modal').classList.remove('hidden');
+}
+
+function showAdminEditBooking() {
+  const b = adminCurrentBooking;
+  if (!b) return;
+  document.getElementById('ae-title').value = b.title;
+  document.getElementById('ae-date').value = b.date;
+  setTimeSelect('ae-start', b.start_time);
+  setTimeSelect('ae-end', b.end_time);
+  document.getElementById('ae-notes').value = b.notes || '';
+  clearError('admin-edit-error');
+  hideAdminDetailModal();
+  document.getElementById('admin-edit-modal').classList.remove('hidden');
+}
+
+function hideAdminEditModal() {
+  document.getElementById('admin-edit-modal').classList.add('hidden');
+}
+
+async function handleAdminSaveBooking() {
+  clearError('admin-edit-error');
+  const body = {
+    title:      document.getElementById('ae-title').value,
+    date:       document.getElementById('ae-date').value,
+    start_time: document.getElementById('ae-start').value,
+    end_time:   document.getElementById('ae-end').value,
+    notes:      document.getElementById('ae-notes').value,
+  };
+  const res = await api(`/api/admin/bookings/${adminCurrentBooking.id}`, { method: 'PUT', body });
+  const data = await res.json();
+  if (!res.ok) return showError('admin-edit-error', data.error);
+  hideAdminEditModal();
+  loadAdminBookings();
+  loadBookings();
+  showToast('Boeking bijgewerkt');
 }
 
 /* ── Start ────────────────────────────────────────────────── */

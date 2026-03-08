@@ -35,6 +35,7 @@ app.use(session({
 app.use('/api/auth', require('./auth'));
 app.use('/api/bookings', require('./bookings'));
 app.use('/api/push', require('./push').router);
+app.use('/api/admin', require('./admin'));
 
 // Alle andere routes → index.html (SPA)
 app.get('*', (req, res) => {
