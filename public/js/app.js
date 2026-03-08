@@ -506,11 +506,19 @@ function setFilter(val) {
   applyFilters();
 }
 
-function playerSpotHtml(name) {
-  const isMe     = name === currentUser?.display_name;
+function playerSpotHtml(name, info) {
   const initials = name.split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2);
-  if (isMe && currentUser?.avatar) {
-    return `<div class="spot spot-player" title="${escHtml(name)}" style="background-image:url('${currentUser.avatar}')"></div>`;
+  let avatarUrl = null;
+  if (info) {
+    const [uid, avatar] = info.split('::');
+    if (String(currentUser?.id) === uid && currentUser?.avatar) {
+      avatarUrl = currentUser.avatar;
+    } else if (avatar) {
+      avatarUrl = avatar;
+    }
+  }
+  if (avatarUrl) {
+    return `<div class="spot spot-player" title="${escHtml(name)}" style="background-image:url('${avatarUrl}')"></div>`;
   }
   return `<div class="spot spot-player" title="${escHtml(name)}">${initials}</div>`;
 }
@@ -519,6 +527,7 @@ function buildCard(b) {
   const playerCount = b.player_count || 0;
   const isFull      = playerCount >= 4;
   const names       = (b.participants_names || '').split('||').filter(Boolean);
+  const infos       = (b.participants_info || '').split('||');
 
   const card = document.createElement('div');
   card.className = isFull ? 'booking-card booking-card--full' : 'booking-card';
@@ -528,7 +537,7 @@ function buildCard(b) {
   let spots = '';
   for (let i = 0; i < 4; i++) {
     spots += i < names.length
-      ? playerSpotHtml(names[i])
+      ? playerSpotHtml(names[i], infos[i])
       : `<div class="spot spot-empty"></div>`;
   }
 

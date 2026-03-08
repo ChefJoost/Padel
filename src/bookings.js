@@ -33,7 +33,15 @@ router.get('/', requireAuth, (req, res) => {
              UNION ALL
              SELECT bg2.guest_name AS name, bg2.added_at AS ts
              FROM booking_guests bg2 WHERE bg2.booking_id = b.id
-             ORDER BY ts ASC)) AS participants_names
+             ORDER BY ts ASC)) AS participants_names,
+      (SELECT GROUP_CONCAT(info, '||')
+       FROM (SELECT p3.user_id || '::' || COALESCE(u3.avatar, '') AS info, p3.joined_at AS ts
+             FROM participants p3
+             JOIN users u3 ON p3.user_id = u3.id WHERE p3.booking_id = b.id
+             UNION ALL
+             SELECT '0::' AS info, bg2.added_at AS ts
+             FROM booking_guests bg2 WHERE bg2.booking_id = b.id
+             ORDER BY ts ASC)) AS participants_info
     FROM bookings b
     JOIN users u ON b.created_by = u.id
     LEFT JOIN participants p ON b.id = p.booking_id
@@ -90,7 +98,8 @@ router.get('/history', requireAuth, (req, res) => {
       u.display_name AS creator_name,
       p.is_extra, p.paid_at,
       COUNT(CASE WHEN p2.is_extra = 0 THEN 1 END) AS player_count,
-      GROUP_CONCAT(u2.display_name, '||') AS participants_names
+      GROUP_CONCAT(u2.display_name, '||') AS participants_names,
+      GROUP_CONCAT(p2.user_id || '::' || COALESCE(u2.avatar, ''), '||') AS participants_info
     FROM bookings b
     JOIN users u ON b.created_by = u.id
     LEFT JOIN participants p ON b.id = p.booking_id AND p.user_id = ?
