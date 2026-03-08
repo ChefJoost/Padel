@@ -208,13 +208,14 @@ body {
   margin-bottom: 14px;
 }
 
-/* Bewerkbare rij met potloodpictogram */
-.field-row--editable .field-edit-icon {
-  flex-shrink: 0;
+/* Bewerkbare rij: potlood via label ::after */
+.field-row--editable label::after {
+  content: " ✏︎";
+  font-size: .75em;
   color: var(--text-2);
-  pointer-events: none;
-  width: 16px;
-  height: 16px;
+}
+.field-row--editable input {
+  color: var(--blue);
 }
 
 /* Toast melding */
