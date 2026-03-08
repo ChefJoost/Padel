@@ -90,13 +90,14 @@ router.get('/history', requireAuth, (req, res) => {
       p.is_extra, p.paid_at,
       COUNT(CASE WHEN p2.is_extra = 0 THEN 1 END) AS player_count
     FROM bookings b
-    JOIN participants p ON b.id = p.booking_id AND p.user_id = ?
     JOIN users u ON b.created_by = u.id
+    LEFT JOIN participants p ON b.id = p.booking_id AND p.user_id = ?
     LEFT JOIN participants p2 ON b.id = p2.booking_id
     WHERE b.date < date('now', 'localtime')
+      AND (p.user_id IS NOT NULL OR b.created_by = ?)
     GROUP BY b.id
     ORDER BY b.date DESC, b.start_time DESC
-  `).all(req.session.userId);
+  `).all(req.session.userId, req.session.userId);
 
   res.json(bookings);
 });
