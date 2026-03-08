@@ -768,7 +768,7 @@ body {
 .unpaid-info   { flex: 1; min-width: 0; }
 .unpaid-title  { font-size: .92rem; font-weight: 600; color: var(--red); }
 .unpaid-meta   { font-size: .78rem; color: var(--text-2); margin-top: 2px; }
-.unpaid-actions { flex-shrink: 0; }
+.unpaid-actions { flex-shrink: 0; display: flex; gap: 6px; align-items: center; }
 
 .btn-pay-small {
   background: var(--orange);
@@ -782,6 +782,19 @@ body {
   transition: opacity .15s;
 }
 .btn-pay-small:active { opacity: .8; }
+
+.btn-paid-manual {
+  background: transparent;
+  color: var(--text-2);
+  border: 1.5px solid var(--border);
+  border-radius: 20px;
+  font-size: .8rem;
+  font-weight: 600;
+  padding: 5px 12px;
+  cursor: pointer;
+  transition: opacity .15s;
+}
+.btn-paid-manual:active { opacity: .8; }
 
 /* ══════════════════════════════════════════════
    CONFIRM DIALOG

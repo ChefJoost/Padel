@@ -348,12 +348,13 @@ async function loadHistory() {
   const bookings = await res.json();
   const list     = document.getElementById('history-list');
 
-  if (!bookings.length) {
+  const recent = bookings.slice(0, 3);
+  if (!recent.length) {
     list.innerHTML = '<div class="field-row history-empty">Nog geen gespeelde potjes.</div>';
     return;
   }
 
-  list.innerHTML = bookings.map(b => `
+  list.innerHTML = recent.map(b => `
     <div class="field-row history-row">
       <div class="history-info">
         <div class="history-title">${escHtml(b.title)}</div>
@@ -366,12 +367,24 @@ async function loadHistory() {
 
 /* ── Niet-betaald ─────────────────────────────────────────── */
 async function loadUnpaid() {
-  const res      = await api('/api/bookings');
-  const bookings = await res.json();
+  const [resUpcoming, resHistory] = await Promise.all([
+    api('/api/bookings'),
+    api('/api/bookings/history'),
+  ]);
+  const upcoming = await resUpcoming.json();
+  const history  = await resHistory.json();
 
-  // Toon boekingen met betaallink waarbij gebruiker nog niet betaald heeft en geen aanmaker is
-  const unpaid = bookings.filter(b =>
-    b.payment_url && !b.user_paid_at && b.user_joined && b.created_by !== currentUser.userId
+  // Normaliseer veldnamen: history gebruikt 'paid_at', upcoming gebruikt 'user_paid_at'
+  const all = [
+    ...upcoming.map(b => ({ ...b, _paid: b.user_paid_at, _fromHistory: false })),
+    ...history.map(b  => ({ ...b, _paid: b.paid_at,      _fromHistory: true  })),
+  ];
+
+  // Niet betaald: deelnemer (niet organisator), niet betaald
+  // Upcoming: alleen als user meedoet (user_joined); history: al server-side gefilterd
+  const unpaid = all.filter(b =>
+    !b._paid && b.created_by !== currentUser.userId &&
+    (b._fromHistory || b.user_joined)
   );
 
   const section = document.getElementById('unpaid-section');
@@ -389,8 +402,8 @@ async function loadUnpaid() {
         <div class="unpaid-meta">${formatDate(b.date)}</div>
       </div>
       <div class="unpaid-actions">
-        <a href="${escAttr(b.payment_url)}" target="_blank" rel="noopener"
-           class="btn-pay-small" onclick="markPaid(${b.id})">Betaal</a>
+        ${b.payment_url ? `<a href="${escAttr(b.payment_url)}" target="_blank" rel="noopener" class="btn-pay-small">Betaal</a>` : ''}
+        <button class="btn-paid-manual" onclick="markPaid(${b.id})">Betaald</button>
       </div>
     </div>
   `).join('');
@@ -398,7 +411,8 @@ async function loadUnpaid() {
 
 async function markPaid(bookingId) {
   await api(`/api/bookings/${bookingId}/pay`, { method: 'POST' });
-  setTimeout(loadUnpaid, 800);
+  loadUnpaid();
+  loadHistory();
 }
 
 /* ── Bookings list + filters ──────────────────────────────── */
