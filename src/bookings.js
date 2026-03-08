@@ -22,16 +22,18 @@ router.get('/', requireAuth, (req, res) => {
       b.id, b.title, b.date, b.start_time, b.end_time, b.notes,
       b.created_by, b.payment_url, b.is_private,
       u.display_name AS creator_name,
-      COUNT(p.id) AS player_count,
+      COUNT(p.id) + COALESCE((SELECT COUNT(*) FROM booking_guests bg WHERE bg.booking_id = b.id), 0) AS player_count,
       MAX(CASE WHEN p.user_id = ? THEN 1 ELSE 0 END) AS user_joined,
       MAX(CASE WHEN p.user_id = ? THEN p.paid_at END) AS user_paid_at,
       MIN(u2.level) AS min_level,
       MAX(u2.level) AS max_level,
-      (SELECT GROUP_CONCAT(display_name, '||')
-       FROM (SELECT u3.display_name FROM participants p3
-             JOIN users u3 ON p3.user_id = u3.id
-             WHERE p3.booking_id = b.id
-             ORDER BY p3.joined_at ASC)) AS participants_names
+      (SELECT GROUP_CONCAT(name, '||')
+       FROM (SELECT u3.display_name AS name, p3.joined_at AS ts FROM participants p3
+             JOIN users u3 ON p3.user_id = u3.id WHERE p3.booking_id = b.id
+             UNION ALL
+             SELECT bg2.guest_name AS name, bg2.added_at AS ts
+             FROM booking_guests bg2 WHERE bg2.booking_id = b.id
+             ORDER BY ts ASC)) AS participants_names
     FROM bookings b
     JOIN users u ON b.created_by = u.id
     LEFT JOIN participants p ON b.id = p.booking_id
@@ -82,12 +84,13 @@ router.get('/invite/:token', requireAuth, (req, res) => {
 // Eén boeking ophalen met deelnemers
 router.get('/:id', requireAuth, (req, res) => {
   const userId = req.session.userId;
+  const bookingId = req.params.id;
   const booking = db.prepare(`
     SELECT
       b.id, b.title, b.location, b.date, b.start_time, b.end_time, b.notes,
       b.created_by, b.payment_url, b.is_private, b.invite_token,
       u.display_name AS creator_name,
-      COUNT(p.id) AS player_count,
+      COUNT(p.id) + COALESCE((SELECT COUNT(*) FROM booking_guests bg WHERE bg.booking_id = b.id), 0) AS player_count,
       MAX(CASE WHEN p.user_id = ? THEN 1 ELSE 0 END) AS user_joined,
       MAX(CASE WHEN p.user_id = ? THEN p.paid_at END) AS user_paid_at,
       MIN(u2.level) AS min_level,
@@ -98,7 +101,7 @@ router.get('/:id', requireAuth, (req, res) => {
     LEFT JOIN users u2 ON p.user_id = u2.id
     WHERE b.id = ?
     GROUP BY b.id
-  `).get(userId, userId, req.params.id);
+  `).get(userId, userId, bookingId);
 
   if (!booking) return res.status(404).json({ error: 'Boeking niet gevonden' });
 
@@ -107,13 +110,26 @@ router.get('/:id', requireAuth, (req, res) => {
     return res.status(403).json({ error: 'Dit is een privé potje' });
   }
 
-  const participants = db.prepare(`
-    SELECT u.display_name, u.level, u.avatar, p.joined_at
+  const regularPlayers = db.prepare(`
+    SELECT p.id, u.display_name, u.level, u.avatar, p.joined_at,
+           0 AS is_guest, NULL AS guest_name, NULL AS added_by
     FROM participants p
     JOIN users u ON p.user_id = u.id
     WHERE p.booking_id = ?
     ORDER BY p.joined_at ASC
-  `).all(req.params.id);
+  `).all(bookingId);
+
+  const guests = db.prepare(`
+    SELECT id, NULL AS display_name, NULL AS level, NULL AS avatar, added_at AS joined_at,
+           1 AS is_guest, guest_name, added_by
+    FROM booking_guests
+    WHERE booking_id = ?
+    ORDER BY added_at ASC
+  `).all(bookingId);
+
+  const participants = [...regularPlayers, ...guests]
+    .sort((a, b) => (a.joined_at || '') < (b.joined_at || '') ? -1 : 1)
+    .map(p => p.is_guest ? { ...p, display_name: p.guest_name } : p);
 
   res.json({ ...booking, participants });
 });
@@ -290,12 +306,13 @@ router.post('/:id/join', requireAuth, (req, res) => {
   ).get(bookingId, userId);
   if (existing) return res.status(409).json({ error: 'Je bent al ingeschreven' });
 
-  // Tel huidige spelers
+  // Tel huidige spelers (inclusief gasten)
   const counts = db.prepare(`
-    SELECT COUNT(*) AS players FROM participants WHERE booking_id = ?
-  `).get(bookingId);
+    SELECT (SELECT COUNT(*) FROM participants WHERE booking_id = ?)
+         + (SELECT COUNT(*) FROM booking_guests WHERE booking_id = ?) AS total
+  `).get(bookingId, bookingId);
 
-  if (counts.players >= 4) {
+  if (counts.total >= 4) {
     return res.status(409).json({ error: 'De boeking is vol (4 spelers)' });
   }
 
@@ -347,6 +364,63 @@ router.delete('/:id/join', requireAuth, (req, res) => {
     return res.status(404).json({ error: 'Je bent niet ingeschreven voor deze boeking' });
   }
 
+  res.json({ success: true });
+});
+
+// Gast toevoegen (organisator of deelnemer)
+router.post('/:id/guests', requireAuth, (req, res) => {
+  const bookingId = req.params.id;
+  const userId = req.session.userId;
+  const { guest_name } = req.body;
+
+  if (!guest_name || !guest_name.trim()) {
+    return res.status(400).json({ error: 'Naam is verplicht' });
+  }
+
+  const booking = db.prepare('SELECT * FROM bookings WHERE id = ?').get(bookingId);
+  if (!booking) return res.status(404).json({ error: 'Boeking niet gevonden' });
+
+  // Alleen organisator of ingeschreven deelnemer mag een gast toevoegen
+  const isParticipant = db.prepare(
+    'SELECT 1 FROM participants WHERE booking_id = ? AND user_id = ?'
+  ).get(bookingId, userId);
+  if (booking.created_by !== userId && !isParticipant) {
+    return res.status(403).json({ error: 'Alleen deelnemers kunnen een gast toevoegen' });
+  }
+
+  // Capaciteitscheck
+  const counts = db.prepare(`
+    SELECT (SELECT COUNT(*) FROM participants WHERE booking_id = ?)
+         + (SELECT COUNT(*) FROM booking_guests WHERE booking_id = ?) AS total
+  `).get(bookingId, bookingId);
+  if (counts.total >= 4) {
+    return res.status(409).json({ error: 'De boeking is vol (4 spelers)' });
+  }
+
+  const result = db.prepare(
+    'INSERT INTO booking_guests (booking_id, guest_name, added_by) VALUES (?, ?, ?)'
+  ).run(bookingId, guest_name.trim(), userId);
+
+  res.status(201).json({ id: result.lastInsertRowid });
+});
+
+// Gast verwijderen (organisator of degene die gast toevoegde)
+router.delete('/:id/guests/:guestId', requireAuth, (req, res) => {
+  const bookingId = req.params.id;
+  const guestId   = req.params.guestId;
+  const userId    = req.session.userId;
+
+  const guest = db.prepare(
+    'SELECT * FROM booking_guests WHERE id = ? AND booking_id = ?'
+  ).get(guestId, bookingId);
+  if (!guest) return res.status(404).json({ error: 'Gast niet gevonden' });
+
+  const booking = db.prepare('SELECT created_by FROM bookings WHERE id = ?').get(bookingId);
+  if (booking.created_by !== userId && guest.added_by !== userId) {
+    return res.status(403).json({ error: 'Geen rechten om deze gast te verwijderen' });
+  }
+
+  db.prepare('DELETE FROM booking_guests WHERE id = ?').run(guestId);
   res.json({ success: true });
 });
 

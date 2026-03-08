@@ -590,8 +590,16 @@ async function showDetailModal(id) {
     `;
   }
 
-  // Deelnemers
+  // Deelnemers (inclusief gasten)
+  const canAddGuest = (isCreator || b.user_joined) && playerCount < 4;
   const playerRows = b.participants.map(p => {
+    if (p.is_guest) {
+      const canRemove = isCreator || p.added_by === currentUser.userId;
+      const removeBtn = canRemove
+        ? `<button class="guest-remove-btn" onclick="handleRemoveGuest(${b.id},${p.id})" title="Gast verwijderen">✕</button>`
+        : '';
+      return `<div class="field-row"><span class="p-player"><span class="guest-icon">👤</span> ${escHtml(p.display_name)}<span class="guest-badge">Gast</span></span>${removeBtn}</div>`;
+    }
     const icon = p.avatar
       ? `<span class="p-avatar" style="background-image:url('${escAttr(p.avatar)}')"></span>`
       : `🎾`;
@@ -599,6 +607,22 @@ async function showDetailModal(id) {
   });
   for (let i = b.participants.length; i < 4; i++) {
     playerRows.push(`<div class="field-row p-empty"><span class="p-icon">○</span> Vrije plek</div>`);
+  }
+  if (canAddGuest) {
+    playerRows.push(`
+      <div class="field-row add-guest-toggle-row" id="add-guest-toggle-row" onclick="showAddGuestForm(${b.id})">
+        <span class="add-guest-label">+ Gast toevoegen</span>
+      </div>
+      <div class="add-guest-form hidden" id="add-guest-form">
+        <div class="field-row">
+          <input type="text" id="guest-name-input" placeholder="Naam van de gast" maxlength="40" />
+        </div>
+        <div class="field-row">
+          <button class="btn btn-primary btn-full" onclick="handleAddGuest(${b.id})">Toevoegen</button>
+        </div>
+        <div id="guest-error" class="inline-error hidden" style="padding:0 16px 8px"></div>
+      </div>
+    `);
   }
 
   const participantsHtml = `
@@ -677,6 +701,31 @@ async function handleLeaveBooking() {
   const data = await res.json();
   if (!res.ok) return showError('detail-error', data.error);
   hideDetailModal(); loadBookings();
+}
+
+function showAddGuestForm(bookingId) {
+  const toggleRow = document.getElementById('add-guest-toggle-row');
+  const form      = document.getElementById('add-guest-form');
+  if (!form) return;
+  toggleRow.classList.add('hidden');
+  form.classList.remove('hidden');
+  document.getElementById('guest-name-input').focus();
+}
+
+async function handleAddGuest(bookingId) {
+  const name = document.getElementById('guest-name-input')?.value?.trim();
+  if (!name) return showError('guest-error', 'Vul een naam in');
+  const res  = await api(`/api/bookings/${bookingId}/guests`, { method: 'POST', body: { guest_name: name } });
+  const data = await res.json();
+  if (!res.ok) return showError('guest-error', data.error);
+  showDetailModal(bookingId); loadBookings();
+}
+
+async function handleRemoveGuest(bookingId, guestId) {
+  const res  = await api(`/api/bookings/${bookingId}/guests/${guestId}`, { method: 'DELETE' });
+  const data = await res.json();
+  if (!res.ok) return showError('detail-error', data.error);
+  showDetailModal(bookingId); loadBookings();
 }
 
 function handleDeleteBooking() {

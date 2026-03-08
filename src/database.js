@@ -64,5 +64,12 @@ migrate('ALTER TABLE bookings ADD COLUMN payment_url TEXT');
 migrate('ALTER TABLE participants ADD COLUMN paid_at DATETIME');
 migrate('ALTER TABLE bookings ADD COLUMN is_private INTEGER DEFAULT 0');
 migrate('ALTER TABLE bookings ADD COLUMN invite_token TEXT');
+migrate(`CREATE TABLE IF NOT EXISTS booking_guests (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  booking_id INTEGER NOT NULL REFERENCES bookings(id) ON DELETE CASCADE,
+  guest_name TEXT NOT NULL,
+  added_by INTEGER REFERENCES users(id),
+  added_at DATETIME DEFAULT CURRENT_TIMESTAMP
+)`);
 
 module.exports = db;
