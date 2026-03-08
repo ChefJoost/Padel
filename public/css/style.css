@@ -478,11 +478,33 @@ body {
   font-size: .75rem;
   font-weight: 600;
 }
-.status-joined { background: var(--green-tint);         color: var(--green-dark); }
-.status-extra  { background: rgba(255,149,0,.12);        color: #a05800; }
-.status-full   { background: rgba(255,59,48,.10);        color: var(--red); }
-.status-open   { background: var(--green-tint);          color: var(--green-dark); }
-.status-level  { background: rgba(88,86,214,.10);        color: var(--indigo); }
+.status-joined  { background: var(--green-tint);         color: var(--green-dark); }
+.status-extra   { background: rgba(255,149,0,.12);        color: #a05800; }
+.status-full    { background: rgba(255,59,48,.10);        color: var(--red); }
+.status-open    { background: var(--green-tint);          color: var(--green-dark); }
+.status-level   { background: rgba(88,86,214,.10);        color: var(--indigo); }
+.status-private { background: rgba(60,60,67,.08);         color: var(--text-2); }
+
+/* Toggle switch (iOS-stijl) */
+.toggle { position: relative; display: inline-block; width: 51px; height: 31px; flex-shrink: 0; }
+.toggle input { opacity: 0; width: 0; height: 0; position: absolute; }
+.toggle-track {
+  position: absolute; inset: 0; border-radius: 16px;
+  background: var(--separator-opaque);
+  transition: background .2s;
+}
+.toggle input:checked + .toggle-track { background: var(--green); }
+.toggle-track::after {
+  content: '';
+  position: absolute;
+  width: 27px; height: 27px;
+  left: 2px; top: 2px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 2px 4px rgba(0,0,0,.25);
+  transition: transform .2s;
+}
+.toggle input:checked + .toggle-track::after { transform: translateX(20px); }
 
 .pay-dot {
   display: inline-block;

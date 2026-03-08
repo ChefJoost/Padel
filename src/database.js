@@ -62,5 +62,7 @@ migrate('ALTER TABLE users ADD COLUMN level INTEGER');
 migrate('ALTER TABLE users ADD COLUMN avatar TEXT');
 migrate('ALTER TABLE bookings ADD COLUMN payment_url TEXT');
 migrate('ALTER TABLE participants ADD COLUMN paid_at DATETIME');
+migrate('ALTER TABLE bookings ADD COLUMN is_private INTEGER DEFAULT 0');
+migrate('ALTER TABLE bookings ADD COLUMN invite_token TEXT');
 
 module.exports = db;

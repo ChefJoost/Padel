@@ -1,4 +1,5 @@
 const express = require('express');
+const crypto = require('crypto');
 const db = require('./database');
 const { sendPushToUser } = require('./push');
 
@@ -12,18 +13,14 @@ function requireAuth(req, res, next) {
   next();
 }
 
-// Alle boekingen ophalen (toekomstig + vandaag, of verleden met ?past=1)
+// Alle boekingen ophalen (toekomstig + vandaag)
 router.get('/', requireAuth, (req, res) => {
-  const past = req.query.past === '1';
-  const dateFilter = past
-    ? `b.date < date('now', 'localtime')`
-    : `b.date >= date('now', 'localtime')`;
-  const order = past ? 'DESC' : 'ASC';
+  const userId = req.session.userId;
 
   const bookings = db.prepare(`
     SELECT
       b.id, b.title, b.date, b.start_time, b.end_time, b.notes,
-      b.created_by, b.payment_url,
+      b.created_by, b.payment_url, b.is_private,
       u.display_name AS creator_name,
       COUNT(p.id) AS player_count,
       MAX(CASE WHEN p.user_id = ? THEN 1 ELSE 0 END) AS user_joined,
@@ -39,20 +36,56 @@ router.get('/', requireAuth, (req, res) => {
     JOIN users u ON b.created_by = u.id
     LEFT JOIN participants p ON b.id = p.booking_id
     LEFT JOIN users u2 ON p.user_id = u2.id
-    WHERE ${dateFilter}
+    WHERE b.date >= date('now', 'localtime')
+      AND (b.is_private = 0
+           OR b.created_by = ?
+           OR EXISTS (SELECT 1 FROM participants WHERE booking_id = b.id AND user_id = ?))
     GROUP BY b.id
-    ORDER BY b.date ${order}, b.start_time ${order}
-  `).all(req.session.userId, req.session.userId);
+    ORDER BY b.date ASC, b.start_time ASC
+  `).all(userId, userId, userId, userId);
 
   res.json(bookings);
 });
 
+// Boeking ophalen via uitnodigingstoken (voor privé potjes)
+router.get('/invite/:token', requireAuth, (req, res) => {
+  const userId = req.session.userId;
+  const booking = db.prepare(`
+    SELECT
+      b.id, b.title, b.date, b.start_time, b.end_time, b.notes,
+      b.created_by, b.payment_url, b.is_private, b.invite_token,
+      u.display_name AS creator_name,
+      COUNT(p.id) AS player_count,
+      MAX(CASE WHEN p.user_id = ? THEN 1 ELSE 0 END) AS user_joined,
+      MAX(CASE WHEN p.user_id = ? THEN p.paid_at END) AS user_paid_at,
+      MIN(u2.level) AS min_level,
+      MAX(u2.level) AS max_level
+    FROM bookings b
+    JOIN users u ON b.created_by = u.id
+    LEFT JOIN participants p ON b.id = p.booking_id
+    LEFT JOIN users u2 ON p.user_id = u2.id
+    WHERE b.invite_token = ?
+    GROUP BY b.id
+  `).get(userId, userId, req.params.token);
+
+  if (!booking) return res.status(404).json({ error: 'Uitnodiging niet gevonden' });
+
+  const participants = db.prepare(`
+    SELECT u.display_name, u.level, u.avatar, p.joined_at
+    FROM participants p JOIN users u ON p.user_id = u.id
+    WHERE p.booking_id = ? ORDER BY p.joined_at ASC
+  `).all(booking.id);
+
+  res.json({ ...booking, participants });
+});
+
 // Eén boeking ophalen met deelnemers
 router.get('/:id', requireAuth, (req, res) => {
+  const userId = req.session.userId;
   const booking = db.prepare(`
     SELECT
       b.id, b.title, b.location, b.date, b.start_time, b.end_time, b.notes,
-      b.created_by, b.payment_url,
+      b.created_by, b.payment_url, b.is_private, b.invite_token,
       u.display_name AS creator_name,
       COUNT(p.id) AS player_count,
       MAX(CASE WHEN p.user_id = ? THEN 1 ELSE 0 END) AS user_joined,
@@ -65,9 +98,14 @@ router.get('/:id', requireAuth, (req, res) => {
     LEFT JOIN users u2 ON p.user_id = u2.id
     WHERE b.id = ?
     GROUP BY b.id
-  `).get(req.session.userId, req.session.userId, req.params.id);
+  `).get(userId, userId, req.params.id);
 
   if (!booking) return res.status(404).json({ error: 'Boeking niet gevonden' });
+
+  // Privé: alleen toegankelijk voor aanmaker en deelnemers
+  if (booking.is_private && booking.created_by !== userId && !booking.user_joined) {
+    return res.status(403).json({ error: 'Dit is een privé potje' });
+  }
 
   const participants = db.prepare(`
     SELECT u.display_name, u.level, u.avatar, p.joined_at
@@ -104,7 +142,7 @@ router.get('/history', requireAuth, (req, res) => {
 
 // Nieuwe boeking aanmaken
 router.post('/', requireAuth, (req, res) => {
-  const { title, date, start_time, end_time, notes } = req.body;
+  const { title, date, start_time, end_time, notes, is_private } = req.body;
 
   if (!title || !date || !start_time || !end_time) {
     return res.status(400).json({ error: 'Vul alle verplichte velden in' });
@@ -114,10 +152,13 @@ router.post('/', requireAuth, (req, res) => {
     return res.status(400).json({ error: 'Datum mag niet in het verleden liggen' });
   }
 
+  const privateFlag = is_private ? 1 : 0;
+  const inviteToken = is_private ? crypto.randomBytes(16).toString('hex') : null;
+
   const result = db.prepare(`
-    INSERT INTO bookings (title, location, date, start_time, end_time, notes, created_by)
-    VALUES (?, ?, ?, ?, ?, ?, ?)
-  `).run(title, '', date, start_time, end_time, notes || null, req.session.userId);
+    INSERT INTO bookings (title, location, date, start_time, end_time, notes, created_by, is_private, invite_token)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(title, '', date, start_time, end_time, notes || null, req.session.userId, privateFlag, inviteToken);
 
   // Aanmaker automatisch inschrijven als eerste speler
   db.prepare(`
@@ -219,9 +260,20 @@ router.post('/:id/pay', requireAuth, (req, res) => {
 router.post('/:id/join', requireAuth, (req, res) => {
   const bookingId = req.params.id;
   const userId = req.session.userId;
+  const token = req.query.token || null;
 
   const booking = db.prepare('SELECT * FROM bookings WHERE id = ?').get(bookingId);
   if (!booking) return res.status(404).json({ error: 'Boeking niet gevonden' });
+
+  // Privé: token verplicht (tenzij aanmaker of al deelnemer)
+  if (booking.is_private && booking.created_by !== userId) {
+    const isParticipant = db.prepare(
+      'SELECT 1 FROM participants WHERE booking_id = ? AND user_id = ?'
+    ).get(bookingId, userId);
+    if (!isParticipant && booking.invite_token !== token) {
+      return res.status(403).json({ error: 'Geen toegang. Gebruik de uitnodigingslink.' });
+    }
+  }
 
   // Al ingeschreven?
   const existing = db.prepare(

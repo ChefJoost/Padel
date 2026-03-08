@@ -118,12 +118,9 @@
 
     <div class="filter-bar">
       <div class="filter-group">
-        <button class="filter-btn active" id="filter-upcoming" onclick="setTimeFilter('upcoming', this)">Aankomend</button>
-        <button class="filter-btn" id="filter-past" onclick="setTimeFilter('past', this)">Verleden</button>
-      </div>
-      <div class="filter-group">
-        <button class="filter-btn active" id="filter-open" onclick="setStatusFilter('open', this)">Open</button>
-        <button class="filter-btn" id="filter-all-status" onclick="setStatusFilter('all', this)">Alle</button>
+        <button class="filter-btn active" id="filter-open" onclick="setFilter('open', this)">Open</button>
+        <button class="filter-btn" id="filter-all" onclick="setFilter('all', this)">Alle</button>
+        <button class="filter-btn" id="filter-mine" onclick="setFilter('mine', this)">Mijn</button>
       </div>
     </div>
 
@@ -246,6 +243,15 @@
           <div class="field-row">
             <label>Notities</label>
             <textarea id="b-notes" rows="2" placeholder="Optionele opmerkingen..."></textarea>
+          </div>
+        </div>
+        <div class="field-group">
+          <div class="field-row">
+            <label>Privé potje</label>
+            <label class="toggle">
+              <input type="checkbox" id="b-private" />
+              <span class="toggle-track"></span>
+            </label>
           </div>
         </div>
         <div id="booking-error" class="inline-error hidden"></div>

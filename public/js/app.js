@@ -8,9 +8,9 @@ let currentDetailBooking = null;
 let currentTab = 'potjes';
 let pendingAvatar = undefined;
 let bookingEditId = null;
-let allBookings   = [];
-let filterTime    = 'upcoming'; // 'upcoming' | 'past'
-let filterStatus  = 'open';     // 'open' | 'all'
+let allBookings      = [];
+let filterStatus     = 'open'; // 'open' | 'all' | 'mine'
+let currentInviteToken = null;
 
 /* ── Wachtwoordvalidatie ──────────────────────────────────── */
 function validatePassword(pw) {
@@ -30,15 +30,37 @@ async function init() {
       setUser(data);
       showApp();
       setupPush();
-      // Deep link: open direct potje als ?potje=ID in URL staat
-      const potjeId = new URLSearchParams(location.search).get('potje');
-      if (potjeId) showDetailModal(parseInt(potjeId, 10));
+      handleDeepLink();
     } else {
       showAuth();
     }
   } catch {
     showAuth();
   }
+}
+
+function handleDeepLink() {
+  const params = new URLSearchParams(location.search);
+  const potjeId = params.get('potje');
+  if (potjeId) { showDetailModal(parseInt(potjeId, 10)); return; }
+  const inviteToken = params.get('invite');
+  if (inviteToken) openInviteLink(inviteToken);
+}
+
+async function openInviteLink(token) {
+  currentInviteToken = token;
+  const res = await api(`/api/bookings/invite/${token}`);
+  if (!res.ok) { currentInviteToken = null; return; }
+  const b = await res.json();
+  currentDetailId = b.id;
+  currentDetailBooking = b;
+  // Render de detail modal direct met de al opgehaalde data
+  showDetailModal(b.id);
+}
+
+function copyInviteLink(token) {
+  const url = `${location.origin}/?invite=${token}`;
+  navigator.clipboard.writeText(url).then(() => showToast('Uitnodigingslink gekopieerd!'));
 }
 
 /* ── API helper ───────────────────────────────────────────── */
@@ -124,6 +146,7 @@ async function handleLogin(e) {
   setUser(data);
   showApp();
   setupPush();
+  handleDeepLink();
 }
 
 async function handleRegister(e) {
@@ -140,6 +163,7 @@ async function handleRegister(e) {
   setUser(data);
   showApp();
   setupPush();
+  handleDeepLink();
 }
 
 async function handleLogout() {
@@ -379,8 +403,7 @@ async function markPaid(bookingId) {
 
 /* ── Bookings list + filters ──────────────────────────────── */
 async function loadBookings() {
-  const url  = '/api/bookings' + (filterTime === 'past' ? '?past=1' : '');
-  const res  = await api(url);
+  const res = await api('/api/bookings');
   allBookings = await res.json();
   applyFilters();
 }
@@ -390,29 +413,33 @@ function applyFilters() {
   const empty = document.getElementById('bookings-empty');
   list.innerHTML = '';
 
-  const visible = filterStatus === 'open'
-    ? allBookings.filter(b => (b.player_count || 0) < 4)
-    : allBookings;
+  let visible = allBookings;
+  if (filterStatus === 'open') visible = allBookings.filter(b => (b.player_count || 0) < 4);
+  if (filterStatus === 'mine') visible = allBookings.filter(b => b.user_joined);
 
-  if (!visible.length) {
-    empty.classList.remove('hidden');
-    return;
+  const emptyTitle = document.querySelector('#bookings-empty .empty-title');
+  const emptySub   = document.querySelector('#bookings-empty .empty-sub');
+  const emptyBtn   = document.querySelector('#bookings-empty .btn');
+  if (filterStatus === 'mine') {
+    emptyTitle.textContent = 'Geen aankomende potjes';
+    emptySub.textContent   = 'Je bent nergens voor ingeschreven.';
+    if (emptyBtn) emptyBtn.style.display = 'none';
+  } else {
+    emptyTitle.textContent = 'Geen potjes gevonden';
+    emptySub.textContent   = 'Maak de eerste boeking aan!';
+    if (emptyBtn) emptyBtn.style.display = '';
   }
+
+  if (!visible.length) { empty.classList.remove('hidden'); return; }
   empty.classList.add('hidden');
   visible.forEach(b => list.appendChild(buildCard(b)));
 }
 
-function setTimeFilter(val, btn) {
-  filterTime = val;
-  document.getElementById('filter-upcoming').classList.toggle('active', val === 'upcoming');
-  document.getElementById('filter-past').classList.toggle('active', val === 'past');
-  loadBookings();
-}
-
-function setStatusFilter(val, btn) {
+function setFilter(val) {
   filterStatus = val;
-  document.getElementById('filter-open').classList.toggle('active', val === 'open');
-  document.getElementById('filter-all-status').classList.toggle('active', val === 'all');
+  document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+  const btn = document.getElementById('filter-' + val);
+  if (btn) btn.classList.add('active');
   applyFilters();
 }
 
@@ -463,6 +490,9 @@ function buildCard(b) {
   const payDot = b.payment_url && b.user_joined && !b.user_paid_at && b.created_by !== currentUser?.userId
     ? `<span class="pay-dot" title="Betaling openstaand"></span>` : '';
 
+  const privateTag = b.is_private
+    ? `<span class="status-tag status-private">🔒 Privé</span>` : '';
+
   card.innerHTML = `
     <div class="card-top">
       <div class="card-title">${escHtml(b.title)}${payDot}</div>
@@ -473,7 +503,7 @@ function buildCard(b) {
       <span>🕐 ${b.start_time} – ${b.end_time}</span>
     </div>
     <div class="card-spots">${spots}</div>
-    <div class="card-tags">${statusTag}${levelTag}</div>
+    <div class="card-tags">${statusTag}${levelTag}${privateTag}</div>
   `;
   return card;
 }
@@ -546,6 +576,20 @@ async function showDetailModal(id) {
     `;
   }
 
+  // Uitnodigingslink (voor aanmaker van privé potje)
+  let inviteHtml = '';
+  if (isCreator && b.is_private && b.invite_token) {
+    inviteHtml = `
+      <div class="section-header">Uitnodigingslink</div>
+      <div class="field-group">
+        <div class="field-row"><span style="color:var(--text-2);font-size:.85em">Alleen mensen met deze link kunnen inschrijven.</span></div>
+        <div class="field-row">
+          <button class="btn btn-outline btn-full" onclick="copyInviteLink('${escAttr(b.invite_token)}')">📋 Kopieer uitnodigingslink</button>
+        </div>
+      </div>
+    `;
+  }
+
   // Deelnemers
   const playerRows = b.participants.map(p => {
     const icon = p.avatar
@@ -563,7 +607,7 @@ async function showDetailModal(id) {
   `;
 
   document.getElementById('detail-body').innerHTML =
-    infoHtml + payHtml + payFormHtml + participantsHtml;
+    infoHtml + payHtml + inviteHtml + payFormHtml + participantsHtml;
 
   // Bewerk-knop in header voor organisator
   const headerRight = document.getElementById('detail-header-right');
@@ -619,9 +663,11 @@ async function markPaidAndRefresh(id) {
 
 async function handleJoinBooking() {
   clearError('detail-error');
-  const res  = await api(`/api/bookings/${currentDetailId}/join`, { method: 'POST' });
+  const qs  = currentInviteToken ? `?token=${currentInviteToken}` : '';
+  const res = await api(`/api/bookings/${currentDetailId}/join${qs}`, { method: 'POST' });
   const data = await res.json();
   if (!res.ok) return showError('detail-error', data.error);
+  currentInviteToken = null;
   hideDetailModal(); loadBookings();
 }
 
@@ -672,6 +718,7 @@ function showNewBookingModal() {
   document.getElementById('b-date').min   = today;
   setTimeSelect('b-start', '20:00');
   setTimeSelect('b-end',   '21:00');
+  document.getElementById('b-private').closest('.field-group').style.display = '';
   document.getElementById('booking-modal').classList.remove('hidden');
 }
 
@@ -687,6 +734,7 @@ function showEditBookingModal() {
   setTimeSelect('b-start', b.start_time);
   setTimeSelect('b-end',   b.end_time);
   document.getElementById('b-notes').value = b.notes || '';
+  document.getElementById('b-private').closest('.field-group').style.display = 'none';
   hideDetailModal();
   document.getElementById('booking-modal').classList.remove('hidden');
 }
@@ -705,6 +753,7 @@ async function handleCreateBooking(e) {
     start_time: document.getElementById('b-start').value,
     end_time:   document.getElementById('b-end').value,
     notes:      document.getElementById('b-notes').value,
+    is_private: document.getElementById('b-private').checked,
   };
 
   if (bookingEditId) {
