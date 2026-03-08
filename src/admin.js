@@ -82,6 +82,19 @@ router.post('/users/:id/reset-password', requireAdmin, async (req, res) => {
   }
 });
 
+// Admin status togglen
+router.post('/users/:id/toggle-admin', requireAdmin, (req, res) => {
+  const userId = parseInt(req.params.id, 10);
+  if (userId === req.session.userId) {
+    return res.status(400).json({ error: 'Je kunt je eigen admin status niet wijzigen' });
+  }
+  const user = db.prepare('SELECT is_admin FROM users WHERE id = ?').get(userId);
+  if (!user) return res.status(404).json({ error: 'Gebruiker niet gevonden' });
+  const newStatus = user.is_admin ? 0 : 1;
+  db.prepare('UPDATE users SET is_admin = ? WHERE id = ?').run(newStatus, userId);
+  res.json({ success: true, is_admin: !!newStatus });
+});
+
 // Alle boekingen ophalen
 router.get('/bookings', requireAdmin, (req, res) => {
   const bookings = db.prepare(`

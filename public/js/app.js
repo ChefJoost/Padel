@@ -231,6 +231,7 @@ function switchTab(tab) {
   if (tab === 'profiel') {
     loadHistory();
     loadUnpaid();
+    loadProfileStats();
   }
   if (tab === 'admin') {
     loadAdminStats();
@@ -394,6 +395,19 @@ async function handleSaveProfile() {
   hideProfileEdit();
   renderProfile();
   showToast('Profiel opgeslagen');
+}
+
+/* ── Profiel stats ────────────────────────────────────────── */
+async function loadProfileStats() {
+  const [resUpcoming, resHistory] = await Promise.all([
+    api('/api/bookings'),
+    api('/api/bookings/history'),
+  ]);
+  const upcoming = await resUpcoming.json();
+  const history  = await resHistory.json();
+  const planned = upcoming.filter(b => b.user_joined).length;
+  document.getElementById('profile-stat-played').textContent = history.length;
+  document.getElementById('profile-stat-planned').textContent = planned;
 }
 
 /* ── Geschiedenis ─────────────────────────────────────────── */
@@ -1080,6 +1094,7 @@ function adminSearchUsers() {
         </div>
         <div class="admin-user-actions">
           <button class="admin-btn-sm admin-btn-reset" onclick="showAdminPwModal(${u.id}, '${escAttr(u.display_name)}')">Wachtwoord</button>
+          ${u.id !== currentUser.userId ? `<button class="admin-btn-sm ${u.is_admin ? 'admin-btn-delete' : 'admin-btn-admin'}" onclick="adminToggleAdmin(${u.id})">${u.is_admin ? 'Ontneem admin' : 'Maak admin'}</button>` : ''}
           ${u.id !== currentUser.userId ? `<button class="admin-btn-sm admin-btn-delete" onclick="adminDeleteUser(${u.id}, '${escAttr(u.display_name)}')">Verwijder</button>` : ''}
         </div>
       </div>
@@ -1102,6 +1117,15 @@ function adminDeleteUser(userId, name) {
     }
   };
   document.getElementById('confirm-modal').classList.remove('hidden');
+}
+
+async function adminToggleAdmin(userId) {
+  const res = await api(`/api/admin/users/${userId}/toggle-admin`, { method: 'POST' });
+  if (res.ok) {
+    const data = await res.json();
+    showToast(data.is_admin ? 'Gebruiker is nu admin' : 'Admin rechten ontnomen');
+    adminSearchUsers();
+  }
 }
 
 function showAdminPwModal(userId, name) {

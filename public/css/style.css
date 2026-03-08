@@ -882,6 +882,13 @@ body {
 /* ══════════════════════════════════════════════
    ADMIN PANEL
 ══════════════════════════════════════════════ */
+.profile-stats {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-bottom: 20px;
+}
+
 .admin-stats {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -935,6 +942,7 @@ body {
 .admin-btn-sm:active { opacity: .7; }
 .admin-btn-reset { color: var(--blue); border-color: var(--blue); }
 .admin-btn-delete { color: var(--red); border-color: var(--red); }
+.admin-btn-admin { color: var(--indigo); border-color: var(--indigo); }
 .admin-badge {
   font-size: .68rem;
   font-weight: 700;
