@@ -91,6 +91,16 @@ body {
   box-shadow: 0 1px 4px rgba(0,0,0,.12);
 }
 
+.forgot-info {
+  background: rgba(60,60,67,.06);
+  border-radius: var(--radius-sm);
+  padding: 14px 16px;
+  margin-bottom: 16px;
+  font-size: .9rem;
+  color: var(--text-2);
+  line-height: 1.5;
+}
+
 .btn-forgot {
   display: block;
   width: 100%;

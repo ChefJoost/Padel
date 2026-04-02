@@ -75,7 +75,13 @@ migrate(`CREATE TABLE IF NOT EXISTS booking_guests (
   added_at DATETIME DEFAULT CURRENT_TIMESTAMP
 )`);
 
-// Stel standaard admin in
-migrate("UPDATE users SET is_admin = 1 WHERE username = 'joosts'");
+// Stel standaard admin in — alleen als er nog helemaal geen admin bestaat
+// Gebruik ADMIN_USERNAME env-variabele of val terug op 'joosts'
+const adminUsername = process.env.ADMIN_USERNAME || 'joosts';
+db.prepare(`
+  UPDATE users SET is_admin = 1
+  WHERE username = ?
+    AND NOT EXISTS (SELECT 1 FROM users WHERE is_admin = 1)
+`).run(adminUsername);
 
 module.exports = db;

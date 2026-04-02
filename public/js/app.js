@@ -113,32 +113,11 @@ function showTab(tab, btn) {
 function showForgotPassword() {
   document.getElementById('login-form').classList.add('hidden');
   document.getElementById('forgot-form').classList.remove('hidden');
-  clearError('forgot-error');
-  document.getElementById('forgot-username').value    = '';
-  document.getElementById('forgot-display-name').value = '';
-  document.getElementById('forgot-new-pw').value      = '';
 }
 
 function hideForgotPassword() {
   document.getElementById('forgot-form').classList.add('hidden');
   document.getElementById('login-form').classList.remove('hidden');
-}
-
-async function handleResetPassword(e) {
-  e.preventDefault();
-  clearError('forgot-error');
-  const username     = document.getElementById('forgot-username').value.trim();
-  const display_name = document.getElementById('forgot-display-name').value.trim();
-  const new_password = document.getElementById('forgot-new-pw').value;
-  const pwError = validatePassword(new_password);
-  if (pwError) return showError('forgot-error', pwError);
-  const res  = await api('/api/auth/reset-password', { method: 'POST', body: { username, display_name, new_password } });
-  const data = await res.json();
-  if (!res.ok) return showError('forgot-error', data.error);
-  hideForgotPassword();
-  showError('login-error', 'Wachtwoord gewijzigd. Je kunt nu inloggen.');
-  document.getElementById('login-error').style.color = 'var(--green)';
-  document.getElementById('login-username').value = username;
 }
 
 async function handleLogin(e) {

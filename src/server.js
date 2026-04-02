@@ -13,15 +13,28 @@ if (!fs.existsSync(dataDir)) {
 
 const SqliteStore = require('connect-sqlite3')(session);
 
-app.use(express.json());
+// Weiger te starten zonder veilige session secret in productie
+if (!process.env.SESSION_SECRET) {
+  console.warn('⚠️  SESSION_SECRET is niet ingesteld. Gebruik een veilige willekeurige string in productie.');
+}
+
+app.use(express.json({ limit: '200kb' }));
 app.use(express.static(path.join(__dirname, '..', 'public')));
+
+// Beveiligingsheaders
+app.use((req, res, next) => {
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('X-Frame-Options', 'DENY');
+  res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+  next();
+});
 
 app.use(session({
   store: new SqliteStore({
     db: 'sessions.db',
     dir: dataDir,
   }),
-  secret: process.env.SESSION_SECRET || 'padel-geheim-sleutel-verander-dit',
+  secret: process.env.SESSION_SECRET || 'padel-dev-only-change-in-production',
   resave: false,
   saveUninitialized: false,
   cookie: {

@@ -2,6 +2,14 @@ const express = require('express');
 const bcrypt = require('bcrypt');
 const db = require('./database');
 
+function validatePassword(pw) {
+  if (pw.length < 8)          return 'Wachtwoord moet minimaal 8 tekens zijn';
+  if (!/[A-Z]/.test(pw))      return 'Wachtwoord moet minimaal 1 hoofdletter bevatten';
+  if (!/[a-z]/.test(pw))      return 'Wachtwoord moet minimaal 1 kleine letter bevatten';
+  if (!/[0-9]/.test(pw))      return 'Wachtwoord moet minimaal 1 cijfer bevatten';
+  return null;
+}
+
 const router = express.Router();
 
 function requireAdmin(req, res, next) {
@@ -69,9 +77,8 @@ router.delete('/users/:id', requireAdmin, (req, res) => {
 router.post('/users/:id/reset-password', requireAdmin, async (req, res) => {
   const userId = parseInt(req.params.id, 10);
   const { new_password } = req.body;
-  if (!new_password || new_password.length < 8) {
-    return res.status(400).json({ error: 'Wachtwoord moet minimaal 8 tekens zijn' });
-  }
+  const pwError = validatePassword(new_password || '');
+  if (pwError) return res.status(400).json({ error: pwError });
   try {
     const hash = await bcrypt.hash(new_password, 12);
     db.prepare('UPDATE users SET password_hash = ? WHERE id = ?').run(hash, userId);

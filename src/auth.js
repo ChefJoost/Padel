@@ -166,30 +166,6 @@ router.put('/profile', async (req, res) => {
   }
 });
 
-// Wachtwoord resetten (zonder ingelogd te zijn, via gebruikersnaam + weergavenaam)
-router.post('/reset-password', async (req, res) => {
-  const { username, display_name, new_password } = req.body;
-
-  if (!username || !display_name || !new_password) {
-    return res.status(400).json({ error: 'Vul alle velden in' });
-  }
-  const pwError = validatePassword(new_password);
-  if (pwError) return res.status(400).json({ error: pwError });
-
-  const user = db.prepare('SELECT * FROM users WHERE username = ?').get(username.toLowerCase());
-
-  if (!user || user.display_name.toLowerCase() !== display_name.trim().toLowerCase()) {
-    return res.status(401).json({ error: 'Gebruikersnaam en weergavenaam komen niet overeen' });
-  }
-
-  try {
-    const hash = await bcrypt.hash(new_password, 12);
-    db.prepare('UPDATE users SET password_hash = ? WHERE id = ?').run(hash, user.id);
-    res.json({ success: true });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: 'Server fout bij opslaan' });
-  }
-});
+// Wachtwoord resetten is verwijderd — gebruik het admin-paneel om wachtwoorden te resetten.
 
 module.exports = router;

@@ -40,25 +40,12 @@
     </form>
 
     <!-- Wachtwoord vergeten -->
-    <form id="forgot-form" class="hidden" onsubmit="handleResetPassword(event)">
-      <div class="field-group">
-        <div class="field-row">
-          <label>Gebruikersnaam</label>
-          <input type="text" id="forgot-username" autocomplete="username" placeholder="jouw gebruikersnaam" />
-        </div>
-        <div class="field-row">
-          <label>Weergavenaam</label>
-          <input type="text" id="forgot-display-name" placeholder="jouw weergavenaam" />
-        </div>
-        <div class="field-row">
-          <label>Nieuw wachtwoord</label>
-          <input type="password" id="forgot-new-pw" autocomplete="new-password" placeholder="min. 8 tekens, A-z, 0-9" />
-        </div>
+    <div id="forgot-form" class="hidden">
+      <div class="forgot-info">
+        <p>Neem contact op met een beheerder om je wachtwoord te laten resetten.</p>
       </div>
-      <div id="forgot-error" class="inline-error hidden"></div>
-      <button type="submit" class="btn btn-primary btn-full">Wachtwoord instellen</button>
       <button type="button" class="btn-forgot" onclick="hideForgotPassword()">Terug naar inloggen</button>
-    </form>
+    </div>
 
     <!-- Register -->
     <form id="register-form" class="hidden" onsubmit="handleRegister(event)">
