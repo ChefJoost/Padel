@@ -228,6 +228,9 @@ function switchTab(tab) {
   document.getElementById('tab-btn-profiel').classList.toggle('active', tab === 'profiel');
   const adminBtn = document.getElementById('tab-btn-admin');
   if (adminBtn) adminBtn.classList.toggle('active', tab === 'admin');
+  if (tab === 'potjes') {
+    loadBookings();
+  }
   if (tab === 'profiel') {
     loadHistory();
     loadUnpaid();
