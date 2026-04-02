@@ -104,8 +104,8 @@ body {
   padding: 10px 0 2px;
 }
 
-/* Level picker — tijdelijk verborgen */
-.level-section, .level-pill, .status-level, .p-level { display: none !important; }
+/* Level picker — verborgen in profiel, zichtbaar in bookings */
+.level-section, .level-pill, .p-level { display: none !important; }
 .level-section { margin-bottom: 16px; }
 .level-label {
   font-size: .82rem;
@@ -581,6 +581,32 @@ body {
   border-radius: var(--radius-sm);
   padding: 9px 14px;
   margin-bottom: 20px;
+}
+
+/* ── Booking level picker ────────────────────────────────── */
+.booking-level-wrap {
+  padding: 6px 16px 14px;
+}
+.booking-level-picker {
+  display: flex;
+  gap: 5px;
+}
+.booking-level-picker .level-btn {
+  flex: 1;
+  height: 38px;
+  font-size: .9rem;
+}
+.booking-level-scale {
+  font-size: .75rem;
+  color: var(--text-3);
+  text-align: center;
+  margin-top: 7px;
+  letter-spacing: .01em;
+}
+.field-optional {
+  font-size: .82rem;
+  color: var(--text-3);
+  margin-left: auto;
 }
 
 .pay-dot {

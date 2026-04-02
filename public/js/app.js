@@ -246,12 +246,17 @@ function switchTab(tab) {
 }
 
 /* ── Level picker ─────────────────────────────────────────── */
-function initLevelPicker(pickerId, hiddenId) {
+function initLevelPicker(pickerId, hiddenId, toggleable = false) {
   document.querySelectorAll(`#${pickerId} .level-btn`).forEach(btn => {
     btn.addEventListener('click', () => {
+      const alreadySelected = btn.classList.contains('selected');
       document.querySelectorAll(`#${pickerId} .level-btn`).forEach(b => b.classList.remove('selected'));
-      btn.classList.add('selected');
-      document.getElementById(hiddenId).value = btn.dataset.level;
+      if (toggleable && alreadySelected) {
+        document.getElementById(hiddenId).value = '';
+      } else {
+        btn.classList.add('selected');
+        document.getElementById(hiddenId).value = btn.dataset.level;
+      }
     });
   });
 }
@@ -260,12 +265,13 @@ function setLevelPicker(pickerId, hiddenId, level) {
   document.querySelectorAll(`#${pickerId} .level-btn`).forEach(b => {
     b.classList.toggle('selected', parseInt(b.dataset.level) === level);
   });
-  if (level) document.getElementById(hiddenId).value = level;
+  document.getElementById(hiddenId).value = level || '';
 }
 
 document.addEventListener('DOMContentLoaded', () => {
   initLevelPicker('reg-level-picker',  'reg-level');
   initLevelPicker('edit-level-picker', 'edit-level');
+  initLevelPicker('b-level-picker', 'b-level', true);
 });
 
 /* ── Push notifications ───────────────────────────────────── */
@@ -584,9 +590,8 @@ function buildCard(b) {
 
   // Niveau
   let levelTag = '';
-  if (b.min_level != null) {
-    const txt = b.min_level === b.max_level ? `Niv. ${b.min_level}` : `Niv. ${b.min_level}–${b.max_level}`;
-    levelTag = `<span class="status-tag status-level">${txt}</span>`;
+  if (b.level != null) {
+    levelTag = `<span class="status-tag status-level">Niv. ${b.level}</span>`;
   }
 
   // Betaallink indicator
@@ -981,6 +986,7 @@ function showNewBookingModal() {
   setTimeSelect('b-start', '20:00');
   setTimeSelect('b-end',   '21:00');
   document.getElementById('b-extra-toggles').style.display = '';
+  setLevelPicker('b-level-picker', 'b-level', null);
   resetSeriesForm();
   document.getElementById('booking-modal').classList.remove('hidden');
 }
@@ -998,6 +1004,7 @@ function showEditBookingModal() {
   setTimeSelect('b-end',   b.end_time);
   document.getElementById('b-notes').value   = b.notes || '';
   document.getElementById('b-private').checked = !!b.is_private;
+  setLevelPicker('b-level-picker', 'b-level', b.level);
   // Reeks-optie verbergen bij bewerken
   document.getElementById('b-extra-toggles').style.display = 'none';
   resetSeriesForm();
@@ -1013,6 +1020,7 @@ function hideNewBookingModal() {
 async function handleCreateBooking(e) {
   e.preventDefault();
   clearError('booking-error');
+  const rawLevel = parseInt(document.getElementById('b-level').value);
   const body = {
     title:      document.getElementById('b-title').value,
     date:       document.getElementById('b-date').value,
@@ -1020,6 +1028,7 @@ async function handleCreateBooking(e) {
     end_time:   document.getElementById('b-end').value,
     notes:      document.getElementById('b-notes').value,
     is_private: document.getElementById('b-private').checked,
+    level:      rawLevel >= 1 && rawLevel <= 9 ? rawLevel : null,
   };
 
   // Valideer dat starttijd niet in het verleden ligt

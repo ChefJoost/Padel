@@ -20,7 +20,7 @@ router.get('/', requireAuth, (req, res) => {
   const bookings = db.prepare(`
     SELECT
       b.id, b.title, b.date, b.start_time, b.end_time, b.notes,
-      b.created_by, b.payment_url, b.is_private,
+      b.created_by, b.payment_url, b.is_private, b.level,
       u.display_name AS creator_name,
       COUNT(p.id) + COALESCE((SELECT COUNT(*) FROM booking_guests bg WHERE bg.booking_id = b.id), 0) AS player_count,
       MAX(CASE WHEN p.user_id = ? THEN 1 ELSE 0 END) AS user_joined,
@@ -63,7 +63,7 @@ router.get('/invite/:token', requireAuth, (req, res) => {
   const booking = db.prepare(`
     SELECT
       b.id, b.title, b.date, b.start_time, b.end_time, b.notes,
-      b.created_by, b.payment_url, b.is_private, b.invite_token,
+      b.created_by, b.payment_url, b.is_private, b.invite_token, b.level,
       u.display_name AS creator_name,
       COUNT(p.id) AS player_count,
       MAX(CASE WHEN p.user_id = ? THEN 1 ELSE 0 END) AS user_joined,
@@ -121,17 +121,14 @@ router.get('/:id', requireAuth, (req, res) => {
   const booking = db.prepare(`
     SELECT
       b.id, b.title, b.location, b.date, b.start_time, b.end_time, b.notes,
-      b.created_by, b.payment_url, b.is_private, b.invite_token,
+      b.created_by, b.payment_url, b.is_private, b.invite_token, b.level,
       u.display_name AS creator_name,
       COUNT(p.id) + COALESCE((SELECT COUNT(*) FROM booking_guests bg WHERE bg.booking_id = b.id), 0) AS player_count,
       MAX(CASE WHEN p.user_id = ? THEN 1 ELSE 0 END) AS user_joined,
-      MAX(CASE WHEN p.user_id = ? THEN p.paid_at END) AS user_paid_at,
-      MIN(u2.level) AS min_level,
-      MAX(u2.level) AS max_level
+      MAX(CASE WHEN p.user_id = ? THEN p.paid_at END) AS user_paid_at
     FROM bookings b
     JOIN users u ON b.created_by = u.id
     LEFT JOIN participants p ON b.id = p.booking_id
-    LEFT JOIN users u2 ON p.user_id = u2.id
     WHERE b.id = ?
     GROUP BY b.id
   `).get(userId, userId, bookingId);
@@ -198,7 +195,7 @@ function calcSeriesDates(startDate, frequency, endType, endDate, count) {
 
 // Nieuwe boeking aanmaken
 router.post('/', requireAuth, (req, res) => {
-  const { title, date, start_time, end_time, notes, is_private, series } = req.body;
+  const { title, date, start_time, end_time, notes, is_private, level, series } = req.body;
 
   if (!title || !date || !start_time || !end_time) {
     return res.status(400).json({ error: 'Vul alle verplichte velden in' });
@@ -232,8 +229,8 @@ router.post('/', requireAuth, (req, res) => {
 
     const seriesId = crypto.randomBytes(8).toString('hex');
     const insertBooking = db.prepare(`
-      INSERT INTO bookings (title, location, date, start_time, end_time, notes, created_by, is_private, invite_token, series_id)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO bookings (title, location, date, start_time, end_time, notes, created_by, is_private, invite_token, series_id, level)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
     const insertParticipant = db.prepare(`
       INSERT INTO participants (booking_id, user_id, is_extra) VALUES (?, ?, 0)
@@ -243,7 +240,7 @@ router.post('/', requireAuth, (req, res) => {
       const ids = [];
       for (const d of dates) {
         const inviteToken = privateFlag ? crypto.randomBytes(16).toString('hex') : null;
-        const r = insertBooking.run(title, '', d, start_time, end_time, notes || null, userId, privateFlag, inviteToken, seriesId);
+        const r = insertBooking.run(title, '', d, start_time, end_time, notes || null, userId, privateFlag, inviteToken, seriesId, level || null);
         insertParticipant.run(r.lastInsertRowid, userId);
         ids.push(r.lastInsertRowid);
       }
@@ -258,9 +255,9 @@ router.post('/', requireAuth, (req, res) => {
   const inviteToken = is_private ? crypto.randomBytes(16).toString('hex') : null;
 
   const result = db.prepare(`
-    INSERT INTO bookings (title, location, date, start_time, end_time, notes, created_by, is_private, invite_token)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `).run(title, '', date, start_time, end_time, notes || null, userId, privateFlag, inviteToken);
+    INSERT INTO bookings (title, location, date, start_time, end_time, notes, created_by, is_private, invite_token, level)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(title, '', date, start_time, end_time, notes || null, userId, privateFlag, inviteToken, level || null);
 
   // Aanmaker automatisch inschrijven als eerste speler
   db.prepare(`
@@ -274,7 +271,7 @@ router.post('/', requireAuth, (req, res) => {
 router.put('/:id', requireAuth, (req, res) => {
   const bookingId = req.params.id;
   const userId = req.session.userId;
-  const { title, date, start_time, end_time, notes, is_private } = req.body;
+  const { title, date, start_time, end_time, notes, is_private, level } = req.body;
 
   const booking = db.prepare('SELECT * FROM bookings WHERE id = ?').get(bookingId);
   if (!booking) return res.status(404).json({ error: 'Boeking niet gevonden' });
@@ -301,8 +298,8 @@ router.put('/:id', requireAuth, (req, res) => {
   }
 
   db.prepare(`
-    UPDATE bookings SET title=?, date=?, start_time=?, end_time=?, notes=?, is_private=?, invite_token=? WHERE id=?
-  `).run(title, date, start_time, end_time, notes || null, privateFlag, inviteToken, bookingId);
+    UPDATE bookings SET title=?, date=?, start_time=?, end_time=?, notes=?, is_private=?, invite_token=?, level=? WHERE id=?
+  `).run(title, date, start_time, end_time, notes || null, privateFlag, inviteToken, level || null, bookingId);
 
   res.json({ success: true });
 });

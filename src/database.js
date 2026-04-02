@@ -66,6 +66,7 @@ migrate('ALTER TABLE participants ADD COLUMN paid_at DATETIME');
 migrate('ALTER TABLE bookings ADD COLUMN is_private INTEGER DEFAULT 0');
 migrate('ALTER TABLE bookings ADD COLUMN invite_token TEXT');
 migrate('ALTER TABLE bookings ADD COLUMN series_id TEXT');
+migrate('ALTER TABLE bookings ADD COLUMN level INTEGER');
 migrate(`CREATE TABLE IF NOT EXISTS booking_guests (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   booking_id INTEGER NOT NULL REFERENCES bookings(id) ON DELETE CASCADE,
