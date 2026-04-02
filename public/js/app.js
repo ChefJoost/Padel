@@ -986,6 +986,7 @@ function showNewBookingModal() {
   setTimeSelect('b-start', '20:00');
   setTimeSelect('b-end',   '21:00');
   document.getElementById('b-extra-toggles').style.display = '';
+  document.getElementById('series-toggle-row').style.display = '';
   setLevelPicker('b-level-picker', 'b-level', null);
   resetSeriesForm();
   document.getElementById('booking-modal').classList.remove('hidden');
@@ -1005,8 +1006,9 @@ function showEditBookingModal() {
   document.getElementById('b-notes').value   = b.notes || '';
   document.getElementById('b-private').checked = !!b.is_private;
   setLevelPicker('b-level-picker', 'b-level', b.level);
-  // Reeks-optie verbergen bij bewerken
-  document.getElementById('b-extra-toggles').style.display = 'none';
+  // Reeks-rij verbergen bij bewerken (privé-toggle wel tonen)
+  document.getElementById('b-extra-toggles').style.display = '';
+  document.getElementById('series-toggle-row').style.display = 'none';
   resetSeriesForm();
   hideDetailModal();
   document.getElementById('booking-modal').classList.remove('hidden');
