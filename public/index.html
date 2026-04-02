@@ -335,7 +335,7 @@
             <textarea id="b-notes" rows="2" placeholder="Optionele opmerkingen..."></textarea>
           </div>
         </div>
-        <div class="field-group">
+        <div class="field-group" id="b-extra-toggles">
           <div class="field-row">
             <label>Privé potje</label>
             <label class="toggle">
@@ -343,7 +343,48 @@
               <span class="toggle-track"></span>
             </label>
           </div>
+          <div class="field-row" id="series-toggle-row">
+            <label>Reeks aanmaken</label>
+            <label class="toggle">
+              <input type="checkbox" id="b-series" onchange="toggleSeriesOptions()" />
+              <span class="toggle-track"></span>
+            </label>
+          </div>
         </div>
+
+        <!-- Reeks opties (zichtbaar als toggle aan) -->
+        <div id="series-options" class="hidden">
+          <div class="field-group">
+            <div class="field-row field-row--seg">
+              <label>Herhaling</label>
+              <div class="seg-control-inline" id="series-freq-ctrl">
+                <button type="button" class="seg-btn active" onclick="setSeriesFreq('weekly',this)">Wekelijks</button>
+                <button type="button" class="seg-btn" onclick="setSeriesFreq('biweekly',this)">2-wekelijks</button>
+                <button type="button" class="seg-btn" onclick="setSeriesFreq('monthly',this)">Maandelijks</button>
+              </div>
+            </div>
+            <div class="field-row field-row--seg">
+              <label>Eindigt</label>
+              <div class="seg-control-inline" id="series-end-ctrl">
+                <button type="button" class="seg-btn active" onclick="setSeriesEndType('date',this)">Op datum</button>
+                <button type="button" class="seg-btn" onclick="setSeriesEndType('count',this)">Na aantal</button>
+              </div>
+            </div>
+            <div class="field-row" id="series-date-row">
+              <label>Einddatum</label>
+              <input type="date" id="b-series-end-date" oninput="updateSeriesPreview()" />
+            </div>
+            <div class="field-row hidden" id="series-count-row">
+              <label>Aantal</label>
+              <div class="series-count-wrap">
+                <input type="number" id="b-series-count" value="4" min="2" max="52" oninput="updateSeriesPreview()" />
+                <span class="series-count-unit">keer</span>
+              </div>
+            </div>
+          </div>
+          <p id="series-preview" class="series-preview hidden"></p>
+        </div>
+
         <div id="booking-error" class="inline-error hidden"></div>
       </form>
     </div>

@@ -167,9 +167,38 @@ router.get('/:id', requireAuth, (req, res) => {
   res.json({ ...booking, participants });
 });
 
+// Hulpfuncties voor reeks-datumberekening
+function addFrequencyToDate(dateStr, frequency) {
+  const [y, m, d] = dateStr.split('-').map(Number);
+  let date;
+  if (frequency === 'weekly')        date = new Date(y, m - 1, d + 7);
+  else if (frequency === 'biweekly') date = new Date(y, m - 1, d + 14);
+  else                               date = new Date(y, m, d); // monthly: maand + 1
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+}
+
+function calcSeriesDates(startDate, frequency, endType, endDate, count) {
+  const dates = [startDate];
+  if (endType === 'count') {
+    let cur = startDate;
+    for (let i = 1; i < Math.min(Math.max(parseInt(count) || 1, 1), 52); i++) {
+      cur = addFrequencyToDate(cur, frequency);
+      dates.push(cur);
+    }
+  } else {
+    let cur = startDate;
+    for (let i = 0; i < 52; i++) {
+      cur = addFrequencyToDate(cur, frequency);
+      if (cur > endDate) break;
+      dates.push(cur);
+    }
+  }
+  return dates;
+}
+
 // Nieuwe boeking aanmaken
 router.post('/', requireAuth, (req, res) => {
-  const { title, date, start_time, end_time, notes, is_private } = req.body;
+  const { title, date, start_time, end_time, notes, is_private, series } = req.body;
 
   if (!title || !date || !start_time || !end_time) {
     return res.status(400).json({ error: 'Vul alle verplichte velden in' });
@@ -181,17 +210,62 @@ router.post('/', requireAuth, (req, res) => {
   }
 
   const privateFlag = is_private ? 1 : 0;
+  const userId = req.session.userId;
+
+  // Reeks: meerdere potjes tegelijk aanmaken
+  if (series && series.frequency) {
+    const validFreqs = ['weekly', 'biweekly', 'monthly'];
+    if (!validFreqs.includes(series.frequency)) {
+      return res.status(400).json({ error: 'Ongeldige herhaalfrequentie' });
+    }
+    if (series.end_type === 'date' && !series.end_date) {
+      return res.status(400).json({ error: 'Geef een einddatum op voor de reeks' });
+    }
+    if (series.end_type === 'count' && (!series.count || series.count < 2)) {
+      return res.status(400).json({ error: 'Aantal herhalingen moet minimaal 2 zijn' });
+    }
+
+    const dates = calcSeriesDates(date, series.frequency, series.end_type, series.end_date, series.count);
+    if (dates.length > 52) {
+      return res.status(400).json({ error: 'Een reeks mag maximaal 52 potjes bevatten' });
+    }
+
+    const seriesId = crypto.randomBytes(8).toString('hex');
+    const insertBooking = db.prepare(`
+      INSERT INTO bookings (title, location, date, start_time, end_time, notes, created_by, is_private, invite_token, series_id)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `);
+    const insertParticipant = db.prepare(`
+      INSERT INTO participants (booking_id, user_id, is_extra) VALUES (?, ?, 0)
+    `);
+
+    const createAll = db.transaction(() => {
+      const ids = [];
+      for (const d of dates) {
+        const inviteToken = privateFlag ? crypto.randomBytes(16).toString('hex') : null;
+        const r = insertBooking.run(title, '', d, start_time, end_time, notes || null, userId, privateFlag, inviteToken, seriesId);
+        insertParticipant.run(r.lastInsertRowid, userId);
+        ids.push(r.lastInsertRowid);
+      }
+      return ids;
+    });
+
+    const ids = createAll();
+    return res.status(201).json({ ids, count: ids.length, series_id: seriesId });
+  }
+
+  // Enkel potje
   const inviteToken = is_private ? crypto.randomBytes(16).toString('hex') : null;
 
   const result = db.prepare(`
     INSERT INTO bookings (title, location, date, start_time, end_time, notes, created_by, is_private, invite_token)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `).run(title, '', date, start_time, end_time, notes || null, req.session.userId, privateFlag, inviteToken);
+  `).run(title, '', date, start_time, end_time, notes || null, userId, privateFlag, inviteToken);
 
   // Aanmaker automatisch inschrijven als eerste speler
   db.prepare(`
     INSERT INTO participants (booking_id, user_id, is_extra) VALUES (?, ?, 0)
-  `).run(result.lastInsertRowid, req.session.userId);
+  `).run(result.lastInsertRowid, userId);
 
   res.status(201).json({ id: result.lastInsertRowid });
 });

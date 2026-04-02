@@ -11,6 +11,8 @@ let bookingEditId = null;
 let allBookings      = [];
 let filterStatus     = 'open'; // 'open' | 'all' | 'mine'
 let currentInviteToken = null;
+let seriesFreq    = 'weekly';
+let seriesEndType = 'date';
 
 /* ── Wachtwoordvalidatie ──────────────────────────────────── */
 function validatePassword(pw) {
@@ -860,6 +862,112 @@ async function handleSetPaymentUrl() {
   showToast(payment_url ? 'Betaallink opgeslagen' : 'Betaallink verwijderd');
 }
 
+/* ── Reeks hulpfuncties ───────────────────────────────────── */
+function seriesAddFreq(dateStr, freq) {
+  const [y, m, d] = dateStr.split('-').map(Number);
+  let dt;
+  if (freq === 'weekly')        dt = new Date(y, m - 1, d + 7);
+  else if (freq === 'biweekly') dt = new Date(y, m - 1, d + 14);
+  else                          dt = new Date(y, m, d); // monthly
+  return `${dt.getFullYear()}-${String(dt.getMonth()+1).padStart(2,'0')}-${String(dt.getDate()).padStart(2,'0')}`;
+}
+
+function seriesCalcDates(start, freq, endType, endDate, count) {
+  const dates = [start];
+  if (endType === 'count') {
+    let cur = start;
+    for (let i = 1; i < Math.min(parseInt(count) || 4, 52); i++) {
+      cur = seriesAddFreq(cur, freq);
+      dates.push(cur);
+    }
+  } else {
+    let cur = start;
+    for (let i = 0; i < 52; i++) {
+      cur = seriesAddFreq(cur, freq);
+      if (cur > endDate) break;
+      dates.push(cur);
+    }
+  }
+  return dates;
+}
+
+function toggleSeriesOptions() {
+  const on = document.getElementById('b-series').checked;
+  document.getElementById('series-options').classList.toggle('hidden', !on);
+  if (on) {
+    const today = document.getElementById('b-date').value || new Date().toISOString().split('T')[0];
+    const endInput = document.getElementById('b-series-end-date');
+    endInput.min = seriesAddFreq(today, seriesFreq);
+    if (!endInput.value) endInput.value = seriesCalcDefaultEnd(today);
+    updateSeriesPreview();
+  }
+}
+
+function setSeriesFreq(freq, btn) {
+  seriesFreq = freq;
+  document.querySelectorAll('#series-freq-ctrl .seg-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  const start = document.getElementById('b-date').value;
+  if (start) {
+    const endInput = document.getElementById('b-series-end-date');
+    endInput.min = seriesAddFreq(start, freq);
+  }
+  updateSeriesPreview();
+}
+
+function setSeriesEndType(type, btn) {
+  seriesEndType = type;
+  document.querySelectorAll('#series-end-ctrl .seg-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  document.getElementById('series-date-row').classList.toggle('hidden', type !== 'date');
+  document.getElementById('series-count-row').classList.toggle('hidden', type !== 'count');
+  updateSeriesPreview();
+}
+
+function seriesCalcDefaultEnd(startStr) {
+  // Standaard: 4 herhalingen (inclusief eerste)
+  let d = startStr;
+  for (let i = 0; i < 3; i++) d = seriesAddFreq(d, seriesFreq);
+  return d;
+}
+
+function updateSeriesPreview() {
+  const preview = document.getElementById('series-preview');
+  const start = document.getElementById('b-date').value;
+  if (!start) { preview.classList.add('hidden'); return; }
+
+  let dates;
+  if (seriesEndType === 'count') {
+    const n = parseInt(document.getElementById('b-series-count').value) || 4;
+    dates = seriesCalcDates(start, seriesFreq, 'count', null, n);
+  } else {
+    const end = document.getElementById('b-series-end-date').value;
+    if (!end || end <= start) { preview.classList.add('hidden'); return; }
+    dates = seriesCalcDates(start, seriesFreq, 'date', end, null);
+  }
+
+  const fmt = s => {
+    const [, m, d] = s.split('-').map(Number);
+    return `${d} ${['jan','feb','mrt','apr','mei','jun','jul','aug','sep','okt','nov','dec'][m-1]}`;
+  };
+  preview.classList.remove('hidden');
+  preview.textContent = `${dates.length} potjes · ${fmt(dates[0])} t/m ${fmt(dates[dates.length-1])}`;
+}
+
+function resetSeriesForm() {
+  seriesFreq    = 'weekly';
+  seriesEndType = 'date';
+  document.getElementById('b-series').checked = false;
+  document.getElementById('series-options').classList.add('hidden');
+  document.querySelectorAll('#series-freq-ctrl .seg-btn').forEach((b, i) => b.classList.toggle('active', i === 0));
+  document.querySelectorAll('#series-end-ctrl .seg-btn').forEach((b, i) => b.classList.toggle('active', i === 0));
+  document.getElementById('series-date-row').classList.remove('hidden');
+  document.getElementById('series-count-row').classList.add('hidden');
+  document.getElementById('b-series-end-date').value = '';
+  document.getElementById('b-series-count').value    = '4';
+  document.getElementById('series-preview').classList.add('hidden');
+}
+
 /* ── New / edit booking modal ─────────────────────────────── */
 function showNewBookingModal() {
   bookingEditId = null;
@@ -872,7 +980,8 @@ function showNewBookingModal() {
   document.getElementById('b-date').min   = today;
   setTimeSelect('b-start', '20:00');
   setTimeSelect('b-end',   '21:00');
-  document.getElementById('b-private').closest('.field-group').style.display = '';
+  document.getElementById('b-extra-toggles').style.display = '';
+  resetSeriesForm();
   document.getElementById('booking-modal').classList.remove('hidden');
 }
 
@@ -889,7 +998,9 @@ function showEditBookingModal() {
   setTimeSelect('b-end',   b.end_time);
   document.getElementById('b-notes').value   = b.notes || '';
   document.getElementById('b-private').checked = !!b.is_private;
-  document.getElementById('b-private').closest('.field-group').style.display = '';
+  // Reeks-optie verbergen bij bewerken
+  document.getElementById('b-extra-toggles').style.display = 'none';
+  resetSeriesForm();
   hideDetailModal();
   document.getElementById('booking-modal').classList.remove('hidden');
 }
@@ -924,10 +1035,29 @@ async function handleCreateBooking(e) {
     if (!res.ok) return showError('booking-error', data.error);
     hideNewBookingModal(); loadBookings();
   } else {
+    // Voeg reeks toe als de toggle aan staat
+    if (document.getElementById('b-series').checked) {
+      if (seriesEndType === 'date') {
+        const endDate = document.getElementById('b-series-end-date').value;
+        if (!endDate || endDate <= body.date) {
+          return showError('booking-error', 'Kies een einddatum na de startdatum');
+        }
+        body.series = { frequency: seriesFreq, end_type: 'date', end_date: endDate, count: null };
+      } else {
+        const count = parseInt(document.getElementById('b-series-count').value);
+        if (!count || count < 2) {
+          return showError('booking-error', 'Aantal herhalingen moet minimaal 2 zijn');
+        }
+        body.series = { frequency: seriesFreq, end_type: 'count', end_date: null, count };
+      }
+    }
+
     const res  = await api('/api/bookings', { method: 'POST', body });
     const data = await res.json();
     if (!res.ok) return showError('booking-error', data.error);
-    hideNewBookingModal(); loadBookings();
+    hideNewBookingModal();
+    loadBookings();
+    if (data.count > 1) showToast(`${data.count} potjes aangemaakt!`);
   }
 }
 
@@ -1284,6 +1414,15 @@ document.addEventListener('DOMContentLoaded', () => {
     const [h, m] = this.value.split(':').map(Number);
     const endH = (h + 1) % 24;
     setTimeSelect('b-end', `${String(endH).padStart(2,'0')}:${String(m).padStart(2,'0')}`);
+  });
+  document.getElementById('b-date').addEventListener('change', function () {
+    if (!document.getElementById('b-series').checked) return;
+    const endInput = document.getElementById('b-series-end-date');
+    endInput.min = seriesAddFreq(this.value, seriesFreq);
+    if (!endInput.value || endInput.value <= this.value) {
+      endInput.value = seriesCalcDefaultEnd(this.value);
+    }
+    updateSeriesPreview();
   });
 });
 init();
