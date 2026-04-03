@@ -83,6 +83,23 @@ migrate(`CREATE TABLE IF NOT EXISTS booking_guests (
   added_at DATETIME DEFAULT CURRENT_TIMESTAMP
 )`);
 
+migrate(`CREATE TABLE IF NOT EXISTS buddy_requests (
+  id           INTEGER PRIMARY KEY AUTOINCREMENT,
+  from_user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  to_user_id   INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  status       TEXT NOT NULL DEFAULT 'pending',
+  created_at   DATETIME DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE(from_user_id, to_user_id)
+)`);
+migrate(`CREATE TABLE IF NOT EXISTS messages (
+  id           INTEGER PRIMARY KEY AUTOINCREMENT,
+  from_user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  to_user_id   INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  content      TEXT NOT NULL,
+  read_at      DATETIME,
+  created_at   DATETIME DEFAULT CURRENT_TIMESTAMP
+)`);
+
 // Stel standaard admin in — alleen als er nog helemaal geen admin bestaat
 // Gebruik ADMIN_USERNAME env-variabele of val terug op 'joosts'
 const adminUsername = process.env.ADMIN_USERNAME || 'joosts';

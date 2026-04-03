@@ -91,6 +91,7 @@ app.use('/api/auth', authRouter);
 app.use('/api/bookings', require('./bookings'));
 app.use('/api/push', require('./push').router);
 app.use('/api/admin', require('./admin'));
+app.use('/api/buddies', require('./buddies'));
 
 // Alle andere routes → index.html (SPA)
 app.get('*', (req, res) => {

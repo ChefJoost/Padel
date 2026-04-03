@@ -148,6 +148,41 @@
     </div>
   </div>
 
+  <!-- ── TAB: BUDDIES ── -->
+  <div id="tab-buddies" class="tab-content hidden">
+    <div class="nav-bar">
+      <h1 class="nav-title">Buddies</h1>
+    </div>
+    <div class="scroll-area">
+
+      <!-- Zoekbalk -->
+      <div class="buddies-search-wrap">
+        <div class="buddies-search-inner">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16" class="buddies-search-icon">
+            <circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/>
+          </svg>
+          <input type="search" id="buddy-search-input" class="buddies-search-input"
+            placeholder="Zoek speler om toe te voegen…" autocomplete="off"
+            oninput="handleBuddySearch(this.value)" />
+        </div>
+      </div>
+      <div id="buddy-search-results" class="field-group hidden" style="margin:0 16px 12px"></div>
+
+      <!-- Inkomende verzoeken -->
+      <div id="buddy-requests-section" class="hidden">
+        <div class="section-header">Verzoeken</div>
+        <div class="field-group" id="buddy-requests-list"></div>
+      </div>
+
+      <!-- Buddies lijst -->
+      <div class="section-header" id="buddies-list-header">Mijn buddies</div>
+      <div class="field-group" id="buddies-list">
+        <div class="field-row buddy-empty">Nog geen buddies. Zoek een speler hierboven.</div>
+      </div>
+
+    </div>
+  </div>
+
   <!-- ── TAB: PROFIEL ── -->
   <div id="tab-profiel" class="tab-content hidden">
     <div class="nav-bar">
@@ -266,6 +301,18 @@
       </svg>
       <span>Potjes</span>
     </button>
+    <button class="tab-item" id="tab-btn-buddies" onclick="switchTab('buddies')">
+      <div class="tab-icon-wrap">
+        <svg class="tab-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="9" cy="7" r="3"/>
+          <path d="M3 21v-2a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v2"/>
+          <circle cx="18" cy="7" r="2.5" stroke-width="1.8"/>
+          <path d="M22 21v-1.5a3 3 0 0 0-2-2.83" stroke-width="1.8"/>
+        </svg>
+        <span class="tab-badge hidden" id="buddies-tab-badge"></span>
+      </div>
+      <span>Buddies</span>
+    </button>
     <button class="tab-item" id="tab-btn-profiel" onclick="switchTab('profiel')">
       <svg class="tab-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
         <circle cx="12" cy="8" r="4"/>
@@ -281,6 +328,31 @@
       <span>Admin</span>
     </button>
   </nav>
+</div>
+
+<!-- ══════════════════════════════════════════════
+     CHAT: Buddy chat scherm
+══════════════════════════════════════════════ -->
+<div id="buddy-chat-screen" class="buddy-chat-screen hidden">
+  <div class="nav-bar buddy-chat-nav">
+    <button class="nav-action nav-text" onclick="hideBuddyChat()">‹ Terug</button>
+    <div class="buddy-chat-nav-center">
+      <div class="buddy-chat-nav-avatar" id="chat-nav-avatar"></div>
+      <h1 class="nav-title" id="chat-buddy-name" style="font-size:1rem"></h1>
+    </div>
+    <button class="nav-action nav-text nav-text--red" id="chat-remove-btn" onclick="handleRemoveBuddy()" style="font-size:.8rem">Verwijder</button>
+  </div>
+  <div class="buddy-chat-messages" id="buddy-chat-messages"></div>
+  <div class="buddy-chat-input-bar">
+    <input type="text" id="buddy-chat-input" class="buddy-chat-input"
+      placeholder="Bericht…" maxlength="1000"
+      onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();handleSendMessage();}" />
+    <button class="buddy-chat-send-btn" onclick="handleSendMessage()">
+      <svg viewBox="0 0 24 24" fill="currentColor" width="20" height="20">
+        <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/>
+      </svg>
+    </button>
+  </div>
 </div>
 
 <!-- ══════════════════════════════════════════════

@@ -8,6 +8,13 @@ let currentDetailBooking = null;
 let currentTab = 'potjes';
 let pendingAvatar = undefined;
 let bookingEditId = null;
+
+// Buddies & chat
+let currentChatUserId = null;
+let currentChatUserName = null;
+let chatPollTimer = null;
+let buddyBadgePollTimer = null;
+let buddySearchTimer = null;
 let allBookings      = [];
 let filterStatus     = 'open'; // 'open' | 'all' | 'mine'
 let currentInviteToken = null;
@@ -86,6 +93,7 @@ function showApp() {
   document.getElementById('app-screen').classList.remove('hidden');
   switchTab('potjes');
   renderProfile();
+  startBuddyBadgePoll();
 }
 
 function setUser(data) {
@@ -203,25 +211,18 @@ async function handleLogout() {
 function switchTab(tab) {
   currentTab = tab;
   document.getElementById('tab-potjes').classList.toggle('hidden', tab !== 'potjes');
+  document.getElementById('tab-buddies').classList.toggle('hidden', tab !== 'buddies');
   document.getElementById('tab-profiel').classList.toggle('hidden', tab !== 'profiel');
   document.getElementById('tab-admin').classList.toggle('hidden', tab !== 'admin');
   document.getElementById('tab-btn-potjes').classList.toggle('active', tab === 'potjes');
+  document.getElementById('tab-btn-buddies').classList.toggle('active', tab === 'buddies');
   document.getElementById('tab-btn-profiel').classList.toggle('active', tab === 'profiel');
   const adminBtn = document.getElementById('tab-btn-admin');
   if (adminBtn) adminBtn.classList.toggle('active', tab === 'admin');
-  if (tab === 'potjes') {
-    loadBookings();
-  }
-  if (tab === 'profiel') {
-    loadHistory();
-    loadUnpaid();
-    loadProfileStats();
-  }
-  if (tab === 'admin') {
-    loadAdminStats();
-    adminSearchUsers();
-    loadAdminBookings();
-  }
+  if (tab === 'potjes')  { loadBookings(); }
+  if (tab === 'buddies') { loadBuddiesTab(); }
+  if (tab === 'profiel') { loadHistory(); loadUnpaid(); loadProfileStats(); }
+  if (tab === 'admin')   { loadAdminStats(); adminSearchUsers(); loadAdminBookings(); }
 }
 
 /* ── Level picker ─────────────────────────────────────────── */
@@ -1455,6 +1456,293 @@ async function handleAdminSaveBooking() {
   loadAdminBookings();
   loadBookings();
   showToast('Boeking bijgewerkt');
+}
+
+/* ══════════════════════════════════════════════════════════
+   BUDDIES
+══════════════════════════════════════════════════════════ */
+
+function buddyAvatarHtml(u, size = 36) {
+  if (u.avatar) {
+    return `<span class="buddy-avatar" style="width:${size}px;height:${size}px;background-image:url('${escAttr(u.avatar)}')"></span>`;
+  }
+  const initials = (u.display_name || '?')[0].toUpperCase();
+  return `<span class="buddy-avatar buddy-avatar--initials" style="width:${size}px;height:${size}px;font-size:${Math.round(size*0.42)}px">${escHtml(initials)}</span>`;
+}
+
+async function loadBuddiesTab() {
+  const [reqRes, buddyRes] = await Promise.all([
+    api('/api/buddies/requests'),
+    api('/api/buddies'),
+  ]);
+  const requests = reqRes.ok ? await reqRes.json() : [];
+  const buddies  = buddyRes.ok ? await buddyRes.json() : [];
+
+  // Verzoeken
+  const reqSection = document.getElementById('buddy-requests-section');
+  const reqList    = document.getElementById('buddy-requests-list');
+  if (requests.length > 0) {
+    reqSection.classList.remove('hidden');
+    reqList.innerHTML = requests.map(r => `
+      <div class="field-row buddy-request-row" id="buddy-req-${r.id}">
+        ${buddyAvatarHtml(r, 38)}
+        <div class="buddy-row-info" style="flex:1;min-width:0">
+          <div class="buddy-name">${escHtml(r.display_name)}</div>
+          ${r.username ? `<div class="buddy-username">@${escHtml(r.username)}</div>` : ''}
+        </div>
+        <div class="buddy-req-actions">
+          <button class="btn-buddy-accept" onclick="acceptBuddyRequest(${r.id})">Accepteer</button>
+          <button class="btn-buddy-reject" onclick="rejectBuddyRequest(${r.id})">Weiger</button>
+        </div>
+      </div>
+    `).join('');
+  } else {
+    reqSection.classList.add('hidden');
+  }
+
+  // Buddies
+  const list = document.getElementById('buddies-list');
+  if (!buddies.length) {
+    list.innerHTML = '<div class="field-row buddy-empty">Nog geen buddies. Zoek een speler hierboven.</div>';
+    return;
+  }
+  list.innerHTML = buddies.map(b => {
+    const unread = b.unread > 0
+      ? `<span class="buddy-unread-badge">${b.unread > 99 ? '99+' : b.unread}</span>`
+      : '';
+    const lastMsg = b.last_message
+      ? `<div class="buddy-last-msg">${escHtml(b.last_message.length > 45 ? b.last_message.slice(0, 45) + '…' : b.last_message)}</div>`
+      : '';
+    return `
+      <div class="field-row buddy-row" onclick="showBuddyChat(${b.id}, '${escAttr(b.display_name)}', ${b.avatar ? `'${escAttr(b.avatar)}'` : 'null'})">
+        <div style="display:flex;align-items:center;gap:12px;flex:1;min-width:0">
+          ${buddyAvatarHtml(b, 42)}
+          <div style="flex:1;min-width:0">
+            <div class="buddy-name">${escHtml(b.display_name)}</div>
+            ${lastMsg}
+          </div>
+        </div>
+        <div style="display:flex;align-items:center;gap:6px;flex-shrink:0">
+          ${unread}
+          <svg viewBox="0 0 24 24" fill="none" stroke="var(--text-3)" stroke-width="2" width="14" height="14"><path d="M9 18l6-6-6-6"/></svg>
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+/* ── Badge ───────────────────────────────────────────────── */
+async function updateBuddyBadge() {
+  const res = await api('/api/buddies/badge');
+  if (!res.ok) return;
+  const { requests, messages } = await res.json();
+  const total = requests + messages;
+  const badge = document.getElementById('buddies-tab-badge');
+  if (!badge) return;
+  if (total > 0) {
+    badge.textContent = total > 9 ? '9+' : total;
+    badge.classList.remove('hidden');
+  } else {
+    badge.classList.add('hidden');
+  }
+}
+
+function startBuddyBadgePoll() {
+  updateBuddyBadge();
+  clearInterval(buddyBadgePollTimer);
+  buddyBadgePollTimer = setInterval(updateBuddyBadge, 30_000);
+}
+
+/* ── Zoeken ──────────────────────────────────────────────── */
+function handleBuddySearch(q) {
+  clearTimeout(buddySearchTimer);
+  const results = document.getElementById('buddy-search-results');
+  if (q.trim().length < 2) {
+    results.classList.add('hidden');
+    results.innerHTML = '';
+    return;
+  }
+  buddySearchTimer = setTimeout(async () => {
+    const res = await api(`/api/buddies/search?q=${encodeURIComponent(q.trim())}`);
+    if (!res.ok) return;
+    const users = await res.json();
+    if (!users.length) {
+      results.innerHTML = '<div class="field-row buddy-empty">Geen spelers gevonden.</div>';
+      results.classList.remove('hidden');
+      return;
+    }
+    results.innerHTML = users.map(u => {
+      let actionHtml = '';
+      if (u.relation === 'buddy') {
+        actionHtml = `<span class="buddy-relation-tag">Buddy ✓</span>`;
+      } else if (u.relation === 'sent') {
+        actionHtml = `<button class="btn-buddy-reject" onclick="cancelBuddyRequest(${u.request_id}, this)">Verzoek intrekken</button>`;
+      } else if (u.relation === 'received') {
+        actionHtml = `<button class="btn-buddy-accept" onclick="acceptBuddyRequest(${u.request_id})">Accepteer</button>`;
+      } else {
+        actionHtml = `<button class="btn-buddy-add" onclick="sendBuddyRequest(${u.id}, this)">+ Buddy</button>`;
+      }
+      return `
+        <div class="field-row buddy-search-row">
+          ${buddyAvatarHtml(u, 36)}
+          <div style="flex:1;min-width:0">
+            <div class="buddy-name">${escHtml(u.display_name)}</div>
+            ${u.username ? `<div class="buddy-username">@${escHtml(u.username)}</div>` : ''}
+          </div>
+          ${actionHtml}
+        </div>
+      `;
+    }).join('');
+    results.classList.remove('hidden');
+  }, 300);
+}
+
+async function sendBuddyRequest(userId, btn) {
+  if (btn) { btn.disabled = true; btn.textContent = '…'; }
+  const res = await api('/api/buddies/request', { method: 'POST', body: JSON.stringify({ user_id: userId }) });
+  if (res.ok) {
+    if (btn) { btn.textContent = 'Verzonden ✓'; btn.classList.remove('btn-buddy-add'); btn.classList.add('buddy-relation-tag'); }
+    updateBuddyBadge();
+  } else {
+    const d = await res.json();
+    showToast(d.error || 'Fout bij verzenden');
+    if (btn) { btn.disabled = false; btn.textContent = '+ Buddy'; }
+  }
+}
+
+async function acceptBuddyRequest(requestId) {
+  const res = await api(`/api/buddies/requests/${requestId}/accept`, { method: 'POST' });
+  if (res.ok) {
+    loadBuddiesTab();
+    updateBuddyBadge();
+    showToast('Buddy toegevoegd!');
+  }
+}
+
+async function rejectBuddyRequest(requestId) {
+  await api(`/api/buddies/requests/${requestId}/reject`, { method: 'POST' });
+  loadBuddiesTab();
+  updateBuddyBadge();
+}
+
+async function cancelBuddyRequest(requestId, btn) {
+  if (btn) { btn.disabled = true; }
+  await api(`/api/buddies/requests/${requestId}/reject`, { method: 'POST' });
+  document.getElementById('buddy-search-input').dispatchEvent(new Event('input'));
+  handleBuddySearch(document.getElementById('buddy-search-input').value);
+}
+
+/* ── Chat ────────────────────────────────────────────────── */
+async function showBuddyChat(userId, name, avatar) {
+  currentChatUserId  = userId;
+  currentChatUserName = name;
+
+  document.getElementById('chat-buddy-name').textContent = name;
+  document.getElementById('chat-remove-btn').dataset.buddyId = userId;
+
+  // Avatar in header
+  const navAv = document.getElementById('chat-nav-avatar');
+  if (avatar) {
+    navAv.style.backgroundImage = `url('${escAttr(avatar)}')`;
+    navAv.textContent = '';
+  } else {
+    navAv.style.backgroundImage = '';
+    navAv.textContent = (name || '?')[0].toUpperCase();
+  }
+
+  document.getElementById('buddy-chat-screen').classList.remove('hidden');
+  document.getElementById('buddy-chat-input').value = '';
+
+  await loadMessages();
+
+  // Markeer als gelezen & update badge
+  api(`/api/buddies/messages/${userId}/read`, { method: 'POST' });
+  updateBuddyBadge();
+  loadBuddiesTab();
+
+  // Poll voor nieuwe berichten
+  clearInterval(chatPollTimer);
+  chatPollTimer = setInterval(async () => {
+    if (currentChatUserId !== userId) return;
+    await loadMessages(false);
+    api(`/api/buddies/messages/${userId}/read`, { method: 'POST' });
+    updateBuddyBadge();
+  }, 4_000);
+
+  setTimeout(() => document.getElementById('buddy-chat-input').focus(), 200);
+}
+
+function hideBuddyChat() {
+  clearInterval(chatPollTimer);
+  chatPollTimer = null;
+  currentChatUserId = null;
+  document.getElementById('buddy-chat-screen').classList.add('hidden');
+  loadBuddiesTab();
+  updateBuddyBadge();
+}
+
+async function loadMessages(scrollToBottom = true) {
+  if (!currentChatUserId) return;
+  const res = await api(`/api/buddies/messages/${currentChatUserId}`);
+  if (!res.ok) return;
+  const msgs = await res.json();
+
+  const container = document.getElementById('buddy-chat-messages');
+  const wasAtBottom = container.scrollHeight - container.scrollTop - container.clientHeight < 60;
+
+  if (!msgs.length) {
+    container.innerHTML = '<div class="chat-empty">Stuur een eerste bericht!</div>';
+    return;
+  }
+
+  container.innerHTML = msgs.map(m => {
+    const mine = m.from_user_id === currentUser.userId;
+    const time = new Date(m.created_at).toLocaleTimeString('nl-NL', { hour: '2-digit', minute: '2-digit' });
+    return `
+      <div class="chat-msg ${mine ? 'chat-msg--mine' : 'chat-msg--theirs'}">
+        <div class="chat-bubble">${escHtml(m.content)}</div>
+        <div class="chat-time">${time}</div>
+      </div>
+    `;
+  }).join('');
+
+  if (scrollToBottom || wasAtBottom) {
+    container.scrollTop = container.scrollHeight;
+  }
+}
+
+async function handleSendMessage() {
+  const input = document.getElementById('buddy-chat-input');
+  const content = input.value.trim();
+  if (!content || !currentChatUserId) return;
+
+  input.value = '';
+  const res = await api(`/api/buddies/messages/${currentChatUserId}`, {
+    method: 'POST',
+    body: JSON.stringify({ content }),
+  });
+  if (!res.ok) {
+    const d = await res.json();
+    showToast(d.error || 'Fout bij verzenden');
+    input.value = content;
+    return;
+  }
+  await loadMessages(true);
+}
+
+function handleRemoveBuddy() {
+  if (!currentChatUserId) return;
+  const name = currentChatUserName || 'deze buddy';
+  document.getElementById('confirm-title').textContent = `${name} verwijderen?`;
+  document.getElementById('confirm-msg').textContent = `Je verwijdert ${name} als buddy.`;
+  document.getElementById('confirm-ok-btn').textContent = 'Verwijderen';
+  document.getElementById('confirm-ok-btn').onclick = async () => {
+    closeConfirm();
+    await api(`/api/buddies/${currentChatUserId}`, { method: 'DELETE' });
+    hideBuddyChat();
+    showToast(`${name} verwijderd als buddy`);
+  };
+  document.getElementById('confirm-modal').classList.remove('hidden');
 }
 
 /* ── Start ────────────────────────────────────────────────── */
