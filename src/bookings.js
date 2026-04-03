@@ -141,7 +141,7 @@ router.get('/:id', requireAuth, (req, res) => {
   }
 
   const regularPlayers = db.prepare(`
-    SELECT p.id, u.display_name, u.level, u.avatar, p.joined_at,
+    SELECT p.id, p.user_id, u.display_name, u.level, u.avatar, p.joined_at,
            0 AS is_guest, NULL AS guest_name, NULL AS added_by
     FROM participants p
     JOIN users u ON p.user_id = u.id

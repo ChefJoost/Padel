@@ -705,7 +705,7 @@ async function showDetailModal(id) {
     const icon = p.avatar
       ? `<span class="p-avatar" style="background-image:url('${escAttr(p.avatar)}')"></span>`
       : `🎾`;
-    return `<div class="field-row"><span class="p-player">${icon} <button class="p-name-btn" onclick="showUserProfile(${p.id})">${escHtml(p.display_name)}</button></span></div>`;
+    return `<div class="field-row"><span class="p-player">${icon} <button class="p-name-btn" onclick="showUserProfile(${p.user_id})">${escHtml(p.display_name)}</button></span></div>`;
   });
   for (let i = b.participants.length; i < 4; i++) {
     playerRows.push(`<div class="field-row p-empty"><span class="p-icon">○</span> Vrije plek</div>`);
