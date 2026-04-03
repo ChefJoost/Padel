@@ -259,6 +259,17 @@ async function setupPush() {
   try {
     const reg = await navigator.serviceWorker.register('/sw.js');
     await navigator.serviceWorker.ready;
+
+    // Als toestemming al ingetrokken: bestaande subscription opruimen
+    if (Notification.permission === 'denied') {
+      const existing = await reg.pushManager.getSubscription();
+      if (existing) {
+        await api('/api/push/unsubscribe', { method: 'DELETE', body: { endpoint: existing.endpoint } });
+        await existing.unsubscribe();
+      }
+      return;
+    }
+
     const permission = await Notification.requestPermission();
     if (permission !== 'granted') return;
     const keyRes = await api('/api/push/vapid-public-key');

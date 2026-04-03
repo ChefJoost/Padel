@@ -49,6 +49,15 @@ router.get('/vapid-public-key', (req, res) => {
   res.json({ key: vapidKeys.publicKey });
 });
 
+// Push-subscription verwijderen (bijv. na intrekken toestemming)
+router.delete('/unsubscribe', requireAuth, (req, res) => {
+  const { endpoint } = req.body;
+  if (!endpoint) return res.status(400).json({ error: 'Endpoint vereist' });
+  db.prepare('DELETE FROM push_subscriptions WHERE user_id = ? AND endpoint = ?')
+    .run(req.session.userId, endpoint);
+  res.json({ success: true });
+});
+
 // Push-subscription opslaan
 router.post('/subscribe', requireAuth, (req, res) => {
   const { endpoint, p256dh, auth } = req.body;

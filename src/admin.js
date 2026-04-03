@@ -12,6 +12,14 @@ function validatePassword(pw) {
 
 const router = express.Router();
 
+function audit(adminId, action, targetId = null, details = null) {
+  try {
+    db.prepare(
+      'INSERT INTO audit_log (admin_id, action, target_id, details) VALUES (?, ?, ?, ?)'
+    ).run(adminId, action, targetId, details ? String(details) : null);
+  } catch (_) {}
+}
+
 function requireAdmin(req, res, next) {
   if (!req.session.userId) {
     return res.status(401).json({ error: 'Niet ingelogd' });
@@ -64,12 +72,13 @@ router.delete('/users/:id', requireAdmin, (req, res) => {
   if (userId === req.session.userId) {
     return res.status(400).json({ error: 'Je kunt jezelf niet verwijderen' });
   }
+  const target = db.prepare('SELECT username FROM users WHERE id = ?').get(userId);
   db.prepare('DELETE FROM participants WHERE user_id = ?').run(userId);
   db.prepare('DELETE FROM booking_guests WHERE added_by = ?').run(userId);
   db.prepare('DELETE FROM push_subscriptions WHERE user_id = ?').run(userId);
-  // Boekingen die door deze gebruiker zijn aangemaakt: verwijder ook
   db.prepare('DELETE FROM bookings WHERE created_by = ?').run(userId);
   db.prepare('DELETE FROM users WHERE id = ?').run(userId);
+  audit(req.session.userId, 'delete_user', userId, target?.username);
   res.json({ success: true });
 });
 
@@ -82,6 +91,7 @@ router.post('/users/:id/reset-password', requireAdmin, async (req, res) => {
   try {
     const hash = await bcrypt.hash(new_password, 12);
     db.prepare('UPDATE users SET password_hash = ? WHERE id = ?').run(hash, userId);
+    audit(req.session.userId, 'reset_password', userId);
     res.json({ success: true });
   } catch (err) {
     console.error(err);
@@ -99,6 +109,7 @@ router.post('/users/:id/toggle-admin', requireAdmin, (req, res) => {
   if (!user) return res.status(404).json({ error: 'Gebruiker niet gevonden' });
   const newStatus = user.is_admin ? 0 : 1;
   db.prepare('UPDATE users SET is_admin = ? WHERE id = ?').run(newStatus, userId);
+  audit(req.session.userId, newStatus ? 'grant_admin' : 'revoke_admin', userId);
   res.json({ success: true, is_admin: !!newStatus });
 });
 
@@ -150,12 +161,16 @@ router.put('/bookings/:id', requireAdmin, (req, res) => {
     UPDATE bookings SET title = ?, date = ?, start_time = ?, end_time = ?, notes = ?
     WHERE id = ?
   `).run(title, date, start_time, end_time, notes || null, bookingId);
+  audit(req.session.userId, 'update_booking', bookingId, title);
   res.json({ success: true });
 });
 
 // Boeking verwijderen
 router.delete('/bookings/:id', requireAdmin, (req, res) => {
-  db.prepare('DELETE FROM bookings WHERE id = ?').run(parseInt(req.params.id, 10));
+  const bookingId = parseInt(req.params.id, 10);
+  const booking = db.prepare('SELECT title FROM bookings WHERE id = ?').get(bookingId);
+  db.prepare('DELETE FROM bookings WHERE id = ?').run(bookingId);
+  audit(req.session.userId, 'delete_booking', bookingId, booking?.title);
   res.json({ success: true });
 });
 

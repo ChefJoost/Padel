@@ -16,7 +16,9 @@ self.addEventListener('push', event => {
 
 self.addEventListener('notificationclick', event => {
   event.notification.close();
-  const url = event.notification.data?.url || '/';
+  // Alleen relatieve paden toestaan — voorkomt javascript:/data: URLs
+  const rawUrl = event.notification.data?.url || '/';
+  const url = rawUrl.startsWith('/') ? rawUrl : '/';
   event.waitUntil(
     clients.matchAll({ type: 'window', includeUncontrolled: true }).then(list => {
       const existing = list.find(c => c.url.includes(self.location.origin));

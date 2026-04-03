@@ -66,6 +66,14 @@ migrate('ALTER TABLE participants ADD COLUMN paid_at DATETIME');
 migrate('ALTER TABLE bookings ADD COLUMN is_private INTEGER DEFAULT 0');
 migrate('ALTER TABLE bookings ADD COLUMN invite_token TEXT');
 migrate('ALTER TABLE bookings ADD COLUMN series_id TEXT');
+migrate(`CREATE TABLE IF NOT EXISTS audit_log (
+  id         INTEGER PRIMARY KEY AUTOINCREMENT,
+  admin_id   INTEGER NOT NULL REFERENCES users(id),
+  action     TEXT NOT NULL,
+  target_id  INTEGER,
+  details    TEXT,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+)`);
 migrate('ALTER TABLE bookings ADD COLUMN level INTEGER');
 migrate(`CREATE TABLE IF NOT EXISTS booking_guests (
   id INTEGER PRIMARY KEY AUTOINCREMENT,

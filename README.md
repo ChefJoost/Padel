@@ -64,8 +64,47 @@ Stuur de URL naar je vrienden — zij kunnen zich registreren en direct meedoen!
 
 ## Omgevingsvariabelen
 
+Zie `.env.example` voor een volledig overzicht. De belangrijkste:
+
 | Variable | Standaard | Beschrijving |
 |---|---|---|
-| `PORT` | `3000` | Poort waarop de server draait |
+| `SESSION_SECRET` | *(dev fallback)* | **Verplicht in productie.** Genereer met `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"` |
+| `ADMIN_USERNAME` | `joosts` | Gebruikersnaam die admin-rechten krijgt bij eerste start (alleen als er nog geen admin bestaat) |
 | `DATA_DIR` | `./data` | Map voor SQLite database bestanden |
-| `SESSION_SECRET` | *(hardcoded fallback)* | Geheime sleutel voor sessies — **verander dit in productie!** |
+| `VAPID_PUBLIC_KEY` / `VAPID_PRIVATE_KEY` | *(auto-gegenereerd)* | Stel in via Railway Variables zodat push-keys overleven na herstart |
+| `PORT` | `3000` | Poort waarop de server draait |
+
+---
+
+## Toekomstige verbeterpunten
+
+### Avatar-opslag migreren van database naar bestandssysteem
+
+Avatars worden momenteel opgeslagen als base64 data-URL in de SQLite-database.
+Dit werkt prima voor kleine groepen, maar schaalt slecht bij meer gebruikers
+(database groeit snel, elke pagina-load verstuurt grote blobs).
+
+**Stappenplan wanneer je wil migreren:**
+
+1. **Kies een opslaglocatie**
+   - *Eenvoudigst:* lokale map (`/data/avatars/`) op het persistent volume
+   - *Schaalbaarder:* object storage zoals Cloudflare R2, AWS S3 of Supabase Storage
+
+2. **Upload-endpoint toevoegen** (`POST /api/auth/avatar`)
+   - Ontvang multipart/form-data (`multer`-package)
+   - Valideer bestandstype (alleen `image/jpeg`, `image/png`, `image/webp`)
+   - Sla op als `{userId}.jpg` of gebruik een UUID als bestandsnaam
+   - Sla het pad/de URL op in `users.avatar` in plaats van de base64 string
+
+3. **Statische bestanden serveren**
+   - Lokaal: `app.use('/avatars', express.static('/data/avatars'))`
+   - Object storage: gebruik de publieke CDN-URL direct
+
+4. **Frontend aanpassen**
+   - `handleAvatarChange()` en `handleWelcomeAvatarChange()` in `app.js`:
+     stuur `FormData` naar het nieuwe upload-endpoint i.p.v. base64 in JSON
+   - `renderAvatarEl()` blijft ongewijzigd (gebruikt al een URL)
+
+5. **Bestaande base64 avatars migreren**
+   - Schrijf een eenmalig migratiescript dat alle `users` met een data-URL avatar
+     omzet naar een bestand en de database bijwerkt
