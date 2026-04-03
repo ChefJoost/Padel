@@ -168,4 +168,42 @@ router.put('/profile', async (req, res) => {
 
 // Wachtwoord resetten is verwijderd — gebruik het admin-paneel om wachtwoorden te resetten.
 
+// Publiek gebruikersprofiel
+router.get('/users/:id', (req, res) => {
+  if (!req.session.userId) return res.status(401).json({ error: 'Niet ingelogd' });
+
+  const userId = parseInt(req.params.id, 10);
+  if (!userId || isNaN(userId)) return res.status(400).json({ error: 'Ongeldig gebruikers-ID' });
+
+  const user = db.prepare(
+    'SELECT id, display_name, username, level, avatar, created_at FROM users WHERE id = ?'
+  ).get(userId);
+  if (!user) return res.status(404).json({ error: 'Gebruiker niet gevonden' });
+
+  const today = new Date().toISOString().slice(0, 10);
+  const played = db.prepare(`
+    SELECT COUNT(*) AS cnt FROM participants p
+    JOIN bookings b ON b.id = p.booking_id
+    WHERE p.user_id = ? AND b.date < ?
+  `).get(userId, today);
+  const planned = db.prepare(`
+    SELECT COUNT(*) AS cnt FROM participants p
+    JOIN bookings b ON b.id = p.booking_id
+    WHERE p.user_id = ? AND b.date >= ?
+  `).get(userId, today);
+
+  res.json({
+    id:           user.id,
+    display_name: user.display_name,
+    username:     user.username,
+    level:        user.level,
+    avatar:       user.avatar,
+    member_since: user.created_at,
+    stats: {
+      played:  played.cnt,
+      planned: planned.cnt,
+    },
+  });
+});
+
 module.exports = router;

@@ -705,7 +705,7 @@ async function showDetailModal(id) {
     const icon = p.avatar
       ? `<span class="p-avatar" style="background-image:url('${escAttr(p.avatar)}')"></span>`
       : `🎾`;
-    return `<div class="field-row"><span class="p-player">${icon} ${escHtml(p.display_name)}</span></div>`;
+    return `<div class="field-row"><span class="p-player">${icon} <button class="p-name-btn" onclick="showUserProfile(${p.id})">${escHtml(p.display_name)}</button></span></div>`;
   });
   for (let i = b.participants.length; i < 4; i++) {
     playerRows.push(`<div class="field-row p-empty"><span class="p-icon">○</span> Vrije plek</div>`);
@@ -779,6 +779,56 @@ async function showDetailModal(id) {
 function hideDetailModal() {
   document.getElementById('detail-modal').classList.add('hidden');
   currentDetailId = null;
+}
+
+/* ── Gebruikersprofiel (readonly) ─────────────────────────── */
+async function showUserProfile(userId) {
+  const modal = document.getElementById('user-profile-modal');
+  const body  = document.getElementById('user-profile-body');
+  body.innerHTML = '<div class="sheet-loading">Laden…</div>';
+  modal.classList.remove('hidden');
+
+  const res = await api(`/api/auth/users/${userId}`);
+  if (!res.ok) {
+    body.innerHTML = '<div class="inline-error" style="margin:20px">Profiel kon niet worden geladen.</div>';
+    return;
+  }
+  const u = await res.json();
+
+  const avatarStyle = u.avatar
+    ? `background-image:url('${escAttr(u.avatar)}')`
+    : `background:var(--green);display:flex;align-items:center;justify-content:center;color:#fff;font-size:2rem;font-weight:700`;
+  const avatarContent = u.avatar ? '' : escHtml((u.display_name || '?')[0].toUpperCase());
+  const levelPill = u.level
+    ? `<div class="level-pill" style="margin-top:6px">Niveau ${u.level}</div>`
+    : '';
+  const memberYear = u.member_since ? new Date(u.member_since).getFullYear() : '';
+
+  body.innerHTML = `
+    <div class="user-profile-hero">
+      <div class="user-profile-avatar" style="${avatarStyle}">${avatarContent}</div>
+      <div class="user-profile-info">
+        <div class="profile-name">${escHtml(u.display_name)}</div>
+        ${u.username ? `<div class="profile-username">@${escHtml(u.username)}</div>` : ''}
+        ${levelPill}
+      </div>
+    </div>
+    <div class="profile-stats" style="margin:0 16px 16px">
+      <div class="stat-card">
+        <div class="stat-number">${u.stats.played}</div>
+        <div class="stat-label">Gespeeld</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-number">${u.stats.planned}</div>
+        <div class="stat-label">Gepland</div>
+      </div>
+    </div>
+    ${memberYear ? `<div style="text-align:center;color:var(--text-2);font-size:.82em;padding-bottom:20px">Lid sinds ${memberYear}</div>` : ''}
+  `;
+}
+
+function hideUserProfile() {
+  document.getElementById('user-profile-modal').classList.add('hidden');
 }
 
 async function markPaidAndRefresh(id) {

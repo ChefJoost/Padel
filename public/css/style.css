@@ -705,6 +705,25 @@ body {
 .p-avatar { display: inline-block; width: 22px; height: 22px; min-width: 22px; min-height: 22px; border-radius: 50%; background-size: cover; background-position: center; flex: none !important; align-self: center; }
 .p-level { margin-left: auto; font-size: .78rem; color: var(--text-2); background: var(--bg); padding: 2px 7px; border-radius: 10px; }
 .p-empty { color: var(--text-3); }
+.p-name-btn {
+  background: none; border: none; padding: 0; margin: 0;
+  font: inherit; color: var(--blue); cursor: pointer;
+  text-align: left; line-height: inherit;
+}
+.p-name-btn:hover { text-decoration: underline; }
+
+/* Gebruikersprofiel modal */
+.user-profile-hero {
+  display: flex; align-items: center; gap: 16px;
+  padding: 20px 20px 4px;
+}
+.user-profile-avatar {
+  width: 64px; height: 64px; min-width: 64px;
+  border-radius: 50%; background-size: cover; background-position: center;
+  flex-shrink: 0;
+}
+.user-profile-info { flex: 1; min-width: 0; }
+.sheet-loading { padding: 40px; text-align: center; color: var(--text-2); font-size: .9rem; }
 
 /* Gast-rij */
 .guest-icon { font-size: .9rem; }

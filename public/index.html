@@ -416,6 +416,20 @@
 </div>
 
 <!-- ══════════════════════════════════════════════
+     MODAL: Gebruikersprofiel (readonly)
+══════════════════════════════════════════════ -->
+<div id="user-profile-modal" class="sheet-overlay hidden" onclick="closeSheet(event)">
+  <div class="sheet">
+    <div class="sheet-header">
+      <button class="sheet-cancel" onclick="hideUserProfile()">Sluiten</button>
+      <h2 class="sheet-title">Profiel</h2>
+      <div style="width:60px"></div>
+    </div>
+    <div class="sheet-body" id="user-profile-body"></div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════
      MODAL: Profiel bewerken
 ══════════════════════════════════════════════ -->
 <div id="profile-modal" class="sheet-overlay hidden" onclick="closeSheet(event)">
