@@ -15,6 +15,7 @@ let currentChatUserName = null;
 let chatPollTimer = null;
 let buddyBadgePollTimer = null;
 let buddySearchTimer = null;
+let allBuddies = [];
 let allBookings      = [];
 let filterStatus     = 'open'; // 'open' | 'all' | 'mine'
 let currentInviteToken = null;
@@ -1496,7 +1497,7 @@ async function loadBuddiesTab() {
     api('/api/buddies'),
   ]);
   const requests = reqRes.ok ? await reqRes.json() : [];
-  const buddies  = buddyRes.ok ? await buddyRes.json() : [];
+  allBuddies     = buddyRes.ok ? await buddyRes.json() : [];
 
   // Verzoeken
   const reqSection = document.getElementById('buddy-requests-section');
@@ -1520,16 +1521,34 @@ async function loadBuddiesTab() {
     reqSection.classList.add('hidden');
   }
 
-  // Buddies
+  // Render lijst (met eventuele actieve filter)
+  const filterInput = document.getElementById('buddy-filter-input');
+  renderBuddiesList(filterInput ? filterInput.value : '');
+}
+
+function renderBuddiesList(filterQ = '') {
+  const q = filterQ.trim().toLowerCase();
+  const visible = q
+    ? allBuddies.filter(b => b.display_name.toLowerCase().includes(q) || (b.username || '').toLowerCase().includes(q))
+    : allBuddies;
+
   const header = document.getElementById('buddies-list-header');
-  if (header) header.textContent = buddies.length ? `Mijn buddies (${buddies.length})` : 'Mijn buddies';
+  if (header) {
+    header.textContent = allBuddies.length
+      ? `Mijn buddies (${allBuddies.length})`
+      : 'Mijn buddies';
+  }
 
   const list = document.getElementById('buddies-list');
-  if (!buddies.length) {
-    list.innerHTML = '<div class="field-row buddy-empty">Nog geen buddies. Zoek een speler hierboven.</div>';
+  if (!allBuddies.length) {
+    list.innerHTML = '<div class="field-row buddy-empty">Nog geen buddies. Klik op + om iemand toe te voegen.</div>';
     return;
   }
-  list.innerHTML = buddies.map(b => {
+  if (!visible.length) {
+    list.innerHTML = `<div class="field-row buddy-empty">Geen buddies gevonden voor "${escHtml(filterQ.trim())}".</div>`;
+    return;
+  }
+  list.innerHTML = visible.map(b => {
     const unread = b.unread > 0
       ? `<span class="buddy-unread-badge">${b.unread > 99 ? '99+' : b.unread}</span>`
       : '';
@@ -1552,6 +1571,25 @@ async function loadBuddiesTab() {
       </div>
     `;
   }).join('');
+}
+
+function filterBuddiesList(q) {
+  renderBuddiesList(q);
+}
+
+/* ── Buddy toevoegen modal ───────────────────────────────── */
+function showAddBuddyModal() {
+  document.getElementById('add-buddy-modal').classList.remove('hidden');
+  document.getElementById('buddy-search-results').innerHTML = '';
+  const input = document.getElementById('buddy-search-input');
+  input.value = '';
+  setTimeout(() => input.focus(), 150);
+}
+
+function hideAddBuddyModal() {
+  document.getElementById('add-buddy-modal').classList.add('hidden');
+  document.getElementById('buddy-search-input').value = '';
+  document.getElementById('buddy-search-results').innerHTML = '';
 }
 
 /* ── Badge ───────────────────────────────────────────────── */

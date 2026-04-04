@@ -151,22 +151,26 @@
   <!-- ── TAB: BUDDIES ── -->
   <div id="tab-buddies" class="tab-content hidden">
     <div class="nav-bar">
+      <div style="width:44px"></div>
       <h1 class="nav-title">Buddies</h1>
+      <button class="nav-action" onclick="showAddBuddyModal()" title="Buddy toevoegen">
+        <span class="nav-action-icon">+</span>
+      </button>
     </div>
-    <div class="scroll-area">
 
-      <!-- Zoekbalk -->
-      <div class="buddies-search-wrap">
-        <div class="buddies-search-inner">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16" class="buddies-search-icon">
-            <circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/>
-          </svg>
-          <input type="search" id="buddy-search-input" class="buddies-search-input"
-            placeholder="Zoek speler om toe te voegen…" autocomplete="off"
-            oninput="handleBuddySearch(this.value)" />
-        </div>
+    <!-- Filter bestaande buddies -->
+    <div class="filter-bar" style="padding-bottom:8px">
+      <div class="buddies-filter-wrap">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14" style="flex-shrink:0;color:var(--text-3)">
+          <circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/>
+        </svg>
+        <input type="search" id="buddy-filter-input" class="buddies-filter-input"
+          placeholder="Zoek in buddies…" autocomplete="off"
+          oninput="filterBuddiesList(this.value)" />
       </div>
-      <div id="buddy-search-results" class="field-group hidden" style="margin:0 16px 12px"></div>
+    </div>
+
+    <div class="scroll-area">
 
       <!-- Inkomende verzoeken -->
       <div id="buddy-requests-section" class="hidden">
@@ -177,7 +181,7 @@
       <!-- Buddies lijst -->
       <div class="section-header" id="buddies-list-header">Mijn buddies</div>
       <div class="field-group" id="buddies-list">
-        <div class="field-row buddy-empty">Nog geen buddies. Zoek een speler hierboven.</div>
+        <div class="field-row buddy-empty">Nog geen buddies. Klik op + om iemand toe te voegen.</div>
       </div>
 
     </div>
@@ -356,6 +360,32 @@
         <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/>
       </svg>
     </button>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════
+     MODAL: Buddy toevoegen (zoeken)
+══════════════════════════════════════════════ -->
+<div id="add-buddy-modal" class="sheet-overlay hidden" onclick="closeSheet(event)">
+  <div class="sheet">
+    <div class="sheet-header">
+      <button class="sheet-cancel" onclick="hideAddBuddyModal()">Sluiten</button>
+      <h2 class="sheet-title">Buddy toevoegen</h2>
+      <div style="width:60px"></div>
+    </div>
+    <div class="sheet-body">
+      <div class="buddies-search-wrap" style="padding:12px 0 4px">
+        <div class="buddies-search-inner">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16" class="buddies-search-icon">
+            <circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/>
+          </svg>
+          <input type="search" id="buddy-search-input" class="buddies-search-input"
+            placeholder="Zoek op naam of gebruikersnaam…" autocomplete="off"
+            oninput="handleBuddySearch(this.value)" />
+        </div>
+      </div>
+      <div id="buddy-search-results" class="field-group" style="margin-top:8px"></div>
+    </div>
   </div>
 </div>
 

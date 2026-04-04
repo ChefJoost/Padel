@@ -1114,15 +1114,33 @@ body {
 /* ══════════════════════════════════════════════
    BUDDIES TAB
 ══════════════════════════════════════════════ */
+
+/* Filter bar in tab */
+.buddies-filter-wrap {
+  display: flex; align-items: center; gap: 8px;
+  flex: 1;
+  background: var(--surface);
+  border: 1px solid var(--separator-opaque);
+  border-radius: 8px;
+  padding: 6px 10px;
+}
+.buddies-filter-input {
+  flex: 1; border: none; background: transparent;
+  font: inherit; font-size: .82rem; color: var(--text);
+  outline: none;
+}
+.buddies-filter-input::placeholder { color: var(--text-3); }
+
+/* Zoek modal */
 .buddies-search-wrap {
-  padding: 12px 16px 4px;
+  padding: 0 0 4px;
 }
 .buddies-search-inner {
   display: flex; align-items: center; gap: 8px;
-  background: var(--surface);
+  background: var(--bg);
   border: 1px solid var(--separator);
   border-radius: 12px;
-  padding: 8px 12px;
+  padding: 9px 12px;
 }
 .buddies-search-icon { flex-shrink: 0; color: var(--text-3); }
 .buddies-search-input {
