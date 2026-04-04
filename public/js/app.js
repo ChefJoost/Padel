@@ -783,7 +783,7 @@ function hideDetailModal() {
 }
 
 /* ── Gebruikersprofiel (readonly) ─────────────────────────── */
-async function showUserProfile(userId) {
+async function showUserProfile(userId, buddyContext = false) {
   const modal = document.getElementById('user-profile-modal');
   const body  = document.getElementById('user-profile-body');
   body.innerHTML = '<div class="sheet-loading">Laden…</div>';
@@ -805,6 +805,17 @@ async function showUserProfile(userId) {
     : '';
   const memberYear = u.member_since ? new Date(u.member_since).getFullYear() : '';
 
+  const buddyButtons = buddyContext ? `
+    <div class="user-profile-actions">
+      <button class="btn btn-primary btn-full" onclick="hideUserProfile();showBuddyChat(${u.id},'${escAttr(u.display_name)}',${u.avatar ? `'${escAttr(u.avatar)}'` : 'null'})">
+        💬 Stuur bericht
+      </button>
+      <button class="btn btn-destructive-outline btn-full" onclick="handleRemoveBuddy(${u.id},'${escAttr(u.display_name)}')">
+        Verwijder buddy
+      </button>
+    </div>
+  ` : '';
+
   body.innerHTML = `
     <div class="user-profile-hero">
       <div class="user-profile-avatar" style="${avatarStyle}">${avatarContent}</div>
@@ -825,7 +836,12 @@ async function showUserProfile(userId) {
       </div>
     </div>
     ${memberYear ? `<div style="text-align:center;color:var(--text-2);font-size:.82em;padding-bottom:20px">Lid sinds ${memberYear}</div>` : ''}
+    ${buddyButtons}
   `;
+}
+
+async function showBuddyProfile(userId) {
+  await showUserProfile(userId, true);
 }
 
 function hideUserProfile() {
@@ -1463,11 +1479,12 @@ async function handleAdminSaveBooking() {
 ══════════════════════════════════════════════════════════ */
 
 function buddyAvatarHtml(u, size = 36) {
+  const dim = `width:${size}px;height:${size}px;min-width:${size}px;min-height:${size}px`;
   if (u.avatar) {
-    return `<span class="buddy-avatar" style="width:${size}px;height:${size}px;background-image:url('${escAttr(u.avatar)}')"></span>`;
+    return `<span class="buddy-avatar" style="${dim};background-image:url('${escAttr(u.avatar)}')"></span>`;
   }
   const initials = (u.display_name || '?')[0].toUpperCase();
-  return `<span class="buddy-avatar buddy-avatar--initials" style="width:${size}px;height:${size}px;font-size:${Math.round(size*0.42)}px">${escHtml(initials)}</span>`;
+  return `<span class="buddy-avatar buddy-avatar--initials" style="${dim};font-size:${Math.round(size*0.42)}px">${escHtml(initials)}</span>`;
 }
 
 async function loadBuddiesTab() {
@@ -1514,7 +1531,7 @@ async function loadBuddiesTab() {
       ? `<div class="buddy-last-msg">${escHtml(b.last_message.length > 45 ? b.last_message.slice(0, 45) + '…' : b.last_message)}</div>`
       : '';
     return `
-      <div class="field-row buddy-row" onclick="showBuddyChat(${b.id}, '${escAttr(b.display_name)}', ${b.avatar ? `'${escAttr(b.avatar)}'` : 'null'})">
+      <div class="field-row buddy-row" onclick="showBuddyProfile(${b.id})">
         <div style="display:flex;align-items:center;gap:12px;flex:1;min-width:0">
           ${buddyAvatarHtml(b, 42)}
           <div style="flex:1;min-width:0">
@@ -1638,7 +1655,6 @@ async function showBuddyChat(userId, name, avatar) {
   currentChatUserName = name;
 
   document.getElementById('chat-buddy-name').textContent = name;
-  document.getElementById('chat-remove-btn').dataset.buddyId = userId;
 
   // Avatar in header
   const navAv = document.getElementById('chat-nav-avatar');
@@ -1730,17 +1746,19 @@ async function handleSendMessage() {
   await loadMessages(true);
 }
 
-function handleRemoveBuddy() {
-  if (!currentChatUserId) return;
-  const name = currentChatUserName || 'deze buddy';
-  document.getElementById('confirm-title').textContent = `${name} verwijderen?`;
-  document.getElementById('confirm-msg').textContent = `Je verwijdert ${name} als buddy.`;
+function handleRemoveBuddy(userId, name) {
+  const displayName = name || 'deze buddy';
+  document.getElementById('confirm-title').textContent = `${displayName} verwijderen?`;
+  document.getElementById('confirm-msg').textContent = `Je verwijdert ${displayName} als buddy.`;
   document.getElementById('confirm-ok-btn').textContent = 'Verwijderen';
   document.getElementById('confirm-ok-btn').onclick = async () => {
     closeConfirm();
-    await api(`/api/buddies/${currentChatUserId}`, { method: 'DELETE' });
-    hideBuddyChat();
-    showToast(`${name} verwijderd als buddy`);
+    await api(`/api/buddies/${userId}`, { method: 'DELETE' });
+    hideUserProfile();
+    // Sluit chat als die open is voor dezelfde gebruiker
+    if (currentChatUserId === userId) hideBuddyChat();
+    loadBuddiesTab();
+    showToast(`${displayName} verwijderd als buddy`);
   };
   document.getElementById('confirm-modal').classList.remove('hidden');
 }

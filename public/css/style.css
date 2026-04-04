@@ -732,6 +732,10 @@ body {
   flex-shrink: 0;
 }
 .user-profile-info { flex: 1; min-width: 0; }
+.user-profile-actions {
+  display: flex; flex-direction: column; gap: 10px;
+  padding: 4px 16px 24px;
+}
 .sheet-loading { padding: 40px; text-align: center; color: var(--text-2); font-size: .9rem; }
 
 /* Gast-rij */
@@ -1131,7 +1135,8 @@ body {
 .buddy-avatar {
   display: inline-block; border-radius: 50%;
   background-size: cover; background-position: center;
-  flex: none; align-self: center;
+  flex: none !important; align-self: center;
+  /* grootte wordt via inline style gezet; min-width/min-height voorkomen uitrekken */
 }
 .buddy-avatar--initials {
   background: var(--green); color: #fff;
