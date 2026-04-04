@@ -1599,7 +1599,7 @@ function handleBuddySearch(q) {
 
 async function sendBuddyRequest(userId, btn) {
   if (btn) { btn.disabled = true; btn.textContent = '…'; }
-  const res = await api('/api/buddies/request', { method: 'POST', body: JSON.stringify({ user_id: userId }) });
+  const res = await api('/api/buddies/request', { method: 'POST', body: { user_id: userId } });
   if (res.ok) {
     if (btn) { btn.textContent = 'Verzonden ✓'; btn.classList.remove('btn-buddy-add'); btn.classList.add('buddy-relation-tag'); }
     updateBuddyBadge();
@@ -1719,7 +1719,7 @@ async function handleSendMessage() {
   input.value = '';
   const res = await api(`/api/buddies/messages/${currentChatUserId}`, {
     method: 'POST',
-    body: JSON.stringify({ content }),
+    body: { content },
   });
   if (!res.ok) {
     const d = await res.json();
