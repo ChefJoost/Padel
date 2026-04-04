@@ -65,6 +65,7 @@ router.get('/', requireAuth, (req, res) => {
   const buddies = db.prepare(`
     SELECT
       u.id, u.display_name, u.username, u.level, u.avatar,
+      br.created_at AS buddy_since,
       (SELECT COUNT(*) FROM messages m
        WHERE m.from_user_id = u.id AND m.to_user_id = ? AND m.read_at IS NULL) AS unread,
       (SELECT content FROM messages ml
@@ -79,10 +80,7 @@ router.get('/', requireAuth, (req, res) => {
     JOIN users u ON (CASE WHEN br.from_user_id = ? THEN br.to_user_id ELSE br.from_user_id END) = u.id
     WHERE br.status = 'accepted'
       AND (br.from_user_id = ? OR br.to_user_id = ?)
-    ORDER BY
-      CASE WHEN last_message_at IS NULL THEN 1 ELSE 0 END,
-      last_message_at DESC,
-      u.display_name ASC
+    ORDER BY COALESCE(last_message_at, br.created_at) DESC
   `).all(userId, userId, userId, userId, userId, userId, userId, userId);
   res.json(buddies);
 });

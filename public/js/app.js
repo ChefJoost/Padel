@@ -401,15 +401,18 @@ async function handleSaveProfile() {
 
 /* ── Profiel stats ────────────────────────────────────────── */
 async function loadProfileStats() {
-  const [resUpcoming, resHistory] = await Promise.all([
+  const [resUpcoming, resHistory, resBuddies] = await Promise.all([
     api('/api/bookings'),
     api('/api/bookings/history'),
+    api('/api/buddies'),
   ]);
   const upcoming = await resUpcoming.json();
   const history  = await resHistory.json();
-  const planned = upcoming.filter(b => b.user_joined).length;
-  document.getElementById('profile-stat-played').textContent = history.length;
+  const buddies  = resBuddies.ok ? await resBuddies.json() : [];
+  const planned  = upcoming.filter(b => b.user_joined).length;
+  document.getElementById('profile-stat-played').textContent  = history.length;
   document.getElementById('profile-stat-planned').textContent = planned;
+  document.getElementById('profile-stat-buddies').textContent = buddies.length;
 }
 
 /* ── Geschiedenis ─────────────────────────────────────────── */
@@ -1518,6 +1521,9 @@ async function loadBuddiesTab() {
   }
 
   // Buddies
+  const header = document.getElementById('buddies-list-header');
+  if (header) header.textContent = buddies.length ? `Mijn buddies (${buddies.length})` : 'Mijn buddies';
+
   const list = document.getElementById('buddies-list');
   if (!buddies.length) {
     list.innerHTML = '<div class="field-row buddy-empty">Nog geen buddies. Zoek een speler hierboven.</div>';
