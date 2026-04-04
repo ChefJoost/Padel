@@ -813,16 +813,47 @@ async function showUserProfile(userId, buddyContext = false) {
     : '';
   const memberYear = u.member_since ? new Date(u.member_since).getFullYear() : '';
 
-  const buddyButtons = buddyContext ? `
-    <div class="user-profile-actions">
-      <button class="btn btn-primary btn-full" onclick="hideUserProfile();showBuddyChat(${u.id},'${escAttr(u.display_name)}',${u.avatar ? `'${escAttr(u.avatar)}'` : 'null'})">
-        💬 Stuur bericht
-      </button>
-      <button class="btn btn-destructive-outline btn-full" onclick="handleRemoveBuddy(${u.id},'${escAttr(u.display_name)}')">
-        Verwijder buddy
-      </button>
-    </div>
-  ` : '';
+  let actionButtons = '';
+  if (buddyContext) {
+    // Vanuit de buddylijst: chat + verwijder
+    actionButtons = `
+      <div class="user-profile-actions">
+        <button class="btn btn-primary btn-full" onclick="hideUserProfile();showBuddyChat(${u.id},'${escAttr(u.display_name)}',${u.avatar ? `'${escAttr(u.avatar)}'` : 'null'})">
+          💬 Stuur bericht
+        </button>
+        <button class="btn btn-destructive-outline btn-full" onclick="handleRemoveBuddy(${u.id},'${escAttr(u.display_name)}')">
+          Verwijder buddy
+        </button>
+      </div>`;
+  } else if (u.buddy_status === 'none') {
+    actionButtons = `
+      <div class="user-profile-actions">
+        <button class="btn btn-primary btn-full" id="profile-buddy-btn" onclick="profileSendBuddyRequest(${u.id})">
+          + Voeg toe als buddy
+        </button>
+      </div>`;
+  } else if (u.buddy_status === 'sent') {
+    actionButtons = `
+      <div class="user-profile-actions">
+        <button class="btn btn-outline btn-full" onclick="profileCancelBuddyRequest(${u.buddy_request_id})">
+          Verzoek intrekken
+        </button>
+      </div>`;
+  } else if (u.buddy_status === 'received') {
+    actionButtons = `
+      <div class="user-profile-actions">
+        <button class="btn btn-primary btn-full" onclick="profileAcceptBuddyRequest(${u.buddy_request_id})">
+          Accepteer buddyverzoek
+        </button>
+      </div>`;
+  } else if (u.buddy_status === 'buddy') {
+    actionButtons = `
+      <div class="user-profile-actions">
+        <button class="btn btn-primary btn-full" onclick="hideUserProfile();showBuddyChat(${u.id},'${escAttr(u.display_name)}',${u.avatar ? `'${escAttr(u.avatar)}'` : 'null'})">
+          💬 Stuur bericht
+        </button>
+      </div>`;
+  }
 
   body.innerHTML = `
     <div class="user-profile-hero">
@@ -844,7 +875,7 @@ async function showUserProfile(userId, buddyContext = false) {
       </div>
     </div>
     ${memberYear ? `<div style="text-align:center;color:var(--text-2);font-size:.82em;padding-bottom:20px">Lid sinds ${memberYear}</div>` : ''}
-    ${buddyButtons}
+    ${actionButtons}
   `;
 }
 
@@ -854,6 +885,36 @@ async function showBuddyProfile(userId) {
 
 function hideUserProfile() {
   document.getElementById('user-profile-modal').classList.add('hidden');
+}
+
+async function profileSendBuddyRequest(userId) {
+  const btn = document.getElementById('profile-buddy-btn');
+  if (btn) { btn.disabled = true; btn.textContent = '…'; }
+  const res = await api('/api/buddies/request', { method: 'POST', body: { user_id: userId } });
+  if (res.ok) {
+    if (btn) { btn.textContent = 'Verzoek verzonden ✓'; btn.classList.replace('btn-primary', 'btn-outline'); }
+    updateBuddyBadge();
+  } else {
+    const d = await res.json();
+    showToast(d.error || 'Fout bij verzenden');
+    if (btn) { btn.disabled = false; btn.textContent = '+ Voeg toe als buddy'; }
+  }
+}
+
+async function profileCancelBuddyRequest(requestId) {
+  await api(`/api/buddies/requests/${requestId}/reject`, { method: 'POST' });
+  hideUserProfile();
+  showToast('Verzoek ingetrokken');
+}
+
+async function profileAcceptBuddyRequest(requestId) {
+  const res = await api(`/api/buddies/requests/${requestId}/accept`, { method: 'POST' });
+  if (res.ok) {
+    hideUserProfile();
+    loadBuddiesTab();
+    updateBuddyBadge();
+    showToast('Buddy toegevoegd!');
+  }
 }
 
 async function markPaidAndRefresh(id) {

@@ -192,13 +192,35 @@ router.get('/users/:id', (req, res) => {
     WHERE p.user_id = ? AND b.date >= ?
   `).get(userId, today);
 
+  const viewerId = req.session.userId;
+
+  // Buddy-relatie met de ingelogde gebruiker
+  let buddy_status = 'none';
+  let buddy_request_id = null;
+  if (userId !== viewerId) {
+    const rel = db.prepare(`
+      SELECT id, status, from_user_id FROM buddy_requests
+      WHERE (from_user_id = ? AND to_user_id = ?) OR (from_user_id = ? AND to_user_id = ?)
+    `).get(viewerId, userId, userId, viewerId);
+    if (rel) {
+      if (rel.status === 'accepted') buddy_status = 'buddy';
+      else if (rel.from_user_id === viewerId) buddy_status = 'sent';
+      else buddy_status = 'received';
+      buddy_request_id = rel.id;
+    }
+  } else {
+    buddy_status = 'self';
+  }
+
   res.json({
-    id:           user.id,
-    display_name: user.display_name,
-    username:     user.username,
-    level:        user.level,
-    avatar:       user.avatar,
-    member_since: user.created_at,
+    id:               user.id,
+    display_name:     user.display_name,
+    username:         user.username,
+    level:            user.level,
+    avatar:           user.avatar,
+    member_since:     user.created_at,
+    buddy_status,
+    buddy_request_id,
     stats: {
       played:  played.cnt,
       planned: planned.cnt,
