@@ -837,6 +837,12 @@ body {
 }
 .profile-edit-btn:active { opacity: 1; }
 .profile-username { font-size: .85rem; color: var(--text-2); margin-top: 2px; }
+.profile-buddy-count {
+  display: inline-block; margin-top: 5px;
+  font-size: .75rem; font-weight: 600;
+  color: var(--green-dark); background: var(--green-tint);
+  padding: 2px 8px; border-radius: 8px;
+}
 
 .level-pill {
   background: rgba(88,86,214,.12);

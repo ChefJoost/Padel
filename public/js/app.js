@@ -413,7 +413,11 @@ async function loadProfileStats() {
   const planned  = upcoming.filter(b => b.user_joined).length;
   document.getElementById('profile-stat-played').textContent  = history.length;
   document.getElementById('profile-stat-planned').textContent = planned;
-  document.getElementById('profile-stat-buddies').textContent = buddies.length;
+  const buddyEl = document.getElementById('profile-buddy-count');
+  if (buddyEl) {
+    buddyEl.textContent = `${buddies.length} ${buddies.length === 1 ? 'buddy' : 'buddies'}`;
+    buddyEl.classList.toggle('hidden', buddies.length === 0);
+  }
 }
 
 /* ── Geschiedenis ─────────────────────────────────────────── */
