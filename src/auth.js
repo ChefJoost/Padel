@@ -192,4 +192,24 @@ router.post('/reset-password', async (req, res) => {
   }
 });
 
+// Alle gebruikers ophalen (voor Buddies tab)
+router.get('/users', (req, res) => {
+  if (!req.session.userId) return res.status(401).json({ error: 'Niet ingelogd' });
+  const myId = req.session.userId;
+
+  const users = db.prepare(`
+    SELECT u.id, u.display_name, u.username, u.level, u.avatar,
+           COUNT(DISTINCT b.id) AS games_together
+    FROM users u
+    LEFT JOIN participants p1 ON p1.user_id = u.id
+    LEFT JOIN bookings b ON b.id = p1.booking_id
+    LEFT JOIN participants p2 ON p2.booking_id = b.id AND p2.user_id = ?
+    WHERE u.id != ?
+    GROUP BY u.id
+    ORDER BY games_together DESC, u.display_name ASC
+  `).all(myId, myId);
+
+  res.json(users);
+});
+
 module.exports = router;

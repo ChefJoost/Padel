@@ -225,31 +225,15 @@ function switchTab(tab) {
   const newScrollArea = document.querySelector(`#tab-${tab} .scroll-area`);
   if (newScrollArea) newScrollArea.scrollTop = 0;
 
-  document.getElementById('tab-potjes').classList.toggle('hidden', tab !== 'potjes');
-  document.getElementById('tab-kalender').classList.toggle('hidden', tab !== 'kalender');
-  document.getElementById('tab-profiel').classList.toggle('hidden', tab !== 'profiel');
-  document.getElementById('tab-admin').classList.toggle('hidden', tab !== 'admin');
-  document.getElementById('tab-btn-potjes').classList.toggle('active', tab === 'potjes');
-  document.getElementById('tab-btn-kalender').classList.toggle('active', tab === 'kalender');
-  document.getElementById('tab-btn-profiel').classList.toggle('active', tab === 'profiel');
-  const adminBtn = document.getElementById('tab-btn-admin');
-  if (adminBtn) adminBtn.classList.toggle('active', tab === 'admin');
-  if (tab === 'potjes') {
-    loadBookings();
-  }
-  if (tab === 'kalender') {
-    loadCalendar();
-  }
-  if (tab === 'profiel') {
-    loadHistory();
-    loadUnpaid();
-    loadProfileStats();
-  }
-  if (tab === 'admin') {
-    loadAdminStats();
-    adminSearchUsers();
-    loadAdminBookings();
-  }
+  ['potjes','kalender','buddies','profiel','admin'].forEach(t => {
+    document.getElementById(`tab-${t}`)?.classList.toggle('hidden', tab !== t);
+    document.getElementById(`tab-btn-${t}`)?.classList.toggle('active', tab === t);
+  });
+  if (tab === 'potjes')   { loadBookings(); }
+  if (tab === 'kalender') { loadCalendar(); }
+  if (tab === 'buddies')  { loadBuddies(); }
+  if (tab === 'profiel')  { loadHistory(); loadUnpaid(); loadProfileStats(); }
+  if (tab === 'admin')    { loadAdminStats(); adminSearchUsers(); loadAdminBookings(); }
 }
 
 /* ── Level picker ─────────────────────────────────────────── */
@@ -1283,6 +1267,41 @@ async function handleAdminSaveBooking() {
   loadAdminBookings();
   loadBookings();
   showToast('Boeking bijgewerkt');
+}
+
+/* ── Buddies ──────────────────────────────────────────────── */
+async function loadBuddies() {
+  const res = await api('/api/auth/users');
+  if (!res.ok) return;
+  const users = await res.json();
+  const list  = document.getElementById('buddies-list');
+
+  if (users.length === 0) {
+    list.innerHTML = `<div class="empty-state"><div class="empty-icon">👥</div>
+      <p class="empty-title">Nog geen andere spelers</p></div>`;
+    return;
+  }
+
+  list.innerHTML = users.map(u => {
+    const initials = u.display_name.split(' ').map(w => w[0]).join('').slice(0,2).toUpperCase();
+    const avatarInner = u.avatar
+      ? `<img src="${u.avatar}" alt="${u.display_name}">`
+      : initials;
+    const togetherLabel = u.games_together > 0
+      ? `${u.games_together} potje${u.games_together !== 1 ? 's' : ''} samen gespeeld`
+      : 'Nog niet samen gespeeld';
+    const levelLabel = u.level ? `Niveau ${u.level}` : '';
+    const meta = [levelLabel, togetherLabel].filter(Boolean).join(' · ');
+
+    return `<div class="buddy-card">
+      <div class="buddy-avatar">${avatarInner}</div>
+      <div class="buddy-info">
+        <div class="buddy-name">${u.display_name}</div>
+        <div class="buddy-meta">${meta}</div>
+      </div>
+      ${u.level ? `<span class="buddy-level">${u.level}</span>` : ''}
+    </div>`;
+  }).join('');
 }
 
 /* ── Kalender — Potjes overzicht ──────────────────────────── */

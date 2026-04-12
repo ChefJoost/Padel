@@ -203,6 +203,16 @@
     </div>
   </div>
 
+  <!-- ── TAB: BUDDIES ── -->
+  <div id="tab-buddies" class="tab-content hidden">
+    <div class="nav-bar">
+      <h1 class="nav-title">Buddies</h1>
+    </div>
+    <div class="scroll-area">
+      <div id="buddies-list"></div>
+    </div>
+  </div>
+
   <!-- ── TAB: PROFIEL ── -->
   <div id="tab-profiel" class="tab-content hidden">
     <div class="nav-bar">
@@ -329,6 +339,15 @@
       </svg>
       <span>Kalender</span>
     </button>
+    <button class="tab-item" id="tab-btn-buddies" onclick="switchTab('buddies')">
+      <svg class="tab-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <circle cx="9" cy="7" r="4"/>
+        <path d="M3 21v-2a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v2"/>
+        <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+        <path d="M21 21v-2a4 4 0 0 0-3-3.85"/>
+      </svg>
+      <span>Buddies</span>
+    </button>
     <button class="tab-item" id="tab-btn-profiel" onclick="switchTab('profiel')">
       <svg class="tab-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
         <circle cx="12" cy="8" r="4"/>
@@ -351,7 +370,6 @@
 ══════════════════════════════════════════════ -->
 <div id="booking-modal" class="sheet-overlay hidden" onclick="closeSheet(event)">
   <div class="sheet">
-    <div class="sheet-handle"></div>
     <div class="sheet-header">
       <button class="sheet-cancel" onclick="hideNewBookingModal()">Annuleer</button>
       <h2 class="sheet-title" id="booking-modal-title">Nieuwe boeking</h2>
@@ -405,7 +423,6 @@
 ══════════════════════════════════════════════ -->
 <div id="detail-modal" class="sheet-overlay hidden" onclick="closeSheet(event)">
   <div class="sheet sheet-tall">
-    <div class="sheet-handle"></div>
     <div class="sheet-header">
       <button class="sheet-cancel" onclick="hideDetailModal()">Sluiten</button>
       <h2 class="sheet-title" id="detail-title"></h2>
@@ -422,7 +439,6 @@
 ══════════════════════════════════════════════ -->
 <div id="profile-modal" class="sheet-overlay hidden" onclick="closeSheet(event)">
   <div class="sheet">
-    <div class="sheet-handle"></div>
     <div class="sheet-header">
       <button class="sheet-cancel" onclick="hideProfileEdit()">Annuleer</button>
       <h2 class="sheet-title">Gegevens wijzigen</h2>
@@ -510,7 +526,6 @@
 ══════════════════════════════════════════════ -->
 <div id="admin-detail-modal" class="sheet-overlay hidden" onclick="closeSheet(event)">
   <div class="sheet sheet-tall">
-    <div class="sheet-handle"></div>
     <div class="sheet-header">
       <button class="sheet-cancel" onclick="hideAdminDetailModal()">Sluiten</button>
       <h2 class="sheet-title" id="admin-detail-title"></h2>
@@ -526,7 +541,6 @@
 ══════════════════════════════════════════════ -->
 <div id="admin-edit-modal" class="sheet-overlay hidden" onclick="closeSheet(event)">
   <div class="sheet">
-    <div class="sheet-handle"></div>
     <div class="sheet-header">
       <button class="sheet-cancel" onclick="hideAdminEditModal()">Annuleer</button>
       <h2 class="sheet-title">Boeking bewerken</h2>
@@ -556,7 +570,6 @@
 ══════════════════════════════════════════════ -->
 <div id="admin-pw-modal" class="sheet-overlay hidden" onclick="closeSheet(event)">
   <div class="sheet">
-    <div class="sheet-handle"></div>
     <div class="sheet-header">
       <button class="sheet-cancel" onclick="hideAdminPwModal()">Annuleer</button>
       <h2 class="sheet-title">Wachtwoord resetten</h2>
@@ -580,7 +593,6 @@
 ══════════════════════════════════════════════ -->
 <div id="cal-day-modal" class="sheet-overlay hidden" onclick="closeSheet(event)">
   <div class="sheet">
-    <div class="sheet-handle"></div>
     <div class="sheet-header">
       <button class="sheet-cancel" onclick="hideCalDayModal()">Sluiten</button>
       <h2 class="sheet-title" id="cal-day-title"></h2>
