@@ -22,7 +22,7 @@
 
   --radius:    12px;
   --radius-sm: 10px;
-  --tab-bar-h: 83px;
+  --tab-bar-h: calc(49px + env(safe-area-inset-bottom, 0px));
   --nav-bar-h: 56px;
 }
 
@@ -284,6 +284,7 @@ body {
   display: flex;
   flex-direction: column;
   height: 100vh;
+  height: 100dvh;
   overflow: hidden;
 }
 
@@ -295,15 +296,15 @@ body {
 }
 
 .nav-bar {
-  height: var(--nav-bar-h);
+  height: calc(var(--nav-bar-h) + env(safe-area-inset-top, 0px));
   background: rgba(242, 242, 247, 0.85);
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
   border-bottom: 1px solid var(--separator);
   display: flex;
-  align-items: center;
+  align-items: flex-end;
   justify-content: space-between;
-  padding: 0 20px;
+  padding: 0 20px calc(10px);
   flex-shrink: 0;
 }
 .nav-title { font-size: 1.1rem; font-weight: 700; letter-spacing: -.01em; }
@@ -358,6 +359,8 @@ body {
   -webkit-backdrop-filter: blur(20px);
   border-top: 1px solid var(--separator);
   display: flex;
+  align-items: flex-start;
+  padding-top: 4px;
   padding-bottom: env(safe-area-inset-bottom, 0px);
   z-index: 100;
 }
@@ -1101,6 +1104,43 @@ body {
   color: var(--green-dark);
   padding: 1px 5px;
   border-radius: 20px;
+}
+
+/* Tijden label op dag-cel */
+.cal-day-times {
+  font-size: .52rem;
+  font-weight: 600;
+  color: rgba(255,255,255,.9);
+  line-height: 1;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Beschikbaarheid detail sheet – andere spelers */
+.avail-other-row {
+  flex-direction: column !important;
+  align-items: flex-start !important;
+  gap: 2px !important;
+}
+.avail-other-info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  justify-content: space-between;
+}
+.avail-other-name { font-size: .9rem; font-weight: 600; }
+.avail-other-time { font-size: .78rem; color: var(--text-2); }
+.level-pill-sm {
+  font-size: .72rem;
+  font-weight: 700;
+  color: var(--green-dark);
+  background: var(--green-tint);
+  padding: 2px 8px;
+  border-radius: 20px;
+  flex-shrink: 0;
 }
 
 /* Legenda */

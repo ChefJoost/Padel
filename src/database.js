@@ -65,6 +65,8 @@ migrate('ALTER TABLE bookings ADD COLUMN payment_url TEXT');
 migrate('ALTER TABLE participants ADD COLUMN paid_at DATETIME');
 migrate('ALTER TABLE bookings ADD COLUMN is_private INTEGER DEFAULT 0');
 migrate('ALTER TABLE bookings ADD COLUMN invite_token TEXT');
+migrate('ALTER TABLE availability ADD COLUMN start_time TEXT');
+migrate('ALTER TABLE availability ADD COLUMN end_time TEXT');
 migrate(`CREATE TABLE IF NOT EXISTS booking_guests (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   booking_id INTEGER NOT NULL REFERENCES bookings(id) ON DELETE CASCADE,
@@ -77,6 +79,8 @@ migrate(`CREATE TABLE IF NOT EXISTS availability (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   date TEXT NOT NULL,
+  start_time TEXT,
+  end_time TEXT,
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
   UNIQUE(user_id, date)
 )`);

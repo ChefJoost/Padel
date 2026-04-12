@@ -8,7 +8,6 @@ function requireAuth(req, res, next) {
 }
 
 // GET /api/availability?year=YYYY&month=M
-// Geeft beschikbaarheid terug voor alle gebruikers in de opgegeven maand
 router.get('/', requireAuth, (req, res) => {
   const userId = req.session.userId;
   const year  = parseInt(req.query.year,  10);
@@ -20,56 +19,62 @@ router.get('/', requireAuth, (req, res) => {
 
   const pad   = (n) => String(n).padStart(2, '0');
   const from  = `${year}-${pad(month)}-01`;
-  const toDay = new Date(year, month, 0).getDate(); // laatste dag van de maand
+  const toDay = new Date(year, month, 0).getDate();
   const to    = `${year}-${pad(month)}-${pad(toDay)}`;
 
   const rows = db.prepare(`
-    SELECT a.date, a.user_id,
+    SELECT a.date, a.user_id, a.start_time, a.end_time,
            u.display_name, u.avatar, u.level
     FROM availability a
     JOIN users u ON u.id = a.user_id
     WHERE a.date >= ? AND a.date <= ?
-    ORDER BY a.date, u.display_name
+    ORDER BY a.date, a.start_time, u.display_name
   `).all(from, to);
 
-  // Groepeer per datum
   const dates = {};
   for (const row of rows) {
     if (!dates[row.date]) {
-      dates[row.date] = { count: 0, me: false, users: [] };
+      dates[row.date] = { count: 0, me: false, myTimes: null, users: [] };
     }
-    dates[row.date].count++;
-    dates[row.date].users.push({
+    const userEntry = {
       id:           row.user_id,
       display_name: row.display_name,
       avatar:       row.avatar,
       level:        row.level,
-    });
+      start_time:   row.start_time,
+      end_time:     row.end_time,
+    };
+    dates[row.date].count++;
+    dates[row.date].users.push(userEntry);
     if (row.user_id === userId) {
       dates[row.date].me = true;
+      dates[row.date].myTimes = { start_time: row.start_time, end_time: row.end_time };
     }
   }
 
   res.json({ dates });
 });
 
-// POST /api/availability/:date  → zet beschikbaar
+// POST /api/availability/:date  — zet beschikbaar (upsert met tijden)
 router.post('/:date', requireAuth, (req, res) => {
   const userId = req.session.userId;
   const date   = req.params.date;
+  const { start_time = null, end_time = null } = req.body || {};
 
   if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
     return res.status(400).json({ error: 'Ongeldige datum (verwacht YYYY-MM-DD)' });
   }
 
   db.prepare(`
-    INSERT OR IGNORE INTO availability (user_id, date) VALUES (?, ?)
-  `).run(userId, date);
+    INSERT INTO availability (user_id, date, start_time, end_time)
+    VALUES (?, ?, ?, ?)
+    ON CONFLICT(user_id, date) DO UPDATE SET start_time = excluded.start_time, end_time = excluded.end_time
+  `).run(userId, date, start_time, end_time);
 
-  res.json({ available: true });
+  res.json({ available: true, start_time, end_time });
 });
 
-// DELETE /api/availability/:date  → verwijder beschikbaarheid
+// DELETE /api/availability/:date  — verwijder beschikbaarheid
 router.delete('/:date', requireAuth, (req, res) => {
   const userId = req.session.userId;
   const date   = req.params.date;
@@ -78,9 +83,7 @@ router.delete('/:date', requireAuth, (req, res) => {
     return res.status(400).json({ error: 'Ongeldige datum (verwacht YYYY-MM-DD)' });
   }
 
-  db.prepare(`
-    DELETE FROM availability WHERE user_id = ? AND date = ?
-  `).run(userId, date);
+  db.prepare(`DELETE FROM availability WHERE user_id = ? AND date = ?`).run(userId, date);
 
   res.json({ available: false });
 });
