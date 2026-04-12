@@ -161,6 +161,45 @@
     </div>
   </div>
 
+  <!-- ── TAB: KALENDER ── -->
+  <div id="tab-kalender" class="tab-content hidden">
+    <div class="nav-bar">
+      <h1 class="nav-title">Beschikbaarheid</h1>
+    </div>
+
+    <div class="scroll-area">
+      <!-- Maand navigatie -->
+      <div class="cal-month-nav">
+        <button class="cal-nav-btn" onclick="calPrevMonth()">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="18" height="18">
+            <path d="M15 18l-6-6 6-6"/>
+          </svg>
+        </button>
+        <span class="cal-month-label" id="cal-month-label"></span>
+        <button class="cal-nav-btn" onclick="calNextMonth()">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="18" height="18">
+            <path d="M9 18l6-6-6-6"/>
+          </svg>
+        </button>
+      </div>
+
+      <!-- Dag-koppen -->
+      <div class="cal-weekdays">
+        <span>Ma</span><span>Di</span><span>Wo</span>
+        <span>Do</span><span>Vr</span><span>Za</span><span>Zo</span>
+      </div>
+
+      <!-- Kalender grid -->
+      <div class="cal-grid" id="cal-grid"></div>
+
+      <!-- Legenda -->
+      <div class="cal-legend">
+        <span class="cal-legend-item"><span class="cal-legend-dot cal-legend-me"></span>Jij bent beschikbaar</span>
+        <span class="cal-legend-item"><span class="cal-legend-dot cal-legend-others"></span>Anderen beschikbaar</span>
+      </div>
+    </div>
+  </div>
+
   <!-- ── TAB: PROFIEL ── -->
   <div id="tab-profiel" class="tab-content hidden">
     <div class="nav-bar">
@@ -278,6 +317,14 @@
         <path d="M16 2v4M8 2v4M3 10h18"/>
       </svg>
       <span>Potjes</span>
+    </button>
+    <button class="tab-item" id="tab-btn-kalender" onclick="switchTab('kalender')">
+      <svg class="tab-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <rect x="3" y="4" width="18" height="16" rx="2"/>
+        <path d="M16 2v4M8 2v4M3 10h18"/>
+        <path d="M8 14h.01M12 14h.01M16 14h.01M8 18h.01M12 18h.01"/>
+      </svg>
+      <span>Kalender</span>
     </button>
     <button class="tab-item" id="tab-btn-profiel" onclick="switchTab('profiel')">
       <svg class="tab-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">

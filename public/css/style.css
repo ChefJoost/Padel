@@ -977,3 +977,152 @@ body {
   border-radius: 20px;
   flex-shrink: 0;
 }
+
+/* ══════════════════════════════════════════════
+   KALENDER — Beschikbaarheid
+══════════════════════════════════════════════ */
+
+.cal-month-nav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px 8px;
+}
+
+.cal-nav-btn {
+  background: var(--surface);
+  border: none;
+  border-radius: 50%;
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  color: var(--blue);
+  box-shadow: 0 1px 3px rgba(0,0,0,.08);
+  transition: opacity .12s;
+}
+.cal-nav-btn:active { opacity: .6; }
+
+.cal-month-label {
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: var(--text);
+  letter-spacing: -.01em;
+  text-transform: capitalize;
+}
+
+.cal-weekdays {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  padding: 0 12px;
+  margin-bottom: 4px;
+}
+.cal-weekdays span {
+  text-align: center;
+  font-size: .72rem;
+  font-weight: 600;
+  color: var(--text-2);
+  padding: 4px 0;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+}
+
+.cal-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 4px;
+  padding: 0 12px 12px;
+}
+
+.cal-day {
+  aspect-ratio: 1;
+  border-radius: 10px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  position: relative;
+  transition: transform .1s, background .15s;
+  background: var(--surface);
+  min-height: 44px;
+  gap: 2px;
+}
+.cal-day:active { transform: scale(.92); }
+
+.cal-day.cal-day--empty {
+  background: transparent;
+  cursor: default;
+  pointer-events: none;
+}
+
+.cal-day.cal-day--past {
+  opacity: .45;
+  cursor: default;
+}
+.cal-day.cal-day--past:active { transform: none; }
+
+.cal-day.cal-day--today {
+  box-shadow: 0 0 0 2px var(--blue);
+}
+
+.cal-day.cal-day--me {
+  background: var(--green);
+}
+.cal-day.cal-day--me .cal-day-num {
+  color: #fff;
+}
+.cal-day.cal-day--me .cal-day-count {
+  color: rgba(255,255,255,.85);
+}
+
+.cal-day-num {
+  font-size: .9rem;
+  font-weight: 600;
+  color: var(--text);
+  line-height: 1;
+}
+
+.cal-day-count {
+  font-size: .65rem;
+  font-weight: 700;
+  color: var(--green-dark);
+  line-height: 1;
+}
+.cal-day--me .cal-day-count {
+  color: rgba(255,255,255,.85);
+}
+
+/* Badge met aantal beschikbare spelers (op niet-groene dagen) */
+.cal-day:not(.cal-day--me) .cal-day-count {
+  background: var(--green-tint);
+  color: var(--green-dark);
+  padding: 1px 5px;
+  border-radius: 20px;
+}
+
+/* Legenda */
+.cal-legend {
+  display: flex;
+  gap: 16px;
+  justify-content: center;
+  padding: 4px 16px 16px;
+  flex-wrap: wrap;
+}
+.cal-legend-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: .78rem;
+  color: var(--text-2);
+}
+.cal-legend-dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 3px;
+  flex-shrink: 0;
+}
+.cal-legend-me     { background: var(--green); }
+.cal-legend-others { background: var(--green-tint); border: 1.5px solid var(--green); }

@@ -73,6 +73,14 @@ migrate(`CREATE TABLE IF NOT EXISTS booking_guests (
   added_at DATETIME DEFAULT CURRENT_TIMESTAMP
 )`);
 
+migrate(`CREATE TABLE IF NOT EXISTS availability (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  date TEXT NOT NULL,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE(user_id, date)
+)`);
+
 // Stel standaard admin in
 migrate("UPDATE users SET is_admin = 1 WHERE username = 'joosts'");
 

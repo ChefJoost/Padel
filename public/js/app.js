@@ -222,14 +222,19 @@ async function handleLogout() {
 function switchTab(tab) {
   currentTab = tab;
   document.getElementById('tab-potjes').classList.toggle('hidden', tab !== 'potjes');
+  document.getElementById('tab-kalender').classList.toggle('hidden', tab !== 'kalender');
   document.getElementById('tab-profiel').classList.toggle('hidden', tab !== 'profiel');
   document.getElementById('tab-admin').classList.toggle('hidden', tab !== 'admin');
   document.getElementById('tab-btn-potjes').classList.toggle('active', tab === 'potjes');
+  document.getElementById('tab-btn-kalender').classList.toggle('active', tab === 'kalender');
   document.getElementById('tab-btn-profiel').classList.toggle('active', tab === 'profiel');
   const adminBtn = document.getElementById('tab-btn-admin');
   if (adminBtn) adminBtn.classList.toggle('active', tab === 'admin');
   if (tab === 'potjes') {
     loadBookings();
+  }
+  if (tab === 'kalender') {
+    loadCalendar();
   }
   if (tab === 'profiel') {
     loadHistory();
@@ -1274,6 +1279,116 @@ async function handleAdminSaveBooking() {
   loadAdminBookings();
   loadBookings();
   showToast('Boeking bijgewerkt');
+}
+
+/* ── Kalender / Beschikbaarheid ───────────────────────────── */
+let calYear  = new Date().getFullYear();
+let calMonth = new Date().getMonth() + 1; // 1-12
+let calData  = {};  // { "YYYY-MM-DD": { count, me, users } }
+
+async function loadCalendar() {
+  const res = await api(`/api/availability?year=${calYear}&month=${calMonth}`);
+  if (!res.ok) return;
+  const { dates } = await res.json();
+  calData = dates;
+  renderCalendar();
+}
+
+function renderCalendar() {
+  const label = document.getElementById('cal-month-label');
+  const grid  = document.getElementById('cal-grid');
+
+  const monthName = new Date(calYear, calMonth - 1, 1)
+    .toLocaleDateString('nl-NL', { month: 'long', year: 'numeric' });
+  label.textContent = monthName;
+
+  // Eerste dag van de maand (0=zo, 1=ma … 6=za → omrekenen naar Ma=0)
+  const firstWeekday = (new Date(calYear, calMonth - 1, 1).getDay() + 6) % 7;
+  const daysInMonth  = new Date(calYear, calMonth, 0).getDate();
+
+  const today = new Date();
+  const todayStr = `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}-${String(today.getDate()).padStart(2,'0')}`;
+
+  let html = '';
+
+  // Lege cellen vóór dag 1
+  for (let i = 0; i < firstWeekday; i++) {
+    html += '<div class="cal-day cal-day--empty"></div>';
+  }
+
+  for (let d = 1; d <= daysInMonth; d++) {
+    const dateStr = `${calYear}-${String(calMonth).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+    const info    = calData[dateStr];
+    const isToday = dateStr === todayStr;
+    const isPast  = dateStr < todayStr;
+    const isMe    = info?.me;
+    const count   = info?.count || 0;
+
+    let cls = 'cal-day';
+    if (isPast)  cls += ' cal-day--past';
+    if (isToday) cls += ' cal-day--today';
+    if (isMe)    cls += ' cal-day--me';
+
+    const countHtml = count > 0
+      ? `<span class="cal-day-count">${count}</span>`
+      : '';
+
+    html += `<div class="${cls}" onclick="toggleAvailability('${dateStr}', ${isPast})">
+      <span class="cal-day-num">${d}</span>
+      ${countHtml}
+    </div>`;
+  }
+
+  grid.innerHTML = html;
+}
+
+async function toggleAvailability(dateStr, isPast) {
+  if (isPast) return;
+  const info   = calData[dateStr];
+  const isMe   = info?.me;
+  const method = isMe ? 'DELETE' : 'POST';
+
+  const res = await api(`/api/availability/${dateStr}`, { method });
+  if (!res.ok) return;
+  const { available } = await res.json();
+
+  // Update lokale state
+  if (available) {
+    if (!calData[dateStr]) {
+      calData[dateStr] = { count: 0, me: false, users: [] };
+    }
+    if (!calData[dateStr].me) {
+      calData[dateStr].me = true;
+      calData[dateStr].count++;
+      calData[dateStr].users.push({
+        id: currentUser.userId,
+        display_name: currentUser.display_name,
+        avatar: currentUser.avatar,
+        level: currentUser.level,
+      });
+    }
+  } else {
+    if (calData[dateStr]) {
+      calData[dateStr].me = false;
+      calData[dateStr].count = Math.max(0, calData[dateStr].count - 1);
+      calData[dateStr].users = calData[dateStr].users.filter(u => u.id !== currentUser.userId);
+      if (calData[dateStr].count === 0) delete calData[dateStr];
+    }
+  }
+
+  renderCalendar();
+}
+
+function calPrevMonth() {
+  calMonth--;
+  if (calMonth < 1) { calMonth = 12; calYear--; }
+  loadCalendar();
+}
+
+function calNextMonth() {
+  calMonth++;
+  if (calMonth > 12) { calMonth = 1; calYear++; }
+  loadCalendar();
 }
 
 /* ── Start ────────────────────────────────────────────────── */
