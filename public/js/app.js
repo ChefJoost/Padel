@@ -1048,7 +1048,7 @@ function clearError(id) {
 
 /* ── Tijdselect opties ────────────────────────────────────── */
 function populateTimeSelects() {
-  ['b-start', 'b-end', 'ae-start', 'ae-end', 'avail-start', 'avail-end'].forEach(id => {
+  ['b-start', 'b-end', 'ae-start', 'ae-end'].forEach(id => {
     const sel = document.getElementById(id);
     if (!sel || sel.options.length) return;
     for (let h = 6; h <= 23; h++) {
@@ -1285,17 +1285,23 @@ async function handleAdminSaveBooking() {
   showToast('Boeking bijgewerkt');
 }
 
-/* ── Kalender / Beschikbaarheid ───────────────────────────── */
-let calYear      = new Date().getFullYear();
-let calMonth     = new Date().getMonth() + 1; // 1-12
-let calData      = {};   // { "YYYY-MM-DD": { count, me, myTimes, users } }
-let calActiveDay = null; // huidig geopende dag in het sheet
+/* ── Kalender — Potjes overzicht ──────────────────────────── */
+let calYear  = new Date().getFullYear();
+let calMonth = new Date().getMonth() + 1; // 1-12
+let calData  = {};  // { "YYYY-MM-DD": [booking, ...] }
 
 async function loadCalendar() {
-  const res = await api(`/api/availability?year=${calYear}&month=${calMonth}`);
+  const res = await api(`/api/bookings/calendar?year=${calYear}&month=${calMonth}`);
   if (!res.ok) return;
-  const { dates } = await res.json();
-  calData = dates;
+  const bookings = await res.json();
+
+  // Groepeer per datum
+  calData = {};
+  for (const b of bookings) {
+    if (!calData[b.date]) calData[b.date] = [];
+    calData[b.date].push(b);
+  }
+
   renderCalendar();
 }
 
@@ -1320,153 +1326,95 @@ function renderCalendar() {
   }
 
   for (let d = 1; d <= daysInMonth; d++) {
-    const dateStr = `${calYear}-${String(calMonth).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
-    const info    = calData[dateStr];
-    const isToday = dateStr === todayStr;
-    const isPast  = dateStr < todayStr;
-    const isMe    = info?.me;
-    const count   = info?.count || 0;
+    const dateStr  = `${calYear}-${String(calMonth).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+    const potjes   = calData[dateStr] || [];
+    const isToday  = dateStr === todayStr;
+    const isPast   = dateStr < todayStr;
+    const iJoined  = potjes.some(b => b.user_joined);
+    const hasPotje = potjes.length > 0;
 
     let cls = 'cal-day';
-    if (isPast)  cls += ' cal-day--past';
-    if (isToday) cls += ' cal-day--today';
-    if (isMe)    cls += ' cal-day--me';
+    if (isPast)             cls += ' cal-day--past';
+    if (isToday)            cls += ' cal-day--today';
+    if (iJoined)            cls += ' cal-day--joined';
+    else if (hasPotje)      cls += ' cal-day--has-potje';
 
-    const countHtml = count > 0
-      ? `<span class="cal-day-count">${count}</span>`
+    // Bolletjes: max 3 dots per potje
+    const dots = potjes.slice(0, 3).map(() =>
+      `<span class="cal-day-dot"></span>`
+    ).join('');
+    const dotsHtml = hasPotje ? `<span class="cal-day-dots">${dots}</span>` : '';
+
+    const clickHandler = hasPotje || !isPast
+      ? `onclick="openCalDay('${dateStr}')"`
       : '';
 
-    // Toon eigen tijden klein onder het getal als die bekend zijn
-    let timesHtml = '';
-    if (isMe && info?.myTimes?.start_time) {
-      const s = info.myTimes.start_time.slice(0,5);
-      const e = info.myTimes.end_time ? info.myTimes.end_time.slice(0,5) : null;
-      timesHtml = `<span class="cal-day-times">${s}${e ? '–'+e : ''}</span>`;
-    }
-
-    html += `<div class="${cls}" onclick="openAvailDay('${dateStr}')">
+    html += `<div class="${cls}" ${clickHandler}>
       <span class="cal-day-num">${d}</span>
-      ${countHtml}${timesHtml}
+      ${dotsHtml}
     </div>`;
   }
 
   grid.innerHTML = html;
 }
 
-function openAvailDay(dateStr) {
-  calActiveDay = dateStr;
-  const info   = calData[dateStr] || { count: 0, me: false, myTimes: null, users: [] };
-  const isPast = dateStr < new Date().toISOString().slice(0,10);
-
-  // Datum netjes opmaken
+function openCalDay(dateStr) {
+  const potjes = calData[dateStr] || [];
   const [y, m, d] = dateStr.split('-');
-  const label = new Date(+y, +m - 1, +d).toLocaleDateString('nl-NL', { weekday: 'long', day: 'numeric', month: 'long' });
-  document.getElementById('avail-modal-title').textContent = label;
+  const label = new Date(+y, +m - 1, +d)
+    .toLocaleDateString('nl-NL', { weekday: 'long', day: 'numeric', month: 'long' });
 
-  // Toggle
-  const toggle = document.getElementById('avail-toggle');
-  toggle.checked = info.me;
-  toggle.disabled = isPast;
+  document.getElementById('cal-day-title').textContent = label;
 
-  // Tijden tonen/verbergen
-  document.getElementById('avail-times').classList.toggle('hidden', !info.me);
-  document.getElementById('avail-save-wrap').classList.toggle('hidden', isPast);
-
-  if (info.myTimes?.start_time) {
-    setTimeSelect('avail-start', info.myTimes.start_time);
-    setTimeSelect('avail-end',   info.myTimes.end_time || '22:00');
+  if (potjes.length === 0) {
+    // Geen potjes: toon lege state met knop aanmaken
+    document.getElementById('cal-day-body').innerHTML = `
+      <div class="empty-state" style="padding:32px 0">
+        <div class="empty-icon">🎾</div>
+        <p class="empty-title">Geen potjes</p>
+        <p class="empty-sub">Er zijn nog geen potjes op deze dag.</p>
+        <button class="btn btn-primary" onclick="hideCalDayModal(); showNewBookingModalForDate('${dateStr}')">Potje aanmaken</button>
+      </div>`;
   } else {
-    setTimeSelect('avail-start', '09:00');
-    setTimeSelect('avail-end',   '12:00');
-  }
+    const items = potjes.map(b => {
+      const spots   = 4 - b.player_count;
+      const isFull  = spots <= 0;
+      const joined  = !!b.user_joined;
+      let badgeClass = 'cal-potje-badge--open';
+      let badgeText  = `${spots} plek${spots !== 1 ? 'ken' : ''} vrij`;
+      if (joined)       { badgeClass = 'cal-potje-badge--joined'; badgeText = 'Jij doet mee'; }
+      else if (isFull)  { badgeClass = 'cal-potje-badge--full';   badgeText = 'Vol'; }
 
-  // Anderen
-  const others = info.users.filter(u => u.id !== currentUser.userId);
-  const othersHeader = document.getElementById('avail-others-header');
-  const othersList   = document.getElementById('avail-others-list');
-
-  if (others.length > 0) {
-    othersHeader.classList.remove('hidden');
-    othersList.innerHTML = others.map(u => {
-      const timeLabel = u.start_time
-        ? `${u.start_time.slice(0,5)}${u.end_time ? '–'+u.end_time.slice(0,5) : ''}`
-        : 'Hele dag';
-      return `<div class="field-row avail-other-row">
-        <div class="avail-other-info">
-          <span class="avail-other-name">${u.display_name}</span>
-          <span class="avail-other-time">${timeLabel}</span>
+      return `<div class="field-row cal-potje-row" onclick="hideCalDayModal(); showDetailModal(${b.id})">
+        <div style="flex:1;min-width:0">
+          <div class="cal-potje-title">${b.title}</div>
+          <div class="cal-potje-meta">${b.start_time.slice(0,5)} – ${b.end_time.slice(0,5)}</div>
+          <span class="cal-potje-badge ${badgeClass}">${badgeText}</span>
         </div>
-        <span class="level-pill-sm">lvl ${u.level || '?'}</span>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16" style="color:var(--text-3);flex-shrink:0">
+          <path d="M9 18l6-6-6-6"/>
+        </svg>
       </div>`;
     }).join('');
-  } else {
-    othersHeader.classList.add('hidden');
-    othersList.innerHTML = '';
+
+    document.getElementById('cal-day-body').innerHTML =
+      `<div class="field-group">${items}</div>`;
   }
 
-  document.getElementById('avail-modal').classList.remove('hidden');
+  document.getElementById('cal-day-modal').classList.remove('hidden');
 }
 
-function onAvailToggle() {
-  const on = document.getElementById('avail-toggle').checked;
-  document.getElementById('avail-times').classList.toggle('hidden', !on);
+function hideCalDayModal() {
+  document.getElementById('cal-day-modal').classList.add('hidden');
 }
 
-async function saveAvailability() {
-  const dateStr = calActiveDay;
-  if (!dateStr) return;
-
-  const toggle = document.getElementById('avail-toggle');
-  const isAvail = toggle.checked;
-
-  if (!isAvail) {
-    // Verwijder beschikbaarheid
-    const res = await api(`/api/availability/${dateStr}`, { method: 'DELETE' });
-    if (!res.ok) return;
-    if (calData[dateStr]) {
-      calData[dateStr].me = false;
-      calData[dateStr].myTimes = null;
-      calData[dateStr].count = Math.max(0, calData[dateStr].count - 1);
-      calData[dateStr].users = calData[dateStr].users.filter(u => u.id !== currentUser.userId);
-      if (calData[dateStr].count === 0) delete calData[dateStr];
-    }
-  } else {
-    const start_time = document.getElementById('avail-start').value || null;
-    const end_time   = document.getElementById('avail-end').value || null;
-    const res = await api(`/api/availability/${dateStr}`, {
-      method: 'POST',
-      body: { start_time, end_time },
-    });
-    if (!res.ok) return;
-    if (!calData[dateStr]) {
-      calData[dateStr] = { count: 0, me: false, myTimes: null, users: [] };
-    }
-    if (!calData[dateStr].me) {
-      calData[dateStr].count++;
-      calData[dateStr].users.push({
-        id: currentUser.userId,
-        display_name: currentUser.display_name,
-        avatar: currentUser.avatar,
-        level: currentUser.level,
-        start_time,
-        end_time,
-      });
-    } else {
-      const me = calData[dateStr].users.find(u => u.id === currentUser.userId);
-      if (me) { me.start_time = start_time; me.end_time = end_time; }
-    }
-    calData[dateStr].me = true;
-    calData[dateStr].myTimes = { start_time, end_time };
-  }
-
-  renderCalendar();
-  hideAvailModal();
-  showToast(isAvail ? 'Beschikbaarheid opgeslagen' : 'Beschikbaarheid verwijderd');
-}
-
-function hideAvailModal() {
-  document.getElementById('avail-modal').classList.add('hidden');
-  calActiveDay = null;
+function showNewBookingModalForDate(dateStr) {
+  showNewBookingModal();
+  // Vul datum alvast in
+  setTimeout(() => {
+    const el = document.getElementById('b-date');
+    if (el) el.value = dateStr;
+  }, 50);
 }
 
 function calPrevMonth() {

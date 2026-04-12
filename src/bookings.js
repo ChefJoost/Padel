@@ -89,6 +89,45 @@ router.get('/invite/:token', requireAuth, (req, res) => {
   res.json({ ...booking, participants });
 });
 
+// Kalender: alle zichtbare potjes in een gegeven maand
+router.get('/calendar', requireAuth, (req, res) => {
+  const userId = req.session.userId;
+  const year   = parseInt(req.query.year,  10);
+  const month  = parseInt(req.query.month, 10);
+
+  if (!year || !month || month < 1 || month > 12) {
+    return res.status(400).json({ error: 'Ongeldige jaar/maand' });
+  }
+
+  const pad   = n => String(n).padStart(2, '0');
+  const from  = `${year}-${pad(month)}-01`;
+  const toDay = new Date(year, month, 0).getDate();
+  const to    = `${year}-${pad(month)}-${pad(toDay)}`;
+
+  const bookings = db.prepare(`
+    SELECT
+      b.id, b.title, b.date, b.start_time, b.end_time, b.notes,
+      b.created_by, b.payment_url, b.is_private,
+      u.display_name AS creator_name,
+      COUNT(p.id) + COALESCE((SELECT COUNT(*) FROM booking_guests bg WHERE bg.booking_id = b.id), 0) AS player_count,
+      MAX(CASE WHEN p.user_id = ? THEN 1 ELSE 0 END) AS user_joined,
+      MIN(u2.level) AS min_level,
+      MAX(u2.level) AS max_level
+    FROM bookings b
+    JOIN users u ON b.created_by = u.id
+    LEFT JOIN participants p ON b.id = p.booking_id
+    LEFT JOIN users u2 ON p.user_id = u2.id
+    WHERE b.date >= ? AND b.date <= ?
+      AND (b.is_private = 0
+           OR b.created_by = ?
+           OR EXISTS (SELECT 1 FROM participants WHERE booking_id = b.id AND user_id = ?))
+    GROUP BY b.id
+    ORDER BY b.date ASC, b.start_time ASC
+  `).all(userId, from, to, userId, userId);
+
+  res.json(bookings);
+});
+
 // Geschiedenis: afgelopen potjes van de ingelogde gebruiker
 router.get('/history', requireAuth, (req, res) => {
   const bookings = db.prepare(`

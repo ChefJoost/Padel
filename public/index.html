@@ -164,38 +164,41 @@
   <!-- ── TAB: KALENDER ── -->
   <div id="tab-kalender" class="tab-content hidden">
     <div class="nav-bar">
-      <h1 class="nav-title">Beschikbaarheid</h1>
+      <h1 class="nav-title">Kalender</h1>
+      <button class="nav-action" onclick="showNewBookingModal()">
+        <span class="nav-action-icon">+</span>
+      </button>
     </div>
 
-    <div class="scroll-area">
-      <!-- Maand navigatie -->
-      <div class="cal-month-nav">
-        <button class="cal-nav-btn" onclick="calPrevMonth()">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="18" height="18">
-            <path d="M15 18l-6-6 6-6"/>
-          </svg>
-        </button>
-        <span class="cal-month-label" id="cal-month-label"></span>
-        <button class="cal-nav-btn" onclick="calNextMonth()">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="18" height="18">
-            <path d="M9 18l6-6-6-6"/>
-          </svg>
-        </button>
-      </div>
+    <!-- Maand navigatie (buiten scroll-area zodat hij altijd zichtbaar is) -->
+    <div class="cal-month-nav">
+      <button class="cal-nav-btn" onclick="calPrevMonth()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="18" height="18">
+          <path d="M15 18l-6-6 6-6"/>
+        </svg>
+      </button>
+      <span class="cal-month-label" id="cal-month-label"></span>
+      <button class="cal-nav-btn" onclick="calNextMonth()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="18" height="18">
+          <path d="M9 18l6-6-6-6"/>
+        </svg>
+      </button>
+    </div>
 
-      <!-- Dag-koppen -->
-      <div class="cal-weekdays">
-        <span>Ma</span><span>Di</span><span>Wo</span>
-        <span>Do</span><span>Vr</span><span>Za</span><span>Zo</span>
-      </div>
+    <!-- Dag-koppen (ook buiten scroll) -->
+    <div class="cal-weekdays">
+      <span>Ma</span><span>Di</span><span>Wo</span>
+      <span>Do</span><span>Vr</span><span>Za</span><span>Zo</span>
+    </div>
 
+    <div class="scroll-area" style="padding-top:8px">
       <!-- Kalender grid -->
       <div class="cal-grid" id="cal-grid"></div>
 
       <!-- Legenda -->
       <div class="cal-legend">
-        <span class="cal-legend-item"><span class="cal-legend-dot cal-legend-me"></span>Jij bent beschikbaar</span>
-        <span class="cal-legend-item"><span class="cal-legend-dot cal-legend-others"></span>Anderen beschikbaar</span>
+        <span class="cal-legend-item"><span class="cal-legend-dot" style="background:var(--green)"></span>Jij doet mee</span>
+        <span class="cal-legend-item"><span class="cal-legend-dot" style="background:var(--blue)"></span>Potje gepland</span>
       </div>
     </div>
   </div>
@@ -573,48 +576,17 @@
 </div>
 
 <!-- ══════════════════════════════════════════════
-     MODAL: Beschikbaarheid dag detail
+     MODAL: Kalender dag – potjes
 ══════════════════════════════════════════════ -->
-<div id="avail-modal" class="sheet-overlay hidden" onclick="closeSheet(event)">
+<div id="cal-day-modal" class="sheet-overlay hidden" onclick="closeSheet(event)">
   <div class="sheet">
     <div class="sheet-handle"></div>
     <div class="sheet-header">
-      <button class="sheet-cancel" onclick="hideAvailModal()">Sluiten</button>
-      <h2 class="sheet-title" id="avail-modal-title"></h2>
+      <button class="sheet-cancel" onclick="hideCalDayModal()">Sluiten</button>
+      <h2 class="sheet-title" id="cal-day-title"></h2>
       <div style="width:60px"></div>
     </div>
-    <div class="sheet-body">
-
-      <!-- Eigen beschikbaarheid -->
-      <div class="section-header">Jouw beschikbaarheid</div>
-      <div class="field-group" id="avail-my-section">
-        <div class="field-row">
-          <label>Beschikbaar</label>
-          <label class="toggle">
-            <input type="checkbox" id="avail-toggle" onchange="onAvailToggle()" />
-            <span class="toggle-track"></span>
-          </label>
-        </div>
-        <div id="avail-times" class="hidden">
-          <div class="field-row">
-            <label>Vroegst starten</label>
-            <select id="avail-start" class="time-select"></select>
-          </div>
-          <div class="field-row">
-            <label>Uiterlijk starten</label>
-            <select id="avail-end" class="time-select"></select>
-          </div>
-        </div>
-      </div>
-      <div id="avail-save-wrap" class="hidden" style="padding: 0 0 8px">
-        <button class="btn btn-primary btn-full" onclick="saveAvailability()">Opslaan</button>
-      </div>
-
-      <!-- Anderen beschikbaar -->
-      <div id="avail-others-header" class="section-header hidden">Anderen beschikbaar</div>
-      <div id="avail-others-list" class="field-group"></div>
-
-    </div>
+    <div class="sheet-body" id="cal-day-body"></div>
   </div>
 </div>
 

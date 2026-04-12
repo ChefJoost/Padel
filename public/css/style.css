@@ -296,15 +296,15 @@ body {
 }
 
 .nav-bar {
-  height: calc(var(--nav-bar-h) + env(safe-area-inset-top, 0px));
+  height: var(--nav-bar-h);
   background: rgba(242, 242, 247, 0.85);
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
   border-bottom: 1px solid var(--separator);
   display: flex;
-  align-items: flex-end;
+  align-items: center;
   justify-content: space-between;
-  padding: 0 20px calc(10px);
+  padding: 0 20px;
   flex-shrink: 0;
 }
 .nav-title { font-size: 1.1rem; font-weight: 700; letter-spacing: -.01em; }
@@ -353,26 +353,25 @@ body {
   bottom: 0;
   left: 0;
   right: 0;
-  height: var(--tab-bar-h);
+  /* Geen vaste hoogte: wordt bepaald door content + safe-area padding */
   background: rgba(249, 249, 249, 0.94);
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
   border-top: 1px solid var(--separator);
   display: flex;
-  align-items: flex-start;
-  padding-top: 4px;
+  /* safe-area-inset-bottom duwt content omhoog boven home-indicator */
   padding-bottom: env(safe-area-inset-bottom, 0px);
   z-index: 100;
 }
 
 .tab-item {
   flex: 1;
+  height: 49px; /* standaard iOS tab bar hoogte */
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   gap: 3px;
-  padding-top: 8px;
   border: none;
   background: transparent;
   color: var(--text-3);
@@ -982,14 +981,15 @@ body {
 }
 
 /* ══════════════════════════════════════════════
-   KALENDER — Beschikbaarheid
+   KALENDER — Potjes overzicht
 ══════════════════════════════════════════════ */
 
 .cal-month-nav {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 12px 16px 8px;
+  padding: 10px 16px 6px;
+  flex-shrink: 0;
 }
 
 .cal-nav-btn {
@@ -1020,7 +1020,7 @@ body {
   display: grid;
   grid-template-columns: repeat(7, 1fr);
   padding: 0 12px;
-  margin-bottom: 4px;
+  flex-shrink: 0;
 }
 .cal-weekdays span {
   text-align: center;
@@ -1035,7 +1035,7 @@ body {
 .cal-grid {
   display: grid;
   grid-template-columns: repeat(7, 1fr);
-  gap: 4px;
+  gap: 3px;
   padding: 0 12px 12px;
 }
 
@@ -1050,10 +1050,11 @@ body {
   position: relative;
   transition: transform .1s, background .15s;
   background: var(--surface);
-  min-height: 44px;
-  gap: 2px;
+  min-height: 40px;
+  gap: 3px;
+  overflow: hidden;
 }
-.cal-day:active { transform: scale(.92); }
+.cal-day:active { transform: scale(.91); }
 
 .cal-day.cal-day--empty {
   background: transparent;
@@ -1062,85 +1063,87 @@ body {
 }
 
 .cal-day.cal-day--past {
-  opacity: .45;
-  cursor: default;
+  opacity: .4;
 }
 .cal-day.cal-day--past:active { transform: none; }
 
-.cal-day.cal-day--today {
-  box-shadow: 0 0 0 2px var(--blue);
-}
-
-.cal-day.cal-day--me {
+/* Dag met potje waar je aan meedoet → groen */
+.cal-day.cal-day--joined {
   background: var(--green);
 }
-.cal-day.cal-day--me .cal-day-num {
-  color: #fff;
+.cal-day.cal-day--joined .cal-day-num { color: #fff; }
+
+/* Dag met potje(s) maar je doet niet mee → blauwe rand */
+.cal-day.cal-day--has-potje {
+  box-shadow: inset 0 0 0 2px var(--blue);
 }
-.cal-day.cal-day--me .cal-day-count {
-  color: rgba(255,255,255,.85);
+
+/* Vandaag: extra indicator */
+.cal-day.cal-day--today .cal-day-num {
+  background: var(--blue);
+  color: #fff;
+  border-radius: 50%;
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.cal-day.cal-day--joined.cal-day--today .cal-day-num {
+  background: rgba(255,255,255,.3);
+  color: #fff;
 }
 
 .cal-day-num {
-  font-size: .9rem;
+  font-size: .88rem;
   font-weight: 600;
   color: var(--text);
   line-height: 1;
 }
 
-.cal-day-count {
-  font-size: .65rem;
-  font-weight: 700;
-  color: var(--green-dark);
-  line-height: 1;
-}
-.cal-day--me .cal-day-count {
-  color: rgba(255,255,255,.85);
-}
-
-/* Badge met aantal beschikbare spelers (op niet-groene dagen) */
-.cal-day:not(.cal-day--me) .cal-day-count {
-  background: var(--green-tint);
-  color: var(--green-dark);
-  padding: 1px 5px;
-  border-radius: 20px;
-}
-
-/* Tijden label op dag-cel */
-.cal-day-times {
-  font-size: .52rem;
-  font-weight: 600;
-  color: rgba(255,255,255,.9);
-  line-height: 1;
-  max-width: 100%;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-/* Beschikbaarheid detail sheet – andere spelers */
-.avail-other-row {
-  flex-direction: column !important;
-  align-items: flex-start !important;
-  gap: 2px !important;
-}
-.avail-other-info {
+/* Bolletjes onder het getal: één bolletje per potje (max 3) */
+.cal-day-dots {
   display: flex;
-  align-items: center;
-  gap: 8px;
-  width: 100%;
-  justify-content: space-between;
+  gap: 2px;
 }
-.avail-other-name { font-size: .9rem; font-weight: 600; }
-.avail-other-time { font-size: .78rem; color: var(--text-2); }
-.level-pill-sm {
+.cal-day-dot {
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: var(--blue);
+}
+.cal-day--joined .cal-day-dot { background: rgba(255,255,255,.8); }
+
+/* Dag-detail sheet – potjes lijst */
+.cal-potje-row {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  cursor: pointer;
+  padding: 12px 0;
+}
+.cal-potje-row:active { opacity: .7; }
+.cal-potje-title { font-size: .95rem; font-weight: 600; }
+.cal-potje-meta  { font-size: .78rem; color: var(--text-2); }
+.cal-potje-badge {
   font-size: .72rem;
   font-weight: 700;
-  color: var(--green-dark);
-  background: var(--green-tint);
   padding: 2px 8px;
   border-radius: 20px;
-  flex-shrink: 0;
+  margin-top: 2px;
+}
+.cal-potje-badge--joined {
+  background: var(--green-tint);
+  color: var(--green-dark);
+}
+.cal-potje-badge--open {
+  background: rgba(0,122,255,.1);
+  color: var(--blue);
+}
+.cal-potje-badge--full {
+  background: var(--bg);
+  color: var(--text-2);
 }
 
 /* Legenda */
@@ -1164,5 +1167,3 @@ body {
   border-radius: 3px;
   flex-shrink: 0;
 }
-.cal-legend-me     { background: var(--green); }
-.cal-legend-others { background: var(--green-tint); border: 1.5px solid var(--green); }
