@@ -12,30 +12,53 @@ function requireAuth(req, res, next) {
 // GET /api/buddies  → mijn buddies met laatste bericht + ongelezen teller
 router.get('/', requireAuth, (req, res) => {
   const me = req.session.userId;
+  console.log('[buddies GET /] userId:', me);
   try {
+    // Haal eerst de buddies op (eenvoudige query zonder messages)
     const buddies = db.prepare(`
       SELECT
         u.id, u.display_name, u.username, u.level, u.avatar,
         (SELECT COUNT(DISTINCT p1.booking_id)
          FROM participants p1
          JOIN participants p2 ON p2.booking_id = p1.booking_id AND p2.user_id = ?
-         WHERE p1.user_id = u.id) AS games_together,
-        (SELECT COUNT(*) FROM messages
-         WHERE sender_id = u.id AND receiver_id = ? AND read_at IS NULL) AS unread_count,
-        (SELECT content FROM messages
-         WHERE (sender_id = ? AND receiver_id = u.id)
-            OR (sender_id = u.id AND receiver_id = ?)
-         ORDER BY created_at DESC LIMIT 1) AS last_message,
-        (SELECT created_at FROM messages
-         WHERE (sender_id = ? AND receiver_id = u.id)
-            OR (sender_id = u.id AND receiver_id = ?)
-         ORDER BY created_at DESC LIMIT 1) AS last_message_at
+         WHERE p1.user_id = u.id) AS games_together
       FROM buddies b
       JOIN users u ON u.id = b.buddy_id
       WHERE b.user_id = ?
-      ORDER BY last_message_at DESC, u.display_name ASC
-    `).all(me, me, me, me, me, me, me);
-    res.json(buddies);
+      ORDER BY u.display_name ASC
+    `).all(me, me);
+
+    console.log('[buddies GET /] gevonden:', buddies.length);
+
+    // Voeg message-stats toe per buddy (aparte query om SQLite-versie problemen te vermijden)
+    const result = buddies.map(buddy => {
+      try {
+        const unread = db.prepare(
+          'SELECT COUNT(*) AS cnt FROM messages WHERE sender_id = ? AND receiver_id = ? AND read_at IS NULL'
+        ).get(buddy.id, me);
+        const last = db.prepare(
+          'SELECT content, created_at FROM messages WHERE (sender_id=? AND receiver_id=?) OR (sender_id=? AND receiver_id=?) ORDER BY created_at DESC LIMIT 1'
+        ).get(buddy.id, me, me, buddy.id);
+        return {
+          ...buddy,
+          unread_count:    unread?.cnt ?? 0,
+          last_message:    last?.content ?? null,
+          last_message_at: last?.created_at ?? null,
+        };
+      } catch (_) {
+        return { ...buddy, unread_count: 0, last_message: null, last_message_at: null };
+      }
+    });
+
+    // Sorteer: buddies met recente berichten eerst
+    result.sort((a, b) => {
+      if (!a.last_message_at && !b.last_message_at) return 0;
+      if (!a.last_message_at) return 1;
+      if (!b.last_message_at) return -1;
+      return a.last_message_at < b.last_message_at ? 1 : -1;
+    });
+
+    res.json(result);
   } catch (err) {
     console.error('[buddies GET /] fout:', err.message);
     res.status(500).json({ error: err.message });

@@ -1284,9 +1284,16 @@ async function loadBuddies() {
   allUsersCache = null; // ververs cache bij laden van buddies tab
   try {
     const res  = await api('/api/buddies');
-    const list = res.ok ? await res.json() : [];
+    if (!res.ok) {
+      const err = await res.json().catch(() => null);
+      showToast('Buddies laden mislukt: ' + (err?.error || res.status));
+      renderBuddiesList([]);
+      return;
+    }
+    const list = await res.json();
     renderBuddiesList(Array.isArray(list) ? list : []);
-  } catch (_) {
+  } catch (e) {
+    showToast('Buddies laden mislukt: ' + e.message);
     renderBuddiesList([]);
   }
 }
