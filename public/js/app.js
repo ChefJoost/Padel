@@ -86,6 +86,13 @@ function showApp() {
   renderProfile();
 }
 
+// Geeft aan of de huidige gebruiker doelwit is van de betaallink (null = iedereen)
+function isPayTargeted(b) {
+  if (!b.payment_target_users) return true;
+  try { return JSON.parse(b.payment_target_users).includes(currentUser.userId); }
+  catch (_) { return true; }
+}
+
 function setUser(data) {
   currentUser = {
     userId:       data.userId,
@@ -459,12 +466,13 @@ async function loadUnpaid() {
     ...history.map(b  => ({ ...b, _paid: b.paid_at,      _fromHistory: true  })),
   ];
 
-  // Niet betaald: deelnemer (niet organisator), niet betaald
+  // Niet betaald: deelnemer (niet organisator), niet betaald, en betaallink is voor jou
   // Upcoming: alleen als user meedoet (user_joined); history: al server-side gefilterd
-  const unpaid = all.filter(b =>
-    !b._paid && b.created_by !== currentUser.userId &&
-    (b._fromHistory || b.user_joined)
-  );
+  const unpaid = all.filter(b => {
+    if (b._paid || b.created_by === currentUser.userId) return false;
+    if (!b._fromHistory && !b.user_joined) return false;
+    return isPayTargeted(b);
+  });
 
   const section = document.getElementById('unpaid-section');
   const list    = document.getElementById('unpaid-list');
@@ -589,7 +597,7 @@ function buildCard(b) {
   }
 
   // Betaallink indicator
-  const payDot = b.payment_url && b.user_joined && !b.user_paid_at && b.created_by !== currentUser?.userId
+  const payDot = b.payment_url && b.user_joined && !b.user_paid_at && b.created_by !== currentUser?.userId && isPayTargeted(b)
     ? `<span class="pay-dot" title="Betaling openstaand"></span>` : '';
 
   const privateTag = b.is_private
@@ -648,9 +656,9 @@ async function showDetailModal(id) {
     </div>
   `;
 
-  // Betaallink (voor deelnemers)
+  // Betaallink (voor deelnemers die doelwit zijn van de link)
   let payHtml = '';
-  if (b.payment_url && !isCreator && b.user_joined) {
+  if (b.payment_url && !isCreator && b.user_joined && isPayTargeted(b)) {
     const paid = b.user_paid_at;
     payHtml = `
       <div class="section-header">Betaling</div>
@@ -669,12 +677,44 @@ async function showDetailModal(id) {
   // Betaallink beheer (voor organisator)
   let payFormHtml = '';
   if (isCreator) {
+    // Deelnemers die betaaltargeting kunnen krijgen (geen gasten, niet de organisator zelf)
+    const payablePlayers = (b.participants || []).filter(p => !p.is_guest && p.user_id !== currentUser.userId);
+    const existingTargets = b.payment_target_users ? (() => { try { return JSON.parse(b.payment_target_users); } catch(_){return null;} })() : null;
+    const isAll = existingTargets === null;
+
+    const checkboxRows = payablePlayers.map(p => {
+      const checked = isAll || existingTargets.includes(p.user_id) ? 'checked' : '';
+      return `<div class="field-row pay-target-row">
+        <label class="pay-target-label">
+          <input type="checkbox" class="pay-target-cb" value="${p.user_id}" ${checked} />
+          ${escHtml(p.display_name)}
+        </label>
+      </div>`;
+    }).join('');
+
+    const targetToggle = payablePlayers.length > 0 ? `
+      <div class="field-group">
+        <div class="field-row">
+          <span style="color:var(--text-2);font-size:.88rem">Voor wie?</span>
+          <div class="seg-control" style="width:auto;min-width:150px;margin-bottom:0">
+            <button type="button" class="seg-btn ${isAll ? 'active' : ''}" onclick="setPayTarget('all',this)">Iedereen</button>
+            <button type="button" class="seg-btn ${!isAll ? 'active' : ''}" onclick="setPayTarget('select',this)">Selecteer</button>
+          </div>
+        </div>
+        <div id="pay-target-select" class="${isAll ? 'hidden' : ''}">
+          ${checkboxRows}
+        </div>
+      </div>` : '';
+
     payFormHtml = `
       <div class="section-header">Betaallink instellen</div>
       <div class="field-group">
         <div class="field-row">
           <input type="url" id="payment-url-input" placeholder="https://tikkie.me/..." value="${escAttr(b.payment_url || '')}" style="flex:1" />
         </div>
+      </div>
+      ${targetToggle}
+      <div class="field-group">
         <div class="field-row">
           <button class="btn btn-primary btn-full" onclick="handleSetPaymentUrl()">Opslaan</button>
         </div>
@@ -855,12 +895,27 @@ function closeConfirm() {
 async function handleSetPaymentUrl() {
   clearError('detail-error');
   const payment_url = document.getElementById('payment-url-input').value.trim();
-  const res  = await api(`/api/bookings/${currentDetailId}/payment`, { method: 'PUT', body: { payment_url } });
+
+  // Lees geselecteerde doelgroep
+  let target_user_ids = null;
+  const selectPanel = document.getElementById('pay-target-select');
+  if (selectPanel && !selectPanel.classList.contains('hidden')) {
+    const checked = [...document.querySelectorAll('.pay-target-cb:checked')].map(cb => parseInt(cb.value, 10));
+    if (checked.length > 0) target_user_ids = checked;
+  }
+
+  const res  = await api(`/api/bookings/${currentDetailId}/payment`, { method: 'PUT', body: { payment_url, target_user_ids } });
   const data = await res.json();
   if (!res.ok) return showError('detail-error', data.error);
   await showDetailModal(currentDetailId);
-  loadBookings();
   showToast(payment_url ? 'Betaallink opgeslagen' : 'Betaallink verwijderd');
+}
+
+function setPayTarget(mode, btn) {
+  btn.closest('.seg-control').querySelectorAll('.seg-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  const panel = document.getElementById('pay-target-select');
+  if (panel) panel.classList.toggle('hidden', mode === 'all');
 }
 
 /* ── New / edit booking modal ─────────────────────────────── */

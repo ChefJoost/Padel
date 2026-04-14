@@ -101,6 +101,7 @@ migrate('ALTER TABLE bookings ADD COLUMN payment_url TEXT');
 migrate('ALTER TABLE participants ADD COLUMN paid_at DATETIME');
 migrate('ALTER TABLE bookings ADD COLUMN is_private INTEGER DEFAULT 0');
 migrate('ALTER TABLE bookings ADD COLUMN invite_token TEXT');
+migrate('ALTER TABLE bookings ADD COLUMN payment_target_users TEXT');
 migrate('ALTER TABLE availability ADD COLUMN start_time TEXT');
 migrate('ALTER TABLE availability ADD COLUMN end_time TEXT');
 

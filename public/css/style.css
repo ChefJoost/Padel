@@ -825,6 +825,23 @@ body {
 }
 .btn-pay-small:active { opacity: .8; }
 
+/* Betaallink doelgroep selector */
+.pay-target-row { padding: 6px 0; }
+.pay-target-label {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: .95rem;
+  cursor: pointer;
+  flex: 1;
+}
+.pay-target-cb {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--blue);
+  flex-shrink: 0;
+}
+
 .btn-paid-manual {
   background: transparent;
   color: var(--text-2);
@@ -1073,7 +1090,7 @@ body {
 
 /* Vandaag: extra indicator */
 .cal-day.cal-day--today .cal-day-num {
-  background: var(--blue);
+  background: var(--orange);
   color: #fff;
   border-radius: 50%;
   width: 24px;

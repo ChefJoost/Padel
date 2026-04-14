@@ -20,7 +20,7 @@ router.get('/', requireAuth, (req, res) => {
   const bookings = db.prepare(`
     SELECT
       b.id, b.title, b.date, b.start_time, b.end_time, b.notes,
-      b.created_by, b.payment_url, b.is_private,
+      b.created_by, b.payment_url, b.payment_target_users, b.is_private,
       u.display_name AS creator_name,
       COUNT(p.id) + COALESCE((SELECT COUNT(*) FROM booking_guests bg WHERE bg.booking_id = b.id), 0) AS player_count,
       MAX(CASE WHEN p.user_id = ? THEN 1 ELSE 0 END) AS user_joined,
@@ -63,7 +63,7 @@ router.get('/invite/:token', requireAuth, (req, res) => {
   const booking = db.prepare(`
     SELECT
       b.id, b.title, b.date, b.start_time, b.end_time, b.notes,
-      b.created_by, b.payment_url, b.is_private, b.invite_token,
+      b.created_by, b.payment_url, b.payment_target_users, b.is_private, b.invite_token,
       u.display_name AS creator_name,
       COUNT(p.id) AS player_count,
       MAX(CASE WHEN p.user_id = ? THEN 1 ELSE 0 END) AS user_joined,
@@ -115,7 +115,7 @@ router.get('/calendar', requireAuth, (req, res) => {
   const bookings = db.prepare(`
     SELECT
       b.id, b.title, b.date, b.start_time, b.end_time, b.notes,
-      b.created_by, b.payment_url, b.is_private,
+      b.created_by, b.payment_url, b.payment_target_users, b.is_private,
       u.display_name AS creator_name,
       COUNT(p.id) + COALESCE((SELECT COUNT(*) FROM booking_guests bg WHERE bg.booking_id = b.id), 0) AS player_count,
       MAX(CASE WHEN p.user_id = ? THEN 1 ELSE 0 END) AS user_joined,
@@ -169,7 +169,7 @@ router.get('/:id', requireAuth, (req, res) => {
   const booking = db.prepare(`
     SELECT
       b.id, b.title, b.location, b.date, b.start_time, b.end_time, b.notes,
-      b.created_by, b.payment_url, b.is_private, b.invite_token,
+      b.created_by, b.payment_url, b.payment_target_users, b.is_private, b.invite_token,
       u.display_name AS creator_name,
       COUNT(p.id) + COALESCE((SELECT COUNT(*) FROM booking_guests bg WHERE bg.booking_id = b.id), 0) AS player_count,
       MAX(CASE WHEN p.user_id = ? THEN 1 ELSE 0 END) AS user_joined,
@@ -285,7 +285,7 @@ router.put('/:id', requireAuth, (req, res) => {
 router.put('/:id/payment', requireAuth, async (req, res) => {
   const bookingId = req.params.id;
   const userId = req.session.userId;
-  const { payment_url } = req.body;
+  const { payment_url, target_user_ids } = req.body;
 
   const booking = db.prepare('SELECT * FROM bookings WHERE id = ?').get(bookingId);
   if (!booking) return res.status(404).json({ error: 'Boeking niet gevonden' });
@@ -303,14 +303,29 @@ router.put('/:id/payment', requireAuth, async (req, res) => {
     }
   }
 
-  db.prepare('UPDATE bookings SET payment_url = ? WHERE id = ?')
-    .run(payment_url || null, bookingId);
+  // Bepaal doelgroep (null = iedereen, JSON array = specifieke spelers)
+  let targetJson = null;
+  if (payment_url && Array.isArray(target_user_ids) && target_user_ids.length > 0) {
+    const ids = target_user_ids.map(Number).filter(n => Number.isInteger(n) && n > 0);
+    if (ids.length > 0) targetJson = JSON.stringify(ids);
+  }
 
-  // Stuur push-notificatie naar alle andere deelnemers als er een URL is ingesteld
+  db.prepare('UPDATE bookings SET payment_url = ?, payment_target_users = ? WHERE id = ?')
+    .run(payment_url || null, payment_url ? targetJson : null, bookingId);
+
+  // Stuur push-notificatie naar gerichte deelnemers
   if (payment_url) {
-    const participants = db.prepare(`
-      SELECT DISTINCT user_id FROM participants WHERE booking_id = ? AND user_id != ?
-    `).all(bookingId, userId);
+    let participants;
+    if (targetJson) {
+      const ids = JSON.parse(targetJson);
+      participants = db.prepare(
+        `SELECT DISTINCT user_id FROM participants WHERE booking_id = ? AND user_id != ? AND user_id IN (${ids.map(() => '?').join(',')})`
+      ).all(bookingId, userId, ...ids);
+    } else {
+      participants = db.prepare(
+        'SELECT DISTINCT user_id FROM participants WHERE booking_id = ? AND user_id != ?'
+      ).all(bookingId, userId);
+    }
 
     const creatorName = db.prepare('SELECT display_name FROM users WHERE id = ?')
       .get(userId)?.display_name || 'De organisator';
