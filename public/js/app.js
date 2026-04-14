@@ -406,15 +406,18 @@ async function handleSaveProfile() {
 
 /* ── Profiel stats ────────────────────────────────────────── */
 async function loadProfileStats() {
-  const [resUpcoming, resHistory] = await Promise.all([
+  const [resUpcoming, resHistory, resBuddies] = await Promise.all([
     api('/api/bookings'),
     api('/api/bookings/history'),
+    api('/api/buddies'),
   ]);
   const upcoming = await resUpcoming.json();
   const history  = await resHistory.json();
-  const planned = upcoming.filter(b => b.user_joined).length;
-  document.getElementById('profile-stat-played').textContent = history.length;
+  const buddies  = resBuddies.ok ? await resBuddies.json() : [];
+  const planned  = upcoming.filter(b => b.user_joined).length;
+  document.getElementById('profile-stat-played').textContent  = history.length;
   document.getElementById('profile-stat-planned').textContent = planned;
+  document.getElementById('profile-stat-buddies').textContent = Array.isArray(buddies) ? buddies.length : 0;
 }
 
 /* ── Geschiedenis ─────────────────────────────────────────── */
@@ -1481,8 +1484,10 @@ async function loadBuddies() {
 }
 
 function renderBuddiesList(buddies) {
-  const el = document.getElementById('buddies-list');
+  const el       = document.getElementById('buddies-list');
+  const countBar = document.getElementById('buddies-count-bar');
   if (buddies.length === 0) {
+    countBar.classList.add('hidden');
     el.innerHTML = `<div class="empty-state" style="padding:40px 0">
       <div class="empty-icon">👥</div>
       <p class="empty-title">Nog geen buddies</p>
@@ -1490,6 +1495,8 @@ function renderBuddiesList(buddies) {
     </div>`;
     return;
   }
+  countBar.textContent = `${buddies.length} ${buddies.length === 1 ? 'buddy' : 'buddies'}`;
+  countBar.classList.remove('hidden');
   el.innerHTML = buddies.map(u => {
     const avatarStyle = u.avatar
       ? `style="background-image:url('${escAttr(u.avatar)}')"` : '';
