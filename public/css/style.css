@@ -1164,12 +1164,22 @@ body {
 /* ══════════════════════════════════════════════
    BUDDIES
 ══════════════════════════════════════════════ */
-.buddies-hint {
-  font-size: .82rem;
-  color: var(--text-2);
-  text-align: center;
-  padding: 8px 16px 12px;
+.buddy-search-wrap {
+  padding: 12px 16px 8px;
 }
+.buddy-search-input {
+  width: 100%;
+  box-sizing: border-box;
+  background: var(--surface);
+  border: none;
+  border-radius: 10px;
+  padding: 10px 14px;
+  font-size: .95rem;
+  color: var(--text);
+  outline: none;
+  -webkit-appearance: none;
+}
+.buddy-search-input::placeholder { color: var(--text-3); }
 
 .buddy-card {
   background: var(--surface);

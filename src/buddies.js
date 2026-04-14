@@ -84,10 +84,10 @@ router.get('/chat/:userId', requireAuth, (req, res) => {
   const other = parseInt(req.params.userId, 10);
   if (!other) return res.status(400).json({ error: 'Ongeldig' });
 
-  // Controleer buddy-relatie (één richting is genoeg om te chatten)
+  // Controleer buddy-relatie (beide richtingen: één van de twee is genoeg)
   const isBuddy = db.prepare(
-    'SELECT 1 FROM buddies WHERE user_id = ? AND buddy_id = ?'
-  ).get(me, other);
+    'SELECT 1 FROM buddies WHERE (user_id = ? AND buddy_id = ?) OR (user_id = ? AND buddy_id = ?)'
+  ).get(me, other, other, me);
   if (!isBuddy) return res.status(403).json({ error: 'Geen buddy' });
 
   const messages = db.prepare(`
@@ -116,8 +116,8 @@ router.post('/chat/:userId', requireAuth, (req, res) => {
   if (!content?.trim()) return res.status(400).json({ error: 'Leeg bericht' });
 
   const isBuddy = db.prepare(
-    'SELECT 1 FROM buddies WHERE user_id = ? AND buddy_id = ?'
-  ).get(me, other);
+    'SELECT 1 FROM buddies WHERE (user_id = ? AND buddy_id = ?) OR (user_id = ? AND buddy_id = ?)'
+  ).get(me, other, other, me);
   if (!isBuddy) return res.status(403).json({ error: 'Geen buddy' });
 
   const result = db.prepare(

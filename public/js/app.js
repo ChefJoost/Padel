@@ -231,7 +231,15 @@ function switchTab(tab) {
   });
   if (tab === 'potjes')   { loadBookings(); }
   if (tab === 'kalender') { loadCalendar(); }
-  if (tab === 'buddies')  { loadBuddies(); }
+  if (tab === 'buddies')  {
+    const si = document.getElementById('buddy-search-input');
+    const sr = document.getElementById('buddy-search-results');
+    if (si) si.value = '';
+    if (sr) { sr.classList.add('hidden'); sr.innerHTML = ''; }
+    const bl = document.getElementById('buddies-list');
+    if (bl) bl.classList.remove('hidden');
+    loadBuddies();
+  }
   if (tab === 'profiel')  { loadHistory(); loadUnpaid(); loadProfileStats(); }
   if (tab === 'admin')    { loadAdminStats(); adminSearchUsers(); loadAdminBookings(); }
 }
@@ -1273,9 +1281,11 @@ async function handleAdminSaveBooking() {
 
 /* ── Buddies ──────────────────────────────────────────────── */
 async function loadBuddies() {
+  allUsersCache = null; // ververs cache bij laden van buddies tab
   const res  = await api('/api/buddies');
   if (!res.ok) return;
   const list = await res.json();
+  if (!Array.isArray(list)) return;
   renderBuddiesList(list);
 }
 
@@ -1374,6 +1384,60 @@ async function removeBuddy(userId, btn) {
     <button class="btn btn-primary btn-full" onclick="addBuddy(${userId}, this)">➕ Toevoegen als buddy</button>`;
 }
 
+/* ── Buddies zoeken ───────────────────────────────────────── */
+let allUsersCache = null;
+
+async function searchBuddyPlayers(query) {
+  const resultsEl = document.getElementById('buddy-search-results');
+  const listEl    = document.getElementById('buddies-list');
+
+  if (!query.trim()) {
+    resultsEl.classList.add('hidden');
+    resultsEl.innerHTML = '';
+    listEl.classList.remove('hidden');
+    return;
+  }
+
+  listEl.classList.add('hidden');
+
+  if (!allUsersCache) {
+    const res = await api('/api/auth/users');
+    if (!res.ok) return;
+    allUsersCache = await res.json();
+  }
+
+  const q = query.toLowerCase().trim();
+  const matches = allUsersCache.filter(u =>
+    u.display_name.toLowerCase().includes(q) ||
+    (u.username || '').toLowerCase().includes(q)
+  );
+
+  if (matches.length === 0) {
+    resultsEl.innerHTML = `<div class="empty-state" style="padding:30px 0">
+      <p class="empty-title">Geen spelers gevonden</p>
+    </div>`;
+  } else {
+    resultsEl.innerHTML = matches.map(u => {
+      const initials    = u.display_name.split(' ').map(w => w[0]).join('').slice(0,2).toUpperCase();
+      const avatarStyle = u.avatar ? `style="background-image:url('${escAttr(u.avatar)}')"` : '';
+      const sub = u.games_together > 0
+        ? `${u.games_together} potje${u.games_together !== 1 ? 's' : ''} samen`
+        : 'Nog niet samen gespeeld';
+      return `<div class="buddy-card" onclick="showPlayerProfile(${u.id})">
+        <div class="buddy-avatar-wrap">
+          <div class="buddy-avatar" ${avatarStyle}>${u.avatar ? '' : initials}</div>
+        </div>
+        <div class="buddy-info">
+          <div class="buddy-name">${escHtml(u.display_name)}</div>
+          <div class="buddy-last-msg">${escHtml(sub)}</div>
+        </div>
+        ${u.level ? `<span class="buddy-level">${u.level}</span>` : ''}
+      </div>`;
+    }).join('');
+  }
+  resultsEl.classList.remove('hidden');
+}
+
 /* ── Chat ─────────────────────────────────────────────────── */
 let chatUserId      = null;
 let chatLastId      = 0;
@@ -1386,7 +1450,7 @@ async function openChat(userId) {
 
   // Haal profiel op voor naam/avatar
   const profRes = await api(`/api/buddies/profile/${userId}`);
-  if (!profRes.ok) return;
+  if (!profRes.ok) { showToast('Kon profiel niet laden'); return; }
   const u = await profRes.json();
   chatBuddyName = u.display_name;
 
@@ -1399,7 +1463,7 @@ async function openChat(userId) {
 
   // Laad berichten
   const msgRes = await api(`/api/buddies/chat/${userId}`);
-  if (!msgRes.ok) return;
+  if (!msgRes.ok) { showToast('Kon chat niet openen'); return; }
   const messages = await msgRes.json();
   if (messages.length > 0) chatLastId = messages[messages.length - 1].id;
 

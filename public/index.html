@@ -209,7 +209,13 @@
       <h1 class="nav-title">Buddies</h1>
     </div>
     <div class="scroll-area">
-      <p class="buddies-hint">Voeg spelers toe als buddy via hun profiel in een potje.</p>
+      <div class="buddy-search-wrap">
+        <input type="search" id="buddy-search-input" class="buddy-search-input"
+               placeholder="Zoek speler op naam..."
+               oninput="searchBuddyPlayers(this.value)"
+               autocomplete="off" />
+      </div>
+      <div id="buddy-search-results" class="hidden"></div>
       <div id="buddies-list"></div>
     </div>
   </div>
