@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <title>PadelPotje</title>
-  <link rel="stylesheet" href="/css/style.css?v=8" />
+  <link rel="stylesheet" href="/css/style.css?v=9" />
 </head>
 <body>
 
@@ -571,6 +571,21 @@
 </div>
 
 <!-- ══════════════════════════════════════════════
+     MODAL: Reeks scope kiezen
+══════════════════════════════════════════════ -->
+<div id="scope-modal" class="confirm-overlay hidden">
+  <div class="confirm-dialog">
+    <div class="confirm-title" id="scope-title">Reeks aanpassen</div>
+    <div class="confirm-msg" id="scope-msg"></div>
+    <div class="confirm-actions confirm-actions--column">
+      <button class="confirm-btn scope-btn--single" onclick="pickScope('single')">Alleen dit potje</button>
+      <button class="confirm-btn scope-btn--future" onclick="pickScope('future')">Dit en toekomstige potjes</button>
+      <button class="confirm-btn confirm-cancel scope-btn--cancel" onclick="closeScopeDialog()">Annuleren</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════
      MODAL: Admin boeking detail
 ══════════════════════════════════════════════ -->
 <div id="admin-detail-modal" class="sheet-overlay hidden" onclick="closeSheet(event)">
@@ -691,6 +706,6 @@
 </div>
 
 <div id="toast" class="toast hidden"></div>
-<script src="/js/app.js?v=8"></script>
+<script src="/js/app.js?v=9"></script>
 </body>
 </html>

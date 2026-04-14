@@ -916,6 +916,9 @@ body {
 .confirm-actions {
   display: flex; border-top: 1px solid var(--separator);
 }
+.confirm-actions--column {
+  flex-direction: column;
+}
 .confirm-btn {
   flex: 1; border: none; background: none; padding: 14px;
   font-size: 1rem; cursor: pointer; transition: background .15s;
@@ -923,6 +926,16 @@ body {
 .confirm-btn:active { background: var(--bg); }
 .confirm-cancel { color: var(--text-1); border-right: 1px solid var(--separator); }
 .confirm-ok     { color: var(--red); font-weight: 600; }
+
+/* Scope dialog buttons */
+.confirm-actions--column .confirm-btn {
+  border-right: none;
+  border-top: 1px solid var(--separator);
+}
+.confirm-actions--column .confirm-btn:first-child { border-top: none; }
+.scope-btn--single { color: var(--blue); font-weight: 600; }
+.scope-btn--future { color: var(--red); font-weight: 600; }
+.scope-btn--cancel { color: var(--text-2); font-weight: 400; }
 
 /* ══════════════════════════════════════════════
    ADMIN PANEL

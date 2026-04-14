@@ -7,6 +7,7 @@ let currentDetailId = null;
 let currentDetailBooking = null;
 let currentTab = 'potjes';
 let pendingAvatar = undefined;
+let pendingScopeCallback = null;
 let bookingEditId = null;
 let allBookings      = [];
 let filterStatus     = 'open'; // 'open' | 'all' | 'mine'
@@ -898,13 +899,25 @@ async function handleDetailSave(id) {
     notes:      document.getElementById('detail-edit-notes').value,
     is_private: document.getElementById('detail-edit-private').checked,
   };
-  const res  = await api(`/api/bookings/${id}`, { method: 'PUT', body });
-  const data = await res.json();
-  if (!res.ok) return showError('detail-error', data.error);
-  hideDetailModal();
-  loadBookings();
-  loadCalendar();
-  showToast('Wijzigingen opgeslagen');
+
+  const doSave = async (scope) => {
+    if (scope) body.scope = scope;
+    const res  = await api(`/api/bookings/${id}`, { method: 'PUT', body });
+    const data = await res.json();
+    if (!res.ok) return showError('detail-error', data.error);
+    hideDetailModal(); loadBookings(); loadCalendar();
+    showToast(scope === 'future' ? 'Reeks bijgewerkt' : 'Wijzigingen opgeslagen');
+  };
+
+  if (currentDetailBooking && currentDetailBooking.series_id) {
+    openScopeDialog(
+      'Reeks aanpassen',
+      'Wil je de tijd en instellingen ook doorvoeren voor toekomstige potjes in deze reeks?',
+      doSave
+    );
+  } else {
+    await doSave();
+  }
 }
 
 async function markPaidAndRefresh(id) {
@@ -975,19 +988,59 @@ async function handleRemoveGuest(bookingId, guestId) {
 }
 
 function handleDeleteBooking() {
-  document.getElementById('confirm-ok-btn').onclick = async () => {
-    closeConfirm();
-    clearError('detail-error');
-    const res  = await api(`/api/bookings/${currentDetailId}`, { method: 'DELETE' });
-    const data = await res.json();
-    if (!res.ok) return showError('detail-error', data.error);
-    hideDetailModal(); loadBookings(); loadCalendar();
+  const openConfirm = (scope) => {
+    const isFuture = scope === 'future';
+    document.getElementById('confirm-title').textContent = isFuture ? 'Reeks verwijderen' : 'Boeking verwijderen';
+    document.getElementById('confirm-msg').textContent   = isFuture
+      ? 'Weet je zeker dat je dit potje en alle toekomstige potjes in de reeks wilt verwijderen?'
+      : 'Weet je zeker dat je deze boeking wilt verwijderen?';
+    document.getElementById('confirm-ok-btn').textContent = 'Verwijderen';
+    document.getElementById('confirm-ok-btn').onclick = async () => {
+      closeConfirm();
+      clearError('detail-error');
+      const url = isFuture
+        ? `/api/bookings/${currentDetailId}?scope=future`
+        : `/api/bookings/${currentDetailId}`;
+      const res  = await api(url, { method: 'DELETE' });
+      const data = await res.json();
+      if (!res.ok) return showError('detail-error', data.error);
+      hideDetailModal(); loadBookings(); loadCalendar();
+    };
+    document.getElementById('confirm-modal').classList.remove('hidden');
   };
-  document.getElementById('confirm-modal').classList.remove('hidden');
+
+  if (currentDetailBooking && currentDetailBooking.series_id) {
+    openScopeDialog(
+      'Reeks verwijderen',
+      'Wil je alleen dit potje verwijderen of ook alle toekomstige potjes in de reeks?',
+      openConfirm
+    );
+  } else {
+    openConfirm(null);
+  }
 }
 
 function closeConfirm() {
   document.getElementById('confirm-modal').classList.add('hidden');
+}
+
+/* ── Reeks scope dialog ───────────────────────────────────── */
+function openScopeDialog(title, msg, callback) {
+  pendingScopeCallback = callback;
+  document.getElementById('scope-title').textContent = title;
+  document.getElementById('scope-msg').textContent   = msg;
+  document.getElementById('scope-modal').classList.remove('hidden');
+}
+
+function closeScopeDialog() {
+  document.getElementById('scope-modal').classList.add('hidden');
+  pendingScopeCallback = null;
+}
+
+function pickScope(scope) {
+  const cb = pendingScopeCallback;
+  closeScopeDialog();
+  if (cb) cb(scope);
 }
 
 function setPayTarget(mode, btn) {

@@ -132,7 +132,7 @@ router.get('/calendar', requireAuth, (req, res) => {
   const bookings = db.prepare(`
     SELECT
       b.id, b.title, b.date, b.start_time, b.end_time, b.notes,
-      b.created_by, b.is_private,
+      b.created_by, b.is_private, b.series_id,
       u.display_name AS creator_name,
       COUNT(p.id) + COALESCE((SELECT COUNT(*) FROM booking_guests bg WHERE bg.booking_id = b.id), 0) AS player_count,
       MAX(CASE WHEN p.user_id = ? THEN 1 ELSE 0 END) AS user_joined,
@@ -195,7 +195,7 @@ router.get('/:id', requireAuth, (req, res) => {
   const booking = db.prepare(`
     SELECT
       b.id, b.title, b.location, b.date, b.start_time, b.end_time, b.notes,
-      b.created_by, b.is_private, b.invite_token,
+      b.created_by, b.is_private, b.invite_token, b.series_id,
       u.display_name AS creator_name,
       COUNT(p.id) + COALESCE((SELECT COUNT(*) FROM booking_guests bg WHERE bg.booking_id = b.id), 0) AS player_count,
       MAX(CASE WHEN p.user_id = ? THEN 1 ELSE 0 END) AS user_joined,
@@ -272,8 +272,8 @@ router.post('/', requireAuth, (req, res) => {
   const privateFlag = is_private ? 1 : 0;
 
   const stmtBooking = db.prepare(`
-    INSERT INTO bookings (title, location, date, start_time, end_time, notes, created_by, is_private, invite_token)
-    VALUES ('Padelpotje', '', ?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO bookings (title, location, date, start_time, end_time, notes, created_by, is_private, invite_token, series_id)
+    VALUES ('Padelpotje', '', ?, ?, ?, ?, ?, ?, ?, ?)
   `);
   const stmtParticipant = db.prepare(
     'INSERT INTO participants (booking_id, user_id, is_extra) VALUES (?, ?, 0)'
@@ -299,29 +299,30 @@ router.post('/', requireAuth, (req, res) => {
       }
     }
 
+    const seriesId = crypto.randomBytes(8).toString('hex');
     const createAll = db.transaction(() => dates.map(d => {
       const tok = is_private ? crypto.randomBytes(16).toString('hex') : null;
-      const r = stmtBooking.run(d, start_time, end_time, notes || null, userId, privateFlag, tok);
+      const r = stmtBooking.run(d, start_time, end_time, notes || null, userId, privateFlag, tok, seriesId);
       stmtParticipant.run(r.lastInsertRowid, userId);
       return r.lastInsertRowid;
     }));
 
     const ids = createAll();
-    return res.status(201).json({ ids, count: ids.length });
+    return res.status(201).json({ ids, count: ids.length, series_id: seriesId });
   }
 
   // Enkelvoudige boeking
   const inviteToken = is_private ? crypto.randomBytes(16).toString('hex') : null;
-  const result = stmtBooking.run(date, start_time, end_time, notes || null, userId, privateFlag, inviteToken);
+  const result = stmtBooking.run(date, start_time, end_time, notes || null, userId, privateFlag, inviteToken, null);
   stmtParticipant.run(result.lastInsertRowid, userId);
   res.status(201).json({ id: result.lastInsertRowid });
 });
 
 // Boeking bewerken (alleen aanmaker)
 router.put('/:id', requireAuth, (req, res) => {
-  const bookingId = req.params.id;
+  const bookingId = parseInt(req.params.id, 10);
   const userId = req.session.userId;
-  const { date, start_time, end_time, notes, is_private } = req.body;
+  const { date, start_time, end_time, notes, is_private, scope } = req.body;
 
   const booking = db.prepare('SELECT * FROM bookings WHERE id = ?').get(bookingId);
   if (!booking) return res.status(404).json({ error: 'Boeking niet gevonden' });
@@ -338,18 +339,39 @@ router.put('/:id', requireAuth, (req, res) => {
     return res.status(400).json({ error: 'Starttijd mag niet in het verleden liggen' });
   }
 
-  // Privé-status kan wijzigen: genereer token als nieuw privé, wis token als openbaar gemaakt
   const privateFlag = is_private ? 1 : 0;
-  let inviteToken = booking.invite_token;
-  if (is_private && !inviteToken) {
-    inviteToken = crypto.randomBytes(16).toString('hex');
-  } else if (!is_private) {
-    inviteToken = null;
-  }
 
-  db.prepare(`
-    UPDATE bookings SET date=?, start_time=?, end_time=?, notes=?, is_private=?, invite_token=? WHERE id=?
-  `).run(date, start_time, end_time, notes || null, privateFlag, inviteToken, bookingId);
+  if (scope === 'future' && booking.series_id) {
+    // Pas tijden/notities/privacy toe op dit + alle toekomstige potjes in de reeks
+    const futureBookings = db.prepare(
+      'SELECT id, invite_token FROM bookings WHERE series_id = ? AND date >= ? AND created_by = ?'
+    ).all(booking.series_id, booking.date, userId);
+
+    const updateStmt = db.prepare(
+      'UPDATE bookings SET start_time=?, end_time=?, notes=?, is_private=?, invite_token=? WHERE id=?'
+    );
+    db.transaction(() => {
+      for (const fb of futureBookings) {
+        let tok = fb.invite_token;
+        if (is_private && !tok) tok = crypto.randomBytes(16).toString('hex');
+        else if (!is_private) tok = null;
+        updateStmt.run(start_time, end_time, notes || null, privateFlag, tok, fb.id);
+      }
+      // Datum alleen voor dit specifieke potje aanpassen
+      db.prepare('UPDATE bookings SET date=? WHERE id=?').run(date, bookingId);
+    })();
+  } else {
+    // Enkel potje bijwerken
+    let inviteToken = booking.invite_token;
+    if (is_private && !inviteToken) {
+      inviteToken = crypto.randomBytes(16).toString('hex');
+    } else if (!is_private) {
+      inviteToken = null;
+    }
+    db.prepare(`
+      UPDATE bookings SET date=?, start_time=?, end_time=?, notes=?, is_private=?, invite_token=? WHERE id=?
+    `).run(date, start_time, end_time, notes || null, privateFlag, inviteToken, bookingId);
+  }
 
   res.json({ success: true });
 });
@@ -589,8 +611,9 @@ router.delete('/:id/guests/:guestId', requireAuth, (req, res) => {
 
 // Boeking verwijderen (alleen aanmaker)
 router.delete('/:id', requireAuth, (req, res) => {
-  const bookingId = req.params.id;
+  const bookingId = parseInt(req.params.id, 10);
   const userId = req.session.userId;
+  const scope = req.query.scope;
 
   const booking = db.prepare('SELECT * FROM bookings WHERE id = ?').get(bookingId);
   if (!booking) return res.status(404).json({ error: 'Boeking niet gevonden' });
@@ -599,7 +622,14 @@ router.delete('/:id', requireAuth, (req, res) => {
     return res.status(403).json({ error: 'Alleen de aanmaker kan de boeking verwijderen' });
   }
 
-  db.prepare('DELETE FROM bookings WHERE id = ?').run(bookingId);
+  if (scope === 'future' && booking.series_id) {
+    db.prepare(
+      'DELETE FROM bookings WHERE series_id = ? AND date >= ? AND created_by = ?'
+    ).run(booking.series_id, booking.date, userId);
+  } else {
+    db.prepare('DELETE FROM bookings WHERE id = ?').run(bookingId);
+  }
+
   res.json({ success: true });
 });
 
