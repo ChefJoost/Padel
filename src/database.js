@@ -112,6 +112,7 @@ migrate('ALTER TABLE bookings ADD COLUMN invite_token TEXT');
 migrate('ALTER TABLE bookings ADD COLUMN payment_target_users TEXT');
 migrate('ALTER TABLE availability ADD COLUMN start_time TEXT');
 migrate('ALTER TABLE availability ADD COLUMN end_time TEXT');
+migrate('ALTER TABLE booking_payment_links ADD COLUMN added_by INTEGER REFERENCES users(id)');
 
 // Migreer bestaande betaallinks naar nieuwe tabel
 {

@@ -231,7 +231,7 @@ router.get('/:id', requireAuth, (req, res) => {
     .map(p => p.is_guest ? { ...p, display_name: p.guest_name } : p);
 
   const paymentLinks = db.prepare(
-    'SELECT id, payment_url, target_user_ids, created_at FROM booking_payment_links WHERE booking_id = ? ORDER BY created_at ASC'
+    'SELECT id, payment_url, target_user_ids, added_by, created_at FROM booking_payment_links WHERE booking_id = ? ORDER BY created_at ASC'
   ).all(bookingId);
   res.json({ ...booking, participants, payment_links: paymentLinks });
 });
@@ -354,8 +354,10 @@ router.post('/:id/payment-links', requireAuth, async (req, res) => {
 
   const booking = db.prepare('SELECT * FROM bookings WHERE id = ?').get(bookingId);
   if (!booking) return res.status(404).json({ error: 'Boeking niet gevonden' });
-  if (booking.created_by !== userId) {
-    return res.status(403).json({ error: 'Alleen de aanmaker kan betaallinks instellen' });
+
+  const isParticipant = db.prepare('SELECT 1 FROM participants WHERE booking_id = ? AND user_id = ?').get(bookingId, userId);
+  if (!isParticipant) {
+    return res.status(403).json({ error: 'Alleen deelnemers kunnen betaallinks toevoegen' });
   }
 
   if (!payment_url?.trim()) return res.status(400).json({ error: 'URL is verplicht' });
@@ -373,8 +375,8 @@ router.post('/:id/payment-links', requireAuth, async (req, res) => {
   }
 
   const result = db.prepare(
-    'INSERT INTO booking_payment_links (booking_id, payment_url, target_user_ids) VALUES (?, ?, ?)'
-  ).run(bookingId, payment_url.trim(), targetCsv);
+    'INSERT INTO booking_payment_links (booking_id, payment_url, target_user_ids, added_by) VALUES (?, ?, ?, ?)'
+  ).run(bookingId, payment_url.trim(), targetCsv, userId);
 
   let participants;
   if (targetCsv) {
@@ -410,7 +412,12 @@ router.delete('/:id/payment-links/:linkId', requireAuth, (req, res) => {
 
   const booking = db.prepare('SELECT created_by FROM bookings WHERE id = ?').get(bookingId);
   if (!booking) return res.status(404).json({ error: 'Boeking niet gevonden' });
-  if (booking.created_by !== userId) return res.status(403).json({ error: 'Geen rechten' });
+
+  const link = db.prepare('SELECT added_by FROM booking_payment_links WHERE id = ? AND booking_id = ?').get(linkId, bookingId);
+  if (!link) return res.status(404).json({ error: 'Link niet gevonden' });
+  if (booking.created_by !== userId && link.added_by !== userId) {
+    return res.status(403).json({ error: 'Geen rechten om deze link te verwijderen' });
+  }
 
   db.prepare('DELETE FROM booking_payment_links WHERE id = ? AND booking_id = ?').run(linkId, bookingId);
   res.json({ success: true });

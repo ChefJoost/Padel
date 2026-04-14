@@ -706,9 +706,9 @@ async function showDetailModal(id) {
     }
   }
 
-  // Betaallinks beheer (voor organisator)
+  // Betaallinks beheer (voor deelnemers en organisator)
   let payFormHtml = '';
-  if (isCreator) {
+  if (isCreator || b.user_joined) {
     const links = b.payment_links || [];
     const pMap  = {};
     (b.participants || []).forEach(p => { if (!p.is_guest) pMap[p.user_id] = p.display_name; });
@@ -718,12 +718,13 @@ async function showDetailModal(id) {
         ? link.target_user_ids.split(',').map(uid => pMap[+uid] ? escHtml(pMap[+uid]) : `#${uid}`).join(', ')
         : 'Iedereen';
       const shortUrl = link.payment_url.length > 38 ? link.payment_url.slice(0, 38) + '…' : link.payment_url;
+      const canRemove = isCreator || link.added_by === currentUser.userId;
       return `<div class="field-row pay-link-row">
         <div class="pay-link-info">
           <div class="pay-link-url">${escHtml(shortUrl)}</div>
           <div class="pay-link-targets">${targetStr}</div>
         </div>
-        <button class="pay-link-remove-btn" onclick="handleRemovePaymentLink(${id},${link.id})">✕</button>
+        ${canRemove ? `<button class="pay-link-remove-btn" onclick="handleRemovePaymentLink(${id},${link.id})">✕</button>` : ''}
       </div>`;
     }).join('');
 
