@@ -1790,10 +1790,13 @@ function renderCalendar() {
     if (iJoined)            cls += ' cal-day--joined';
     else if (hasPotje)      cls += ' cal-day--has-potje';
 
-    // Bolletjes: max 3 dots per potje
-    const dots = potjes.slice(0, 3).map(() =>
-      `<span class="cal-day-dot"></span>`
-    ).join('');
+    // Bolletjes: max 3 dots, kleur per rol (oranje=beheerder, blauw=deelnemer, grijs=overig)
+    const dots = potjes.slice(0, 3).map(b => {
+      const isOrg    = b.created_by === currentUser.userId;
+      const isJoined = !!b.user_joined && !isOrg;
+      const dotCls   = isOrg ? 'cal-day-dot--organizer' : isJoined ? 'cal-day-dot--joined' : '';
+      return `<span class="cal-day-dot ${dotCls}"></span>`;
+    }).join('');
     const dotsHtml = hasPotje ? `<span class="cal-day-dots">${dots}</span>` : '';
 
     const clickHandler = hasPotje || !isPast
@@ -1832,13 +1835,19 @@ function openCalDay(dateStr) {
   } else {
     const items = potjes.map(b => {
       const joined = !!b.user_joined;
+      const isOrg  = b.created_by === currentUser.userId;
+      const roleIcon = isOrg
+        ? `<span class="cal-role-icon cal-role-icon--organizer">★</span>`
+        : joined
+        ? `<span class="cal-role-icon cal-role-icon--joined">✓</span>`
+        : '';
 
       if (isPast) {
         const badgeClass = joined ? 'cal-potje-badge--joined' : 'cal-potje-badge--past';
         const badgeText  = joined ? 'Jij hebt meegedaan' : `${b.player_count} speler${b.player_count !== 1 ? 's' : ''}`;
         return `<div class="field-row cal-potje-row cal-potje-row--past">
           <div style="flex:1;min-width:0">
-            <div class="cal-potje-meta">${b.start_time.slice(0,5)} – ${b.end_time.slice(0,5)}</div>
+            <div class="cal-potje-meta">${roleIcon}${b.start_time.slice(0,5)} – ${b.end_time.slice(0,5)}</div>
             <span class="cal-potje-badge ${badgeClass}">${badgeText}</span>
           </div>
         </div>`;
@@ -1848,13 +1857,13 @@ function openCalDay(dateStr) {
       const isFull   = spots <= 0;
       let badgeClass = 'cal-potje-badge--open';
       let badgeText  = `${spots} plek${spots !== 1 ? 'ken' : ''} vrij`;
-      if (joined)      { badgeClass = 'cal-potje-badge--joined'; badgeText = 'Jij doet mee'; }
+      if (isOrg)       { badgeClass = 'cal-potje-badge--joined'; badgeText = 'Jij organiseert'; }
+      else if (joined) { badgeClass = 'cal-potje-badge--joined'; badgeText = 'Jij doet mee'; }
       else if (isFull) { badgeClass = 'cal-potje-badge--full';   badgeText = 'Vol'; }
 
       return `<div class="field-row cal-potje-row" onclick="hideCalDayModal(); showDetailModal(${b.id})">
         <div style="flex:1;min-width:0">
-          <div class="cal-potje-title">${b.title}</div>
-          <div class="cal-potje-meta">${b.start_time.slice(0,5)} – ${b.end_time.slice(0,5)}</div>
+          <div class="cal-potje-meta">${roleIcon}${b.start_time.slice(0,5)} – ${b.end_time.slice(0,5)}</div>
           <span class="cal-potje-badge ${badgeClass}">${badgeText}</span>
         </div>
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16" style="color:var(--text-3);flex-shrink:0">

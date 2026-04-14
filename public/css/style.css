@@ -1149,12 +1149,28 @@ body {
   gap: 2px;
 }
 .cal-day-dot {
-  width: 4px;
-  height: 4px;
+  width: 5px;
+  height: 5px;
   border-radius: 50%;
-  background: var(--blue);
+  background: var(--text-3);           /* grijs: niet betrokken */
 }
-.cal-day--joined .cal-day-dot { background: rgba(255,255,255,.8); }
+.cal-day-dot--organizer { background: var(--orange); }  /* oranje: beheerder */
+.cal-day-dot--joined    { background: var(--blue); }    /* blauw: deelnemer */
+
+/* Op groene (joined) achtergrond */
+.cal-day--joined .cal-day-dot               { background: rgba(255,255,255,.5); }
+.cal-day--joined .cal-day-dot--organizer    { background: var(--orange); }
+.cal-day--joined .cal-day-dot--joined       { background: rgba(255,255,255,.9); }
+
+/* Rol-icoon in de dag-rij (★ organisator, ✓ deelnemer) */
+.cal-role-icon {
+  font-style: normal;
+  font-size: .75rem;
+  font-weight: 700;
+  margin-right: 3px;
+}
+.cal-role-icon--organizer { color: var(--orange); }
+.cal-role-icon--joined    { color: var(--green-dark); }
 
 /* Dag-detail sheet – potjes lijst */
 .cal-potje-row {
