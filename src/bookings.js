@@ -137,7 +137,15 @@ router.get('/calendar', requireAuth, (req, res) => {
       COUNT(p.id) + COALESCE((SELECT COUNT(*) FROM booking_guests bg WHERE bg.booking_id = b.id), 0) AS player_count,
       MAX(CASE WHEN p.user_id = ? THEN 1 ELSE 0 END) AS user_joined,
       MIN(u2.level) AS min_level,
-      MAX(u2.level) AS max_level
+      MAX(u2.level) AS max_level,
+      (SELECT GROUP_CONCAT(info, '||')
+       FROM (SELECT p3.user_id || '::' || COALESCE(u3.avatar, '') AS info, p3.joined_at AS ts
+             FROM participants p3
+             JOIN users u3 ON p3.user_id = u3.id WHERE p3.booking_id = b.id
+             UNION ALL
+             SELECT '0::' AS info, bg2.added_at AS ts
+             FROM booking_guests bg2 WHERE bg2.booking_id = b.id
+             ORDER BY ts ASC)) AS participants_info
     FROM bookings b
     JOIN users u ON b.created_by = u.id
     LEFT JOIN participants p ON b.id = p.booking_id
