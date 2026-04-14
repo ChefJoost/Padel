@@ -14,7 +14,15 @@ if (!fs.existsSync(dataDir)) {
 const SqliteStore = require('connect-sqlite3')(session);
 
 app.use(express.json());
-app.use(express.static(path.join(__dirname, '..', 'public')));
+
+// Statische bestanden: JS/CSS mogen gecached worden, HTML nooit
+app.use(express.static(path.join(__dirname, '..', 'public'), {
+  setHeaders(res, filePath) {
+    if (filePath.endsWith('.html')) {
+      res.setHeader('Cache-Control', 'no-store');
+    }
+  },
+}));
 
 app.use(session({
   store: new SqliteStore({
@@ -31,6 +39,9 @@ app.use(session({
   },
 }));
 
+// Versie-check (helpt bevestigen welke deploy actief is)
+app.get('/api/version', (req, res) => res.json({ version: 'e892201', ts: new Date().toISOString() }));
+
 // Routes
 app.use('/api/auth', require('./auth'));
 app.use('/api/bookings', require('./bookings'));
@@ -38,8 +49,9 @@ app.use('/api/buddies', require('./buddies'));
 app.use('/api/push', require('./push').router);
 app.use('/api/admin', require('./admin'));
 
-// Alle andere routes → index.html (SPA)
+// Alle andere routes → index.html (SPA) – nooit cachen zodat nieuwe JS altijd geladen wordt
 app.get('*', (req, res) => {
+  res.setHeader('Cache-Control', 'no-store');
   res.sendFile(path.join(__dirname, '..', 'public', 'index.html'));
 });
 
