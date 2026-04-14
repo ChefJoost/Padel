@@ -1282,11 +1282,13 @@ async function handleAdminSaveBooking() {
 /* ── Buddies ──────────────────────────────────────────────── */
 async function loadBuddies() {
   allUsersCache = null; // ververs cache bij laden van buddies tab
-  const res  = await api('/api/buddies');
-  if (!res.ok) return;
-  const list = await res.json();
-  if (!Array.isArray(list)) return;
-  renderBuddiesList(list);
+  try {
+    const res  = await api('/api/buddies');
+    const list = res.ok ? await res.json() : [];
+    renderBuddiesList(Array.isArray(list) ? list : []);
+  } catch (_) {
+    renderBuddiesList([]);
+  }
 }
 
 function renderBuddiesList(buddies) {
@@ -1295,7 +1297,7 @@ function renderBuddiesList(buddies) {
     el.innerHTML = `<div class="empty-state" style="padding:40px 0">
       <div class="empty-icon">👥</div>
       <p class="empty-title">Nog geen buddies</p>
-      <p class="empty-sub">Klik op een speler in een potje om hem toe te voegen.</p>
+      <p class="empty-sub">Zoek een speler hierboven of klik op een speler in een potje.</p>
     </div>`;
     return;
   }

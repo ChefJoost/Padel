@@ -12,29 +12,34 @@ function requireAuth(req, res, next) {
 // GET /api/buddies  → mijn buddies met laatste bericht + ongelezen teller
 router.get('/', requireAuth, (req, res) => {
   const me = req.session.userId;
-  const buddies = db.prepare(`
-    SELECT
-      u.id, u.display_name, u.username, u.level, u.avatar,
-      (SELECT COUNT(DISTINCT p1.booking_id)
-       FROM participants p1
-       JOIN participants p2 ON p2.booking_id = p1.booking_id AND p2.user_id = ?
-       WHERE p1.user_id = u.id) AS games_together,
-      (SELECT COUNT(*) FROM messages
-       WHERE sender_id = u.id AND receiver_id = ? AND read_at IS NULL) AS unread_count,
-      (SELECT content FROM messages
-       WHERE (sender_id = ? AND receiver_id = u.id)
-          OR (sender_id = u.id AND receiver_id = ?)
-       ORDER BY created_at DESC LIMIT 1) AS last_message,
-      (SELECT created_at FROM messages
-       WHERE (sender_id = ? AND receiver_id = u.id)
-          OR (sender_id = u.id AND receiver_id = ?)
-       ORDER BY created_at DESC LIMIT 1) AS last_message_at
-    FROM buddies b
-    JOIN users u ON u.id = b.buddy_id
-    WHERE b.user_id = ?
-    ORDER BY last_message_at DESC, u.display_name ASC
-  `).all(me, me, me, me, me, me, me);
-  res.json(buddies);
+  try {
+    const buddies = db.prepare(`
+      SELECT
+        u.id, u.display_name, u.username, u.level, u.avatar,
+        (SELECT COUNT(DISTINCT p1.booking_id)
+         FROM participants p1
+         JOIN participants p2 ON p2.booking_id = p1.booking_id AND p2.user_id = ?
+         WHERE p1.user_id = u.id) AS games_together,
+        (SELECT COUNT(*) FROM messages
+         WHERE sender_id = u.id AND receiver_id = ? AND read_at IS NULL) AS unread_count,
+        (SELECT content FROM messages
+         WHERE (sender_id = ? AND receiver_id = u.id)
+            OR (sender_id = u.id AND receiver_id = ?)
+         ORDER BY created_at DESC LIMIT 1) AS last_message,
+        (SELECT created_at FROM messages
+         WHERE (sender_id = ? AND receiver_id = u.id)
+            OR (sender_id = u.id AND receiver_id = ?)
+         ORDER BY created_at DESC LIMIT 1) AS last_message_at
+      FROM buddies b
+      JOIN users u ON u.id = b.buddy_id
+      WHERE b.user_id = ?
+      ORDER BY last_message_at DESC, u.display_name ASC
+    `).all(me, me, me, me, me, me, me);
+    res.json(buddies);
+  } catch (err) {
+    console.error('[buddies GET /] fout:', err.message);
+    res.status(500).json({ error: err.message });
+  }
 });
 
 // GET /api/buddies/profile/:userId  → publiek profiel van een speler
