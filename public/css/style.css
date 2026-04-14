@@ -1161,6 +1161,31 @@ body {
   flex-shrink: 0;
 }
 
+/* Kalender Alle/Mijn filter */
+.cal-filter-bar {
+  display: flex;
+  justify-content: center;
+  padding: 6px 16px 2px;
+  flex-shrink: 0;
+}
+.cal-filter-bar .seg-control {
+  width: 160px;
+  margin-bottom: 0;
+}
+
+/* Verleden potje rij – niet klikbaar */
+.cal-potje-row--past {
+  cursor: default;
+  opacity: .8;
+}
+.cal-potje-row--past:active { opacity: .8; transform: none; }
+
+/* Badge voor verleden potjes zonder deelname */
+.cal-potje-badge--past {
+  background: var(--bg);
+  color: var(--text-2);
+}
+
 /* ══════════════════════════════════════════════
    BUDDIES
 ══════════════════════════════════════════════ */

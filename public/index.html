@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <title>PadelPotje</title>
-  <link rel="stylesheet" href="/css/style.css?v=5" />
+  <link rel="stylesheet" href="/css/style.css?v=6" />
 </head>
 <body>
 
@@ -168,6 +168,14 @@
       <button class="nav-action" onclick="showNewBookingModal()">
         <span class="nav-action-icon">+</span>
       </button>
+    </div>
+
+    <!-- Alle / Mijn filter -->
+    <div class="cal-filter-bar">
+      <div class="seg-control">
+        <button class="seg-btn active" onclick="setCalFilter('all', this)">Alle</button>
+        <button class="seg-btn" onclick="setCalFilter('mine', this)">Mijn</button>
+      </div>
     </div>
 
     <!-- Maand navigatie (buiten scroll-area zodat hij altijd zichtbaar is) -->
@@ -652,6 +660,6 @@
 </div>
 
 <div id="toast" class="toast hidden"></div>
-<script src="/js/app.js?v=5"></script>
+<script src="/js/app.js?v=6"></script>
 </body>
 </html>

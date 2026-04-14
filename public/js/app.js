@@ -1556,12 +1556,14 @@ async function sendChatMessage() {
 }
 
 /* ── Kalender — Potjes overzicht ──────────────────────────── */
-let calYear  = new Date().getFullYear();
-let calMonth = new Date().getMonth() + 1; // 1-12
-let calData  = {};  // { "YYYY-MM-DD": [booking, ...] }
+let calYear   = new Date().getFullYear();
+let calMonth  = new Date().getMonth() + 1; // 1-12
+let calFilter = 'all'; // 'all' | 'mine'
+let calData   = {};    // { "YYYY-MM-DD": [booking, ...] }
 
 async function loadCalendar() {
-  const res = await api(`/api/bookings/calendar?year=${calYear}&month=${calMonth}`);
+  const mineParam = calFilter === 'mine' ? '&mine=1' : '';
+  const res = await api(`/api/bookings/calendar?year=${calYear}&month=${calMonth}${mineParam}`);
   if (!res.ok) return;
   const bookings = await res.json();
 
@@ -1636,24 +1638,40 @@ function openCalDay(dateStr) {
 
   document.getElementById('cal-day-title').textContent = label;
 
+  const today    = new Date();
+  const todayStr = `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}-${String(today.getDate()).padStart(2,'0')}`;
+  const isPast   = dateStr < todayStr;
+
   if (potjes.length === 0) {
-    // Geen potjes: toon lege state met knop aanmaken
     document.getElementById('cal-day-body').innerHTML = `
       <div class="empty-state" style="padding:32px 0">
         <div class="empty-icon">🎾</div>
         <p class="empty-title">Geen potjes</p>
-        <p class="empty-sub">Er zijn nog geen potjes op deze dag.</p>
-        <button class="btn btn-primary" onclick="hideCalDayModal(); showNewBookingModalForDate('${dateStr}')">Potje aanmaken</button>
+        ${!isPast ? `<p class="empty-sub">Er zijn nog geen potjes op deze dag.</p>
+        <button class="btn btn-primary" onclick="hideCalDayModal(); showNewBookingModalForDate('${dateStr}')">Potje aanmaken</button>` : ''}
       </div>`;
   } else {
     const items = potjes.map(b => {
-      const spots   = 4 - b.player_count;
-      const isFull  = spots <= 0;
-      const joined  = !!b.user_joined;
+      const joined = !!b.user_joined;
+
+      if (isPast) {
+        const badgeClass = joined ? 'cal-potje-badge--joined' : 'cal-potje-badge--past';
+        const badgeText  = joined ? 'Jij hebt meegedaan' : `${b.player_count} speler${b.player_count !== 1 ? 's' : ''}`;
+        return `<div class="field-row cal-potje-row cal-potje-row--past">
+          <div style="flex:1;min-width:0">
+            <div class="cal-potje-title">${b.title}</div>
+            <div class="cal-potje-meta">${b.start_time.slice(0,5)} – ${b.end_time.slice(0,5)}</div>
+            <span class="cal-potje-badge ${badgeClass}">${badgeText}</span>
+          </div>
+        </div>`;
+      }
+
+      const spots    = 4 - b.player_count;
+      const isFull   = spots <= 0;
       let badgeClass = 'cal-potje-badge--open';
       let badgeText  = `${spots} plek${spots !== 1 ? 'ken' : ''} vrij`;
-      if (joined)       { badgeClass = 'cal-potje-badge--joined'; badgeText = 'Jij doet mee'; }
-      else if (isFull)  { badgeClass = 'cal-potje-badge--full';   badgeText = 'Vol'; }
+      if (joined)      { badgeClass = 'cal-potje-badge--joined'; badgeText = 'Jij doet mee'; }
+      else if (isFull) { badgeClass = 'cal-potje-badge--full';   badgeText = 'Vol'; }
 
       return `<div class="field-row cal-potje-row" onclick="hideCalDayModal(); showDetailModal(${b.id})">
         <div style="flex:1;min-width:0">
@@ -1685,6 +1703,13 @@ function showNewBookingModalForDate(dateStr) {
     const el = document.getElementById('b-date');
     if (el) el.value = dateStr;
   }, 50);
+}
+
+function setCalFilter(filter, btn) {
+  calFilter = filter;
+  document.querySelectorAll('.cal-filter-bar .seg-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  loadCalendar();
 }
 
 function calPrevMonth() {

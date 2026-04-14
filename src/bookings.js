@@ -94,6 +94,7 @@ router.get('/calendar', requireAuth, (req, res) => {
   const userId = req.session.userId;
   const year   = parseInt(req.query.year,  10);
   const month  = parseInt(req.query.month, 10);
+  const mine   = req.query.mine === '1';
 
   if (!year || !month || month < 1 || month > 12) {
     return res.status(400).json({ error: 'Ongeldige jaar/maand' });
@@ -103,6 +104,13 @@ router.get('/calendar', requireAuth, (req, res) => {
   const from  = `${year}-${pad(month)}-01`;
   const toDay = new Date(year, month, 0).getDate();
   const to    = `${year}-${pad(month)}-${pad(toDay)}`;
+
+  const mineClause = mine
+    ? 'AND (b.created_by = ? OR EXISTS (SELECT 1 FROM participants WHERE booking_id = b.id AND user_id = ?))'
+    : '';
+
+  const params = [userId, from, to, userId, userId];
+  if (mine) params.push(userId, userId);
 
   const bookings = db.prepare(`
     SELECT
@@ -121,9 +129,10 @@ router.get('/calendar', requireAuth, (req, res) => {
       AND (b.is_private = 0
            OR b.created_by = ?
            OR EXISTS (SELECT 1 FROM participants WHERE booking_id = b.id AND user_id = ?))
+      ${mineClause}
     GROUP BY b.id
     ORDER BY b.date ASC, b.start_time ASC
-  `).all(userId, from, to, userId, userId);
+  `).all(...params);
 
   res.json(bookings);
 });
