@@ -434,11 +434,20 @@ async function loadIcalToken() {
 function setIcalLink(url) {
   const link = document.getElementById('ical-open-link');
   if (!link || !url) return;
-  // iOS: webcal:// opent direct de Agenda-app
-  // Android/overig: https:// downloadt het .ics bestand, OS toont app-kiezer
   const isIOS = /iP(hone|ad|od)/.test(navigator.userAgent);
-  link.href = isIOS ? url.replace(/^https?:/, 'webcal:') : url;
-  link.onclick = () => navigator.clipboard.writeText(url).catch(() => {});
+  if (isIOS) {
+    // webcal:// opent direct de iOS Agenda-app
+    link.href = url.replace(/^https?:/, 'webcal:');
+    link.removeAttribute('target');
+  } else {
+    // Google Calendar subscribe-URL werkt op Android en desktop
+    link.href = `https://calendar.google.com/calendar/r?cid=${encodeURIComponent(url)}`;
+    link.target = '_blank';
+    link.rel    = 'noopener noreferrer';
+  }
+  // Kopieer de ruwe https:// URL stil naar klembord — geen return value zodat
+  // de link-navigatie niet geblokkeerd wordt
+  link.onclick = () => { navigator.clipboard.writeText(url).catch(() => {}); };
 }
 
 async function regenerateIcalToken() {
