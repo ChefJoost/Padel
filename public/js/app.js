@@ -244,7 +244,7 @@ function switchTab(tab) {
     if (bl) bl.classList.remove('hidden');
     loadBuddies();
   }
-  if (tab === 'profiel')  { loadHistory(); loadUnpaid(); loadProfileStats(); }
+  if (tab === 'profiel')  { loadHistory(); loadUnpaid(); loadProfileStats(); loadIcalToken(); }
   if (tab === 'admin')    { loadAdminStats(); adminSearchUsers(); loadAdminBookings(); }
 }
 
@@ -425,24 +425,27 @@ async function loadProfileStats() {
 let icalUrl = null;
 
 async function loadIcalToken() {
-  const res  = await api('/api/ical/token');
+  const res = await api('/api/ical/token');
   if (!res.ok) return;
   icalUrl = (await res.json()).url;
+  setIcalLink(icalUrl);
 }
 
-async function openIcalFeed() {
-  if (!icalUrl) await loadIcalToken();
-  if (!icalUrl) return showToast('Kon de link niet laden');
-  // Kopieer de https:// URL stil naar klembord (voor handmatig plakken)
-  navigator.clipboard.writeText(icalUrl).catch(() => {});
-  // webcal:// laat iOS/Android direct de agenda-app kiezen
-  window.location.href = icalUrl.replace(/^https?:/, 'webcal:');
+function setIcalLink(url) {
+  const link = document.getElementById('ical-open-link');
+  if (!link || !url) return;
+  // iOS: webcal:// opent direct de Agenda-app
+  // Android/overig: https:// downloadt het .ics bestand, OS toont app-kiezer
+  const isIOS = /iP(hone|ad|od)/.test(navigator.userAgent);
+  link.href = isIOS ? url.replace(/^https?:/, 'webcal:') : url;
+  link.onclick = () => navigator.clipboard.writeText(url).catch(() => {});
 }
 
 async function regenerateIcalToken() {
   if (!confirm('Dit maakt je huidige agenda-link ongeldig. Doorgaan?')) return;
   const data = await (await api('/api/ical/token/regenerate', { method: 'POST' })).json();
   icalUrl = data.url;
+  setIcalLink(icalUrl);
   showToast('Nieuwe agenda-link aangemaakt');
 }
 

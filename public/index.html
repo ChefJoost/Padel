@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <title>PadelPotje</title>
-  <link rel="stylesheet" href="/css/style.css?v=12" />
+  <link rel="stylesheet" href="/css/style.css?v=13" />
 </head>
 <body>
 
@@ -293,11 +293,11 @@
       <!-- iCal -->
       <div class="section-header">Agenda koppelen</div>
       <div class="field-group">
-        <div class="field-row" style="flex-direction:column;align-items:flex-start;gap:4px">
-          <span style="font-size:.88rem;font-weight:600">Voeg je potjes automatisch toe in je agenda via een iCal!</span>
+        <div class="field-row">
+          <span style="color:var(--text-1)">Voeg je potjes automatisch toe in je agenda via een iCal!</span>
         </div>
         <div class="field-row">
-          <button class="btn btn-primary btn-full" id="ical-open-btn" onclick="openIcalFeed()">Toevoegen aan agenda</button>
+          <a id="ical-open-link" class="btn btn-primary btn-full" style="text-decoration:none;text-align:center">Toevoegen aan agenda</a>
         </div>
         <div class="field-row">
           <button class="btn btn-outline btn-full" style="font-size:.84rem;color:var(--text-2)" onclick="regenerateIcalToken()">Nieuwe link aanmaken</button>
@@ -720,6 +720,6 @@
 </div>
 
 <div id="toast" class="toast hidden"></div>
-<script src="/js/app.js?v=12"></script>
+<script src="/js/app.js?v=13"></script>
 </body>
 </html>
