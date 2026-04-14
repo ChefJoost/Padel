@@ -109,6 +109,24 @@ migrate("UPDATE users SET is_admin = 1 WHERE username = 'joosts'");
 
 module.exports = db;
 
+// Controleer messages tabel schema bij opstarten (kan verkeerd schema hebben van oude deploy)
+{
+  const cols = db.prepare('PRAGMA table_info(messages)').all().map(c => c.name);
+  if (cols.length > 0 && !cols.includes('sender_id')) {
+    console.log('[database] messages tabel heeft verkeerd schema, opnieuw aanmaken. Kolommen:', cols);
+    db.exec('DROP TABLE messages');
+    db.exec(`CREATE TABLE messages (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      sender_id   INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      receiver_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      content TEXT NOT NULL,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      read_at DATETIME
+    )`);
+    console.log('[database] messages tabel opnieuw aangemaakt');
+  }
+}
+
 // Log welke tabellen aanwezig zijn bij opstarten
 const tables = db.prepare("SELECT name FROM sqlite_master WHERE type='table' ORDER BY name").all();
 console.log('[database] tabellen bij opstarten:', tables.map(t => t.name).join(', '));

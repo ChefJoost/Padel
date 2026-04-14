@@ -106,9 +106,19 @@ router.delete('/:userId', requireAuth, (req, res) => {
 
 // ── Chat ─────────────────────────────────────────────────────
 
-// Zorg dat de messages tabel altijd bestaat (defensief, voor als de migratie faalde)
+// Zorg dat de messages tabel bestaat met het juiste schema.
+// De tabel kan bestaan met een oud/verkeerd schema – dan droppen we hem en maken opnieuw.
 function ensureMessagesTable() {
-  db.exec(`CREATE TABLE IF NOT EXISTS messages (
+  const cols = db.prepare('PRAGMA table_info(messages)').all().map(c => c.name);
+  if (cols.includes('sender_id')) return; // schema klopt al
+
+  if (cols.length > 0) {
+    // Tabel bestaat maar mist sender_id → oud/verkeerd schema, opnieuw aanmaken
+    console.log('[messages] verkeerd schema gevonden, tabel opnieuw aanmaken. Kolommen:', cols);
+    db.exec('DROP TABLE messages');
+  }
+
+  db.exec(`CREATE TABLE messages (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     sender_id   INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     receiver_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -116,6 +126,7 @@ function ensureMessagesTable() {
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     read_at DATETIME
   )`);
+  console.log('[messages] tabel aangemaakt');
 }
 
 // GET /api/buddies/chat/:userId  → gesprek ophalen + markeer als gelezen
