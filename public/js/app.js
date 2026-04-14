@@ -82,7 +82,9 @@ function showAuth() {
 function showApp() {
   document.getElementById('auth-screen').classList.add('hidden');
   document.getElementById('app-screen').classList.remove('hidden');
-  switchTab('kalender');
+  const validTabs = ['potjes', 'kalender', 'buddies', 'profiel', 'admin'];
+  const hash = location.hash.replace('#', '');
+  switchTab(validTabs.includes(hash) ? hash : 'kalender');
   renderProfile();
 }
 
@@ -221,6 +223,7 @@ async function handleLogout() {
 /* ── Tab navigatie ────────────────────────────────────────── */
 function switchTab(tab) {
   currentTab = tab;
+  location.hash = tab;
   // Reset scroll naar boven voor het nieuwe tabblad
   const newScrollArea = document.querySelector(`#tab-${tab} .scroll-area`);
   if (newScrollArea) newScrollArea.scrollTop = 0;
