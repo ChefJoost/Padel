@@ -89,6 +89,14 @@ db.exec(`
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     UNIQUE(user_id, date)
   );
+
+  CREATE TABLE IF NOT EXISTS booking_payment_links (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    booking_id INTEGER NOT NULL REFERENCES bookings(id) ON DELETE CASCADE,
+    payment_url TEXT NOT NULL,
+    target_user_ids TEXT,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  );
 `);
 
 // Migraties: ALTER TABLE heeft try/catch nodig (mislukt als kolom al bestaat)
@@ -104,6 +112,31 @@ migrate('ALTER TABLE bookings ADD COLUMN invite_token TEXT');
 migrate('ALTER TABLE bookings ADD COLUMN payment_target_users TEXT');
 migrate('ALTER TABLE availability ADD COLUMN start_time TEXT');
 migrate('ALTER TABLE availability ADD COLUMN end_time TEXT');
+
+// Migreer bestaande betaallinks naar nieuwe tabel
+{
+  const toMigrate = db.prepare(
+    "SELECT id, payment_url, payment_target_users FROM bookings WHERE payment_url IS NOT NULL"
+  ).all();
+  let migrated = 0;
+  for (const row of toMigrate) {
+    const exists = db.prepare("SELECT 1 FROM booking_payment_links WHERE booking_id = ?").get(row.id);
+    if (!exists) {
+      let targetCsv = null;
+      if (row.payment_target_users) {
+        try {
+          const arr = JSON.parse(row.payment_target_users);
+          if (Array.isArray(arr) && arr.length) targetCsv = arr.join(',');
+        } catch (_) {}
+      }
+      db.prepare("INSERT INTO booking_payment_links (booking_id, payment_url, target_user_ids) VALUES (?, ?, ?)")
+        .run(row.id, row.payment_url, targetCsv);
+      migrated++;
+    }
+    db.prepare("UPDATE bookings SET payment_url = NULL, payment_target_users = NULL WHERE id = ?").run(row.id);
+  }
+  if (migrated) console.log(`[database] ${migrated} betaallink(s) gemigreerd naar booking_payment_links`);
+}
 
 // Stel standaard admin in
 migrate("UPDATE users SET is_admin = 1 WHERE username = 'joosts'");

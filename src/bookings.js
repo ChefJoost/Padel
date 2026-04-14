@@ -13,6 +13,23 @@ function requireAuth(req, res, next) {
   next();
 }
 
+// Voeg payment_link_for_me toe aan elk booking-object
+function attachPaymentLinks(bookings, userId) {
+  if (!bookings.length) return bookings;
+  const ids = bookings.map(b => b.id);
+  const links = db.prepare(
+    `SELECT booking_id, payment_url FROM booking_payment_links
+     WHERE booking_id IN (${ids.map(() => '?').join(',')})
+     AND (target_user_ids IS NULL OR INSTR(',' || target_user_ids || ',', ',' || ? || ',') > 0)
+     ORDER BY created_at ASC`
+  ).all(...ids, userId);
+  const map = {};
+  for (const link of links) {
+    if (!map[link.booking_id]) map[link.booking_id] = link.payment_url;
+  }
+  return bookings.map(b => ({ ...b, payment_link_for_me: map[b.id] || null }));
+}
+
 // Alle boekingen ophalen (toekomstig + vandaag)
 router.get('/', requireAuth, (req, res) => {
   const userId = req.session.userId;
@@ -20,7 +37,7 @@ router.get('/', requireAuth, (req, res) => {
   const bookings = db.prepare(`
     SELECT
       b.id, b.title, b.date, b.start_time, b.end_time, b.notes,
-      b.created_by, b.payment_url, b.payment_target_users, b.is_private,
+      b.created_by, b.is_private,
       u.display_name AS creator_name,
       COUNT(p.id) + COALESCE((SELECT COUNT(*) FROM booking_guests bg WHERE bg.booking_id = b.id), 0) AS player_count,
       MAX(CASE WHEN p.user_id = ? THEN 1 ELSE 0 END) AS user_joined,
@@ -54,7 +71,7 @@ router.get('/', requireAuth, (req, res) => {
     ORDER BY b.date ASC, b.start_time ASC
   `).all(userId, userId, userId, userId);
 
-  res.json(bookings);
+  res.json(attachPaymentLinks(bookings, userId));
 });
 
 // Boeking ophalen via uitnodigingstoken (voor privé potjes)
@@ -115,7 +132,7 @@ router.get('/calendar', requireAuth, (req, res) => {
   const bookings = db.prepare(`
     SELECT
       b.id, b.title, b.date, b.start_time, b.end_time, b.notes,
-      b.created_by, b.payment_url, b.payment_target_users, b.is_private,
+      b.created_by, b.is_private,
       u.display_name AS creator_name,
       COUNT(p.id) + COALESCE((SELECT COUNT(*) FROM booking_guests bg WHERE bg.booking_id = b.id), 0) AS player_count,
       MAX(CASE WHEN p.user_id = ? THEN 1 ELSE 0 END) AS user_joined,
@@ -134,15 +151,16 @@ router.get('/calendar', requireAuth, (req, res) => {
     ORDER BY b.date ASC, b.start_time ASC
   `).all(...params);
 
-  res.json(bookings);
+  res.json(attachPaymentLinks(bookings, userId));
 });
 
 // Geschiedenis: afgelopen potjes van de ingelogde gebruiker
 router.get('/history', requireAuth, (req, res) => {
+  const userId = req.session.userId;
   const bookings = db.prepare(`
     SELECT
       b.id, b.title, b.location, b.date, b.start_time, b.end_time,
-      b.created_by, b.payment_url,
+      b.created_by,
       u.display_name AS creator_name,
       p.is_extra, p.paid_at,
       COUNT(CASE WHEN p2.is_extra = 0 THEN 1 END) AS player_count,
@@ -157,9 +175,9 @@ router.get('/history', requireAuth, (req, res) => {
       AND (p.user_id IS NOT NULL OR b.created_by = ?)
     GROUP BY b.id
     ORDER BY b.date DESC, b.start_time DESC
-  `).all(req.session.userId, req.session.userId);
+  `).all(userId, userId);
 
-  res.json(bookings);
+  res.json(attachPaymentLinks(bookings, userId));
 });
 
 // Eén boeking ophalen met deelnemers
@@ -169,7 +187,7 @@ router.get('/:id', requireAuth, (req, res) => {
   const booking = db.prepare(`
     SELECT
       b.id, b.title, b.location, b.date, b.start_time, b.end_time, b.notes,
-      b.created_by, b.payment_url, b.payment_target_users, b.is_private, b.invite_token,
+      b.created_by, b.is_private, b.invite_token,
       u.display_name AS creator_name,
       COUNT(p.id) + COALESCE((SELECT COUNT(*) FROM booking_guests bg WHERE bg.booking_id = b.id), 0) AS player_count,
       MAX(CASE WHEN p.user_id = ? THEN 1 ELSE 0 END) AS user_joined,
@@ -212,7 +230,10 @@ router.get('/:id', requireAuth, (req, res) => {
     .sort((a, b) => (a.joined_at || '') < (b.joined_at || '') ? -1 : 1)
     .map(p => p.is_guest ? { ...p, display_name: p.guest_name } : p);
 
-  res.json({ ...booking, participants });
+  const paymentLinks = db.prepare(
+    'SELECT id, payment_url, target_user_ids, created_at FROM booking_payment_links WHERE booking_id = ? ORDER BY created_at ASC'
+  ).all(bookingId);
+  res.json({ ...booking, participants, payment_links: paymentLinks });
 });
 
 // Nieuwe boeking aanmaken
@@ -281,66 +302,73 @@ router.put('/:id', requireAuth, (req, res) => {
   res.json({ success: true });
 });
 
-// Betaallink instellen/bijwerken (alleen aanmaker)
-router.put('/:id/payment', requireAuth, async (req, res) => {
-  const bookingId = req.params.id;
-  const userId = req.session.userId;
+// Betaallink toevoegen
+router.post('/:id/payment-links', requireAuth, async (req, res) => {
+  const bookingId = parseInt(req.params.id, 10);
+  const userId    = req.session.userId;
   const { payment_url, target_user_ids } = req.body;
 
   const booking = db.prepare('SELECT * FROM bookings WHERE id = ?').get(bookingId);
   if (!booking) return res.status(404).json({ error: 'Boeking niet gevonden' });
   if (booking.created_by !== userId) {
-    return res.status(403).json({ error: 'Alleen de aanmaker kan de betaallink instellen' });
+    return res.status(403).json({ error: 'Alleen de aanmaker kan betaallinks instellen' });
   }
 
-  // Valideer URL
-  if (payment_url) {
-    try {
-      const url = new URL(payment_url);
-      if (!['http:', 'https:'].includes(url.protocol)) throw new Error();
-    } catch {
-      return res.status(400).json({ error: 'Ongeldige URL. Gebruik https://...' });
-    }
+  if (!payment_url?.trim()) return res.status(400).json({ error: 'URL is verplicht' });
+  try {
+    const url = new URL(payment_url);
+    if (!['http:', 'https:'].includes(url.protocol)) throw new Error();
+  } catch {
+    return res.status(400).json({ error: 'Ongeldige URL. Gebruik https://...' });
   }
 
-  // Bepaal doelgroep (null = iedereen, JSON array = specifieke spelers)
-  let targetJson = null;
-  if (payment_url && Array.isArray(target_user_ids) && target_user_ids.length > 0) {
+  let targetCsv = null;
+  if (Array.isArray(target_user_ids) && target_user_ids.length > 0) {
     const ids = target_user_ids.map(Number).filter(n => Number.isInteger(n) && n > 0);
-    if (ids.length > 0) targetJson = JSON.stringify(ids);
+    if (ids.length > 0) targetCsv = ids.join(',');
   }
 
-  db.prepare('UPDATE bookings SET payment_url = ?, payment_target_users = ? WHERE id = ?')
-    .run(payment_url || null, payment_url ? targetJson : null, bookingId);
+  const result = db.prepare(
+    'INSERT INTO booking_payment_links (booking_id, payment_url, target_user_ids) VALUES (?, ?, ?)'
+  ).run(bookingId, payment_url.trim(), targetCsv);
 
-  // Stuur push-notificatie naar gerichte deelnemers
-  if (payment_url) {
-    let participants;
-    if (targetJson) {
-      const ids = JSON.parse(targetJson);
-      participants = db.prepare(
-        `SELECT DISTINCT user_id FROM participants WHERE booking_id = ? AND user_id != ? AND user_id IN (${ids.map(() => '?').join(',')})`
-      ).all(bookingId, userId, ...ids);
-    } else {
-      participants = db.prepare(
-        'SELECT DISTINCT user_id FROM participants WHERE booking_id = ? AND user_id != ?'
-      ).all(bookingId, userId);
-    }
-
-    const creatorName = db.prepare('SELECT display_name FROM users WHERE id = ?')
-      .get(userId)?.display_name || 'De organisator';
-
-    await Promise.allSettled(
-      participants.map(p =>
-        sendPushToUser(p.user_id, {
-          title: '💳 Betaallink beschikbaar',
-          body: `${creatorName} heeft een betaallink toegevoegd voor "${booking.title}"`,
-          url: '/',
-        })
-      )
-    );
+  let participants;
+  if (targetCsv) {
+    const ids = targetCsv.split(',').map(Number);
+    participants = db.prepare(
+      `SELECT DISTINCT user_id FROM participants WHERE booking_id = ? AND user_id != ? AND user_id IN (${ids.map(() => '?').join(',')})`
+    ).all(bookingId, userId, ...ids);
+  } else {
+    participants = db.prepare(
+      'SELECT DISTINCT user_id FROM participants WHERE booking_id = ? AND user_id != ?'
+    ).all(bookingId, userId);
   }
 
+  const creatorName = db.prepare('SELECT display_name FROM users WHERE id = ?')
+    .get(userId)?.display_name || 'De organisator';
+
+  await Promise.allSettled(
+    participants.map(p => sendPushToUser(p.user_id, {
+      title: '💳 Betaallink beschikbaar',
+      body: `${creatorName} heeft een betaallink toegevoegd voor "${booking.title}"`,
+      url: '/',
+    }))
+  );
+
+  res.status(201).json({ id: result.lastInsertRowid });
+});
+
+// Betaallink verwijderen
+router.delete('/:id/payment-links/:linkId', requireAuth, (req, res) => {
+  const bookingId = parseInt(req.params.id, 10);
+  const linkId    = parseInt(req.params.linkId, 10);
+  const userId    = req.session.userId;
+
+  const booking = db.prepare('SELECT created_by FROM bookings WHERE id = ?').get(bookingId);
+  if (!booking) return res.status(404).json({ error: 'Boeking niet gevonden' });
+  if (booking.created_by !== userId) return res.status(403).json({ error: 'Geen rechten' });
+
+  db.prepare('DELETE FROM booking_payment_links WHERE id = ? AND booking_id = ?').run(linkId, bookingId);
   res.json({ success: true });
 });
 

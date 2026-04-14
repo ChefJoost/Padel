@@ -842,6 +842,38 @@ body {
   flex-shrink: 0;
 }
 
+/* Betaallink beheer – lijst van links */
+.pay-link-row {
+  flex-direction: row !important;
+  align-items: center;
+  gap: 8px;
+}
+.pay-link-info { flex: 1; min-width: 0; }
+.pay-link-url {
+  font-size: .85rem;
+  font-weight: 600;
+  color: var(--blue);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.pay-link-targets {
+  font-size: .76rem;
+  color: var(--text-2);
+  margin-top: 1px;
+}
+.pay-link-remove-btn {
+  background: none;
+  border: none;
+  color: var(--red);
+  font-size: 1.1rem;
+  line-height: 1;
+  padding: 4px 6px;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.pay-link-remove-btn:active { opacity: .6; }
+
 .btn-paid-manual {
   background: transparent;
   color: var(--text-2);
