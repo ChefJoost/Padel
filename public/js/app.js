@@ -848,6 +848,14 @@ async function showDetailModal(id) {
     waBtn.onclick = () => shareWhatsApp(b);
     actions.appendChild(waBtn);
 
+    if (b.user_joined) {
+      const leaveOrgBtn = document.createElement('button');
+      leaveOrgBtn.className = 'btn btn-outline btn-full';
+      leaveOrgBtn.textContent = 'Uitschrijven';
+      leaveOrgBtn.onclick = () => handleLeaveAsOrganizer(b);
+      actions.appendChild(leaveOrgBtn);
+    }
+
     const delBtn = document.createElement('button');
     delBtn.className = 'btn btn-destructive-outline btn-full';
     delBtn.textContent = 'Boeking verwijderen';
@@ -915,6 +923,24 @@ async function handleLeaveBooking() {
   const data = await res.json();
   if (!res.ok) return showError('detail-error', data.error);
   hideDetailModal(); loadBookings(); loadCalendar();
+}
+
+function handleLeaveAsOrganizer(b) {
+  const alone = b.player_count <= 1;
+  document.getElementById('confirm-title').textContent = 'Uitschrijven';
+  document.getElementById('confirm-msg').textContent = alone
+    ? 'Je bent de enige deelnemer. Na uitschrijven staat het potje leeg, maar het blijft bestaan. Weet je het zeker?'
+    : 'Je schrijft je uit als deelnemer. Het potje blijft bestaan en andere spelers blijven ingeschreven. Weet je het zeker?';
+  document.getElementById('confirm-ok-btn').textContent = 'Uitschrijven';
+  document.getElementById('confirm-ok-btn').onclick = async () => {
+    closeConfirm();
+    clearError('detail-error');
+    const res  = await api(`/api/bookings/${b.id}/join`, { method: 'DELETE' });
+    const data = await res.json();
+    if (!res.ok) return showError('detail-error', data.error);
+    hideDetailModal(); loadBookings(); loadCalendar();
+  };
+  document.getElementById('confirm-modal').classList.remove('hidden');
 }
 
 function showAddGuestForm(bookingId) {

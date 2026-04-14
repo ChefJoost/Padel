@@ -511,10 +511,6 @@ router.delete('/:id/join', requireAuth, (req, res) => {
   const booking = db.prepare('SELECT * FROM bookings WHERE id = ?').get(bookingId);
   if (!booking) return res.status(404).json({ error: 'Boeking niet gevonden' });
 
-  if (booking.created_by === userId) {
-    return res.status(400).json({ error: 'Als aanmaker kun je niet uitschrijven. Verwijder de boeking.' });
-  }
-
   const result = db.prepare(
     'DELETE FROM participants WHERE booking_id = ? AND user_id = ?'
   ).run(bookingId, userId);
