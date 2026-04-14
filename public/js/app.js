@@ -1900,14 +1900,28 @@ function openCalDay(dateStr) {
       else if (joined) { badgeClass = 'cal-potje-badge--joined'; badgeText = 'Jij doet mee'; }
       else if (isFull) { badgeClass = 'cal-potje-badge--full';   badgeText = 'Vol'; }
 
+      // Mini avatars
+      const parts = (b.participants_info || '').split('||').filter(Boolean);
+      const miniAvatars = parts.slice(0, 4).map(info => {
+        const sepIdx = info.indexOf('::');
+        const uid = info.slice(0, sepIdx);
+        const avatarData = info.slice(sepIdx + 2);
+        if (uid === '0') {
+          return `<div class="cal-mini-avatar" title="Gast">G</div>`;
+        }
+        if (avatarData && avatarData.startsWith('data:')) {
+          return `<div class="cal-mini-avatar"><img src="${avatarData}" alt="" /></div>`;
+        }
+        return `<div class="cal-mini-avatar">?</div>`;
+      }).join('');
+      const avatarsHtml = miniAvatars ? `<div class="cal-mini-avatars">${miniAvatars}</div>` : '';
+
       return `<div class="field-row cal-potje-row" onclick="hideCalDayModal(); showDetailModal(${b.id})">
         <div style="flex:1;min-width:0">
           <div class="cal-potje-meta">${b.start_time.slice(0,5)} – ${b.end_time.slice(0,5)}</div>
           <span class="cal-potje-badge ${badgeClass}">${badgeText}</span>
         </div>
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16" style="color:var(--text-3);flex-shrink:0">
-          <path d="M9 18l6-6-6-6"/>
-        </svg>
+        ${avatarsHtml}
       </div>`;
     }).join('');
 
