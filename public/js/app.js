@@ -436,7 +436,7 @@ async function loadHistory() {
     return `
     <div class="field-row history-row">
       <div class="history-info">
-        <div class="history-title">${escHtml(b.title)}</div>
+        <div class="history-title">Padelpotje</div>
         <div class="history-meta">${formatDate(b.date)}</div>
         ${names ? `<div class="history-players">${names}</div>` : ''}
       </div>
@@ -477,7 +477,7 @@ async function loadUnpaid() {
   list.innerHTML = unpaid.map(b => `
     <div class="field-row unpaid-row">
       <div class="unpaid-info">
-        <div class="unpaid-title">${escHtml(b.title)}</div>
+        <div class="unpaid-title">Padelpotje</div>
         <div class="unpaid-meta">${formatDate(b.date)}</div>
       </div>
       <div class="unpaid-actions">
@@ -597,7 +597,7 @@ function buildCard(b) {
 
   card.innerHTML = `
     <div class="card-top">
-      <div class="card-title">${escHtml(b.title)}${payDot}</div>
+      <div class="card-title">Padelpotje${payDot}</div>
       <div class="card-chevron">›</div>
     </div>
     <div class="card-meta">
@@ -623,7 +623,7 @@ async function showDetailModal(id) {
   const b   = await res.json();
   currentDetailBooking = b;
 
-  document.getElementById('detail-title').textContent = b.title;
+  document.getElementById('detail-title').textContent = 'Padelpotje';
 
   const playerCount = b.player_count || 0;
   const isFull      = playerCount >= 4;
@@ -970,7 +970,6 @@ function showEditBookingModal() {
   document.getElementById('booking-modal-title').textContent = 'Boeking bewerken';
   document.getElementById('booking-modal-done').textContent  = 'Opslaan';
   clearError('booking-error');
-  document.getElementById('b-title').value = b.title;
   document.getElementById('b-date').value  = b.date;
   document.getElementById('b-date').min    = new Date().toISOString().split('T')[0];
   setTimeSelect('b-start', b.start_time);
@@ -991,7 +990,6 @@ async function handleCreateBooking(e) {
   e.preventDefault();
   clearError('booking-error');
   const body = {
-    title:      document.getElementById('b-title').value,
     date:       document.getElementById('b-date').value,
     start_time: document.getElementById('b-start').value,
     end_time:   document.getElementById('b-end').value,
@@ -1086,7 +1084,7 @@ function shareWhatsApp(b) {
   const url = (b.is_private && b.invite_token)
     ? `${location.origin}/?invite=${b.invite_token}`
     : `${location.origin}/?potje=${b.id}`;
-  const msg = `🎾 ${b.title}\n\n${datumKap}, ${b.start_time} - ${b.end_time}\n\nDoe mee:\n${url}`;
+  const msg = `🎾 Padelpotje\n\n${datumKap}, ${b.start_time} - ${b.end_time}\n\nDoe mee:\n${url}`;
   window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`, '_blank');
 }
 
@@ -1252,7 +1250,7 @@ async function loadAdminBookings() {
   list.innerHTML = bookings.map(b => `
     <div class="admin-booking-card" onclick="showAdminDetailModal(${b.id})">
       <div class="admin-booking-info">
-        <div class="admin-booking-title">${escHtml(b.title)}${b.is_private ? ' 🔒' : ''}</div>
+        <div class="admin-booking-title">Padelpotje${b.is_private ? ' 🔒' : ''}</div>
         <div class="admin-booking-meta">${formatDate(b.date)} · ${b.start_time}–${b.end_time} · ${escHtml(b.creator_name)}</div>
       </div>
       <div class="admin-booking-count">${b.player_count}/4</div>
@@ -1266,7 +1264,7 @@ async function showAdminDetailModal(id) {
   const b = await res.json();
   adminCurrentBooking = b;
 
-  document.getElementById('admin-detail-title').textContent = b.title;
+  document.getElementById('admin-detail-title').textContent = 'Padelpotje';
 
   const infoHtml = `
     <div class="section-header">Details</div>
@@ -1332,7 +1330,6 @@ function adminDeleteBooking(bookingId) {
 function showAdminEditBooking() {
   const b = adminCurrentBooking;
   if (!b) return;
-  document.getElementById('ae-title').value = b.title;
   document.getElementById('ae-date').value = b.date;
   setTimeSelect('ae-start', b.start_time);
   setTimeSelect('ae-end', b.end_time);
@@ -1349,7 +1346,6 @@ function hideAdminEditModal() {
 async function handleAdminSaveBooking() {
   clearError('admin-edit-error');
   const body = {
-    title:      document.getElementById('ae-title').value,
     date:       document.getElementById('ae-date').value,
     start_time: document.getElementById('ae-start').value,
     end_time:   document.getElementById('ae-end').value,
@@ -1744,7 +1740,6 @@ function openCalDay(dateStr) {
         const badgeText  = joined ? 'Jij hebt meegedaan' : `${b.player_count} speler${b.player_count !== 1 ? 's' : ''}`;
         return `<div class="field-row cal-potje-row cal-potje-row--past">
           <div style="flex:1;min-width:0">
-            <div class="cal-potje-title">${b.title}</div>
             <div class="cal-potje-meta">${b.start_time.slice(0,5)} – ${b.end_time.slice(0,5)}</div>
             <span class="cal-potje-badge ${badgeClass}">${badgeText}</span>
           </div>

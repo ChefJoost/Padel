@@ -238,9 +238,9 @@ router.get('/:id', requireAuth, (req, res) => {
 
 // Nieuwe boeking aanmaken
 router.post('/', requireAuth, (req, res) => {
-  const { title, date, start_time, end_time, notes, is_private } = req.body;
+  const { date, start_time, end_time, notes, is_private } = req.body;
 
-  if (!title || !date || !start_time || !end_time) {
+  if (!date || !start_time || !end_time) {
     return res.status(400).json({ error: 'Vul alle verplichte velden in' });
   }
 
@@ -255,7 +255,7 @@ router.post('/', requireAuth, (req, res) => {
   const result = db.prepare(`
     INSERT INTO bookings (title, location, date, start_time, end_time, notes, created_by, is_private, invite_token)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `).run(title, '', date, start_time, end_time, notes || null, req.session.userId, privateFlag, inviteToken);
+  `).run('Padelpotje', '', date, start_time, end_time, notes || null, req.session.userId, privateFlag, inviteToken);
 
   // Aanmaker automatisch inschrijven als eerste speler
   db.prepare(`
@@ -269,7 +269,7 @@ router.post('/', requireAuth, (req, res) => {
 router.put('/:id', requireAuth, (req, res) => {
   const bookingId = req.params.id;
   const userId = req.session.userId;
-  const { title, date, start_time, end_time, notes, is_private } = req.body;
+  const { date, start_time, end_time, notes, is_private } = req.body;
 
   const booking = db.prepare('SELECT * FROM bookings WHERE id = ?').get(bookingId);
   if (!booking) return res.status(404).json({ error: 'Boeking niet gevonden' });
@@ -277,7 +277,7 @@ router.put('/:id', requireAuth, (req, res) => {
     return res.status(403).json({ error: 'Alleen de aanmaker kan de boeking bewerken' });
   }
 
-  if (!title || !date || !start_time || !end_time) {
+  if (!date || !start_time || !end_time) {
     return res.status(400).json({ error: 'Vul alle verplichte velden in' });
   }
 
@@ -296,8 +296,8 @@ router.put('/:id', requireAuth, (req, res) => {
   }
 
   db.prepare(`
-    UPDATE bookings SET title=?, date=?, start_time=?, end_time=?, notes=?, is_private=?, invite_token=? WHERE id=?
-  `).run(title, date, start_time, end_time, notes || null, privateFlag, inviteToken, bookingId);
+    UPDATE bookings SET date=?, start_time=?, end_time=?, notes=?, is_private=?, invite_token=? WHERE id=?
+  `).run(date, start_time, end_time, notes || null, privateFlag, inviteToken, bookingId);
 
   res.json({ success: true });
 });

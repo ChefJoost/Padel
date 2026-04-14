@@ -395,12 +395,6 @@
       <form id="booking-form" onsubmit="handleCreateBooking(event)">
         <div class="field-group">
           <div class="field-row">
-            <label>Titel</label>
-            <input type="text" id="b-title" placeholder="bijv. Zaterdag potje" required />
-          </div>
-        </div>
-        <div class="field-group">
-          <div class="field-row">
             <label>Datum</label>
             <input type="date" id="b-date" required />
           </div>
@@ -564,9 +558,6 @@
     </div>
     <div class="sheet-body">
       <form id="admin-edit-form" onsubmit="event.preventDefault(); handleAdminSaveBooking()">
-        <div class="field-group">
-          <div class="field-row"><label>Titel</label><input type="text" id="ae-title" required /></div>
-        </div>
         <div class="field-group">
           <div class="field-row"><label>Datum</label><input type="date" id="ae-date" required /></div>
           <div class="field-row"><label>Van</label><select id="ae-start" class="time-select"></select></div>
