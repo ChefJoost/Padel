@@ -14,6 +14,7 @@
   --blue:       #007AFF;
   --red:        #FF3B30;
   --orange:     #FF9500;
+  --yellow:     #FFD60A;
   --indigo:     #5856D6;
 
   --text:   #000000;
@@ -1120,10 +1121,10 @@ body {
   box-shadow: inset 0 0 0 2px var(--blue);
 }
 
-/* Vandaag: extra indicator */
+/* Vandaag: extra indicator (geel) */
 .cal-day.cal-day--today .cal-day-num {
-  background: var(--orange);
-  color: #fff;
+  background: var(--yellow);
+  color: #1c1c1e;
   border-radius: 50%;
   width: 24px;
   height: 24px;
@@ -1132,8 +1133,8 @@ body {
   justify-content: center;
 }
 .cal-day.cal-day--joined.cal-day--today .cal-day-num {
-  background: var(--orange);
-  color: #fff;
+  background: var(--yellow);
+  color: #1c1c1e;
 }
 
 .cal-day-num {
@@ -1156,21 +1157,6 @@ body {
 }
 .cal-day-dot--organizer { background: var(--orange); }  /* oranje: beheerder */
 .cal-day-dot--joined    { background: var(--blue); }    /* blauw: deelnemer */
-
-/* Op groene (joined) achtergrond */
-.cal-day--joined .cal-day-dot               { background: rgba(255,255,255,.5); }
-.cal-day--joined .cal-day-dot--organizer    { background: var(--orange); }
-.cal-day--joined .cal-day-dot--joined       { background: rgba(255,255,255,.9); }
-
-/* Rol-icoon in de dag-rij (★ organisator, ✓ deelnemer) */
-.cal-role-icon {
-  font-style: normal;
-  font-size: .75rem;
-  font-weight: 700;
-  margin-right: 3px;
-}
-.cal-role-icon--organizer { color: var(--orange); }
-.cal-role-icon--joined    { color: var(--green-dark); }
 
 /* Dag-detail sheet – potjes lijst */
 .cal-potje-row {
@@ -1231,7 +1217,7 @@ body {
 .cal-legend-today {
   width: 10px;
   height: 10px;
-  background: var(--orange);
+  background: var(--yellow);
   border-radius: 50%;
   flex-shrink: 0;
 }
