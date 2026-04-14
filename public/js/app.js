@@ -880,7 +880,7 @@ async function handleDetailSave(id) {
   const res  = await api(`/api/bookings/${id}`, { method: 'PUT', body });
   const data = await res.json();
   if (!res.ok) return showError('detail-error', data.error);
-  await showDetailModal(id);
+  hideDetailModal();
   loadBookings();
   loadCalendar();
   showToast('Wijzigingen opgeslagen');
