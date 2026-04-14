@@ -1833,14 +1833,15 @@ function renderCalendar() {
     if (iJoined)            cls += ' cal-day--joined';
     else if (hasPotje)      cls += ' cal-day--has-potje';
 
-    // Bolletjes: max 3 dots, kleur per rol (oranje=beheerder, blauw=deelnemer, grijs=overig)
+    // Bolletjes: oranje=beheerder, blauw=deelnemer, geen dot als niet betrokken
     const dots = potjes.slice(0, 3).map(b => {
       const isOrg    = b.created_by === currentUser.userId;
       const isJoined = !!b.user_joined && !isOrg;
-      const dotCls   = isOrg ? 'cal-day-dot--organizer' : isJoined ? 'cal-day-dot--joined' : '';
+      if (!isOrg && !isJoined) return '';
+      const dotCls = isOrg ? 'cal-day-dot--organizer' : 'cal-day-dot--joined';
       return `<span class="cal-day-dot ${dotCls}"></span>`;
     }).join('');
-    const dotsHtml = hasPotje ? `<span class="cal-day-dots">${dots}</span>` : '';
+    const dotsHtml = dots ? `<span class="cal-day-dots">${dots}</span>` : '';
 
     const clickHandler = hasPotje || !isPast
       ? `onclick="openCalDay('${dateStr}')"`
