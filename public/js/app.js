@@ -849,7 +849,7 @@ async function handleJoinBooking() {
   const data = await res.json();
   if (!res.ok) return showError('detail-error', data.error);
   currentInviteToken = null;
-  hideDetailModal(); loadBookings();
+  hideDetailModal(); loadBookings(); loadCalendar();
 }
 
 async function handleLeaveBooking() {
@@ -857,7 +857,7 @@ async function handleLeaveBooking() {
   const res  = await api(`/api/bookings/${currentDetailId}/join`, { method: 'DELETE' });
   const data = await res.json();
   if (!res.ok) return showError('detail-error', data.error);
-  hideDetailModal(); loadBookings();
+  hideDetailModal(); loadBookings(); loadCalendar();
 }
 
 function showAddGuestForm(bookingId) {
@@ -875,14 +875,14 @@ async function handleAddGuest(bookingId) {
   const res  = await api(`/api/bookings/${bookingId}/guests`, { method: 'POST', body: { guest_name: name } });
   const data = await res.json();
   if (!res.ok) return showError('guest-error', data.error);
-  showDetailModal(bookingId); loadBookings();
+  showDetailModal(bookingId); loadBookings(); loadCalendar();
 }
 
 async function handleRemoveGuest(bookingId, guestId) {
   const res  = await api(`/api/bookings/${bookingId}/guests/${guestId}`, { method: 'DELETE' });
   const data = await res.json();
   if (!res.ok) return showError('detail-error', data.error);
-  showDetailModal(bookingId); loadBookings();
+  showDetailModal(bookingId); loadBookings(); loadCalendar();
 }
 
 function handleDeleteBooking() {
@@ -892,7 +892,7 @@ function handleDeleteBooking() {
     const res  = await api(`/api/bookings/${currentDetailId}`, { method: 'DELETE' });
     const data = await res.json();
     if (!res.ok) return showError('detail-error', data.error);
-    hideDetailModal(); loadBookings();
+    hideDetailModal(); loadBookings(); loadCalendar();
   };
   document.getElementById('confirm-modal').classList.remove('hidden');
 }
@@ -1010,12 +1010,12 @@ async function handleCreateBooking(e) {
     const res  = await api(`/api/bookings/${bookingEditId}`, { method: 'PUT', body });
     const data = await res.json();
     if (!res.ok) return showError('booking-error', data.error);
-    hideNewBookingModal(); loadBookings();
+    hideNewBookingModal(); loadBookings(); loadCalendar();
   } else {
     const res  = await api('/api/bookings', { method: 'POST', body });
     const data = await res.json();
     if (!res.ok) return showError('booking-error', data.error);
-    hideNewBookingModal(); loadBookings();
+    hideNewBookingModal(); loadBookings(); loadCalendar();
   }
 }
 
