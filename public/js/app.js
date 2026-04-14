@@ -1472,7 +1472,11 @@ async function openChat(userId) {
 
   // Laad berichten
   const msgRes = await api(`/api/buddies/chat/${userId}`);
-  if (!msgRes.ok) { showToast('Kon chat niet openen'); return; }
+  if (!msgRes.ok) {
+    const errBody = await msgRes.json().catch(() => null);
+    showToast('Chat fout (' + msgRes.status + '): ' + (errBody?.error || 'onbekend'));
+    return;
+  }
   const messages = await msgRes.json();
   if (messages.length > 0) chatLastId = messages[messages.length - 1].id;
 

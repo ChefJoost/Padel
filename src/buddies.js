@@ -122,6 +122,7 @@ function ensureMessagesTable() {
 router.get('/chat/:userId', requireAuth, (req, res) => {
   const me    = req.session.userId;
   const other = parseInt(req.params.userId, 10);
+  console.log('[chat GET] me:', me, 'other:', other);
   if (!other) return res.status(400).json({ error: 'Ongeldig' });
 
   try {
@@ -131,7 +132,9 @@ router.get('/chat/:userId', requireAuth, (req, res) => {
     const isBuddy = db.prepare(
       'SELECT 1 FROM buddies WHERE (user_id = ? AND buddy_id = ?) OR (user_id = ? AND buddy_id = ?)'
     ).get(me, other, other, me);
-    if (!isBuddy) return res.status(403).json({ error: 'Geen buddy' });
+    const buddyCount = db.prepare('SELECT COUNT(*) as c FROM buddies WHERE user_id=?').get(me);
+    console.log('[chat GET] isBuddy:', !!isBuddy, '| mijn buddy count:', buddyCount?.c);
+    if (!isBuddy) return res.status(403).json({ error: `Geen buddy (me=${me}, other=${other}, buddies=${buddyCount?.c})` });
 
     const messages = db.prepare(`
       SELECT id, sender_id, content, created_at
