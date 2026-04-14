@@ -48,6 +48,7 @@ app.use('/api/bookings', require('./bookings'));
 app.use('/api/buddies', require('./buddies'));
 app.use('/api/push', require('./push').router);
 app.use('/api/admin', require('./admin'));
+app.use('/api/ical',  require('./ical'));
 
 // Alle andere routes → index.html (SPA) – nooit cachen zodat nieuwe JS altijd geladen wordt
 app.get('*', (req, res) => {

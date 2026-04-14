@@ -956,6 +956,35 @@ body {
   letter-spacing: .01em;
 }
 
+/* iCal koppeling */
+.ical-url-row {
+  gap: 8px;
+  align-items: center;
+}
+.ical-url-text {
+  flex: 1;
+  min-width: 0;
+  font-size: .72rem;
+  color: var(--text-2);
+  word-break: break-all;
+  line-height: 1.4;
+  font-family: monospace;
+}
+.ical-copy-btn {
+  flex-shrink: 0;
+  background: none;
+  border: none;
+  padding: 6px;
+  border-radius: 8px;
+  cursor: pointer;
+  color: var(--blue);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background .15s;
+}
+.ical-copy-btn:active { background: var(--bg-2); }
+
 .admin-stats {
   display: grid;
   grid-template-columns: 1fr 1fr;
