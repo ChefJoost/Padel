@@ -236,9 +236,20 @@ router.get('/:id', requireAuth, (req, res) => {
   res.json({ ...booking, participants, payment_links: paymentLinks });
 });
 
+// Helper: voeg een interval toe aan een datumstring (YYYY-MM-DD)
+function addInterval(dateStr, interval) {
+  const [y, m, d] = dateStr.split('-').map(Number);
+  const dt = new Date(y, m - 1, d);
+  if (interval === 'weekly')        dt.setDate(dt.getDate() + 7);
+  else if (interval === 'biweekly') dt.setDate(dt.getDate() + 14);
+  else if (interval === 'monthly')  dt.setMonth(dt.getMonth() + 1);
+  return `${dt.getFullYear()}-${String(dt.getMonth()+1).padStart(2,'0')}-${String(dt.getDate()).padStart(2,'0')}`;
+}
+
 // Nieuwe boeking aanmaken
 router.post('/', requireAuth, (req, res) => {
-  const { date, start_time, end_time, notes, is_private } = req.body;
+  const { date, start_time, end_time, notes, is_private,
+          reeks_interval, reeks_end_type, reeks_count, reeks_end_date } = req.body;
 
   if (!date || !start_time || !end_time) {
     return res.status(400).json({ error: 'Vul alle verplichte velden in' });
@@ -249,19 +260,52 @@ router.post('/', requireAuth, (req, res) => {
     return res.status(400).json({ error: 'Starttijd mag niet in het verleden liggen' });
   }
 
+  const userId      = req.session.userId;
   const privateFlag = is_private ? 1 : 0;
-  const inviteToken = is_private ? crypto.randomBytes(16).toString('hex') : null;
 
-  const result = db.prepare(`
+  const stmtBooking = db.prepare(`
     INSERT INTO bookings (title, location, date, start_time, end_time, notes, created_by, is_private, invite_token)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `).run('Padelpotje', '', date, start_time, end_time, notes || null, req.session.userId, privateFlag, inviteToken);
+    VALUES ('Padelpotje', '', ?, ?, ?, ?, ?, ?, ?)
+  `);
+  const stmtParticipant = db.prepare(
+    'INSERT INTO participants (booking_id, user_id, is_extra) VALUES (?, ?, 0)'
+  );
 
-  // Aanmaker automatisch inschrijven als eerste speler
-  db.prepare(`
-    INSERT INTO participants (booking_id, user_id, is_extra) VALUES (?, ?, 0)
-  `).run(result.lastInsertRowid, req.session.userId);
+  if (reeks_interval) {
+    // Reeks modus: genereer alle datums
+    const MAX = 52;
+    const dates = [date];
+    if (reeks_end_type === 'date' && reeks_end_date) {
+      let cur = date;
+      for (let i = 0; i < MAX; i++) {
+        cur = addInterval(cur, reeks_interval);
+        if (cur > reeks_end_date) break;
+        dates.push(cur);
+      }
+    } else {
+      const n = Math.min(Math.max(parseInt(reeks_count) || 4, 1), MAX);
+      let cur = date;
+      for (let i = 0; i < n; i++) {
+        cur = addInterval(cur, reeks_interval);
+        dates.push(cur);
+      }
+    }
 
+    const createAll = db.transaction(() => dates.map(d => {
+      const tok = is_private ? crypto.randomBytes(16).toString('hex') : null;
+      const r = stmtBooking.run(d, start_time, end_time, notes || null, userId, privateFlag, tok);
+      stmtParticipant.run(r.lastInsertRowid, userId);
+      return r.lastInsertRowid;
+    }));
+
+    const ids = createAll();
+    return res.status(201).json({ ids, count: ids.length });
+  }
+
+  // Enkelvoudige boeking
+  const inviteToken = is_private ? crypto.randomBytes(16).toString('hex') : null;
+  const result = stmtBooking.run(date, start_time, end_time, notes || null, userId, privateFlag, inviteToken);
+  stmtParticipant.run(result.lastInsertRowid, userId);
   res.status(201).json({ id: result.lastInsertRowid });
 });
 

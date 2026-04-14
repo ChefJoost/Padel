@@ -961,6 +961,11 @@ function showNewBookingModal() {
   setTimeSelect('b-start', '20:00');
   setTimeSelect('b-end',   '21:00');
   document.getElementById('b-private').closest('.field-group').style.display = '';
+  // Reeks reset
+  document.getElementById('reeks-group').classList.remove('hidden');
+  document.getElementById('reeks-panel').classList.add('hidden');
+  document.getElementById('reeks-count-row').classList.remove('hidden');
+  document.getElementById('reeks-date-row').classList.add('hidden');
   document.getElementById('booking-modal').classList.remove('hidden');
 }
 
@@ -977,6 +982,9 @@ function showEditBookingModal() {
   document.getElementById('b-notes').value   = b.notes || '';
   document.getElementById('b-private').checked = !!b.is_private;
   document.getElementById('b-private').closest('.field-group').style.display = '';
+  // Reeks niet van toepassing bij bewerken
+  document.getElementById('reeks-group').classList.add('hidden');
+  document.getElementById('reeks-panel').classList.add('hidden');
   hideDetailModal();
   document.getElementById('booking-modal').classList.remove('hidden');
 }
@@ -984,6 +992,15 @@ function showEditBookingModal() {
 function hideNewBookingModal() {
   document.getElementById('booking-modal').classList.add('hidden');
   bookingEditId = null;
+}
+
+function toggleReeksPanel(checked) {
+  document.getElementById('reeks-panel').classList.toggle('hidden', !checked);
+}
+
+function toggleReeksEndType(value) {
+  document.getElementById('reeks-count-row').classList.toggle('hidden', value !== 'count');
+  document.getElementById('reeks-date-row').classList.toggle('hidden', value !== 'date');
 }
 
 async function handleCreateBooking(e) {
@@ -1010,10 +1027,22 @@ async function handleCreateBooking(e) {
     if (!res.ok) return showError('booking-error', data.error);
     hideNewBookingModal(); loadBookings(); loadCalendar();
   } else {
+    const isReeks = document.getElementById('b-reeks').checked;
+    if (isReeks) {
+      body.reeks_interval = document.getElementById('reeks-interval').value;
+      body.reeks_end_type = document.getElementById('reeks-end-type').value;
+      if (body.reeks_end_type === 'count') {
+        body.reeks_count = parseInt(document.getElementById('reeks-count').value) || 4;
+      } else {
+        body.reeks_end_date = document.getElementById('reeks-end-date').value;
+        if (!body.reeks_end_date) return showError('booking-error', 'Kies een einddatum voor de reeks');
+      }
+    }
     const res  = await api('/api/bookings', { method: 'POST', body });
     const data = await res.json();
     if (!res.ok) return showError('booking-error', data.error);
     hideNewBookingModal(); loadBookings(); loadCalendar();
+    if (isReeks) showToast(`${data.count} potjes aangemaakt`);
   }
 }
 

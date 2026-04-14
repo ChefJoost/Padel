@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <title>PadelPotje</title>
-  <link rel="stylesheet" href="/css/style.css?v=6" />
+  <link rel="stylesheet" href="/css/style.css?v=7" />
 </head>
 <body>
 
@@ -422,6 +422,40 @@
             </label>
           </div>
         </div>
+        <div id="reeks-group" class="field-group">
+          <div class="field-row">
+            <label>Reeks</label>
+            <label class="toggle">
+              <input type="checkbox" id="b-reeks" onchange="toggleReeksPanel(this.checked)" />
+              <span class="toggle-track"></span>
+            </label>
+          </div>
+        </div>
+        <div id="reeks-panel" class="field-group hidden">
+          <div class="field-row">
+            <label>Herhaling</label>
+            <select id="reeks-interval" class="time-select">
+              <option value="weekly">Wekelijks</option>
+              <option value="biweekly">Tweewekelijks</option>
+              <option value="monthly">Maandelijks</option>
+            </select>
+          </div>
+          <div class="field-row">
+            <label>Eindigt</label>
+            <select id="reeks-end-type" class="time-select" onchange="toggleReeksEndType(this.value)">
+              <option value="count">Na aantal keer</option>
+              <option value="date">Op datum</option>
+            </select>
+          </div>
+          <div class="field-row" id="reeks-count-row">
+            <label>Aantal keer</label>
+            <input type="number" id="reeks-count" min="1" max="52" value="4" style="width:70px;text-align:right" />
+          </div>
+          <div class="field-row hidden" id="reeks-date-row">
+            <label>Tot datum</label>
+            <input type="date" id="reeks-end-date" />
+          </div>
+        </div>
         <div id="booking-error" class="inline-error hidden"></div>
       </form>
     </div>
@@ -652,6 +686,6 @@
 </div>
 
 <div id="toast" class="toast hidden"></div>
-<script src="/js/app.js?v=6"></script>
+<script src="/js/app.js?v=7"></script>
 </body>
 </html>
