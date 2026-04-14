@@ -854,6 +854,12 @@ async function showDetailModal(id) {
       leaveOrgBtn.textContent = 'Uitschrijven';
       leaveOrgBtn.onclick = () => handleLeaveAsOrganizer(b);
       actions.appendChild(leaveOrgBtn);
+    } else if (!isFull) {
+      const joinOrgBtn = document.createElement('button');
+      joinOrgBtn.className = 'btn btn-primary btn-full';
+      joinOrgBtn.textContent = 'Inschrijven';
+      joinOrgBtn.onclick = handleJoinBooking;
+      actions.appendChild(joinOrgBtn);
     }
 
     const delBtn = document.createElement('button');
