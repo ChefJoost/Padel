@@ -637,16 +637,48 @@ async function showDetailModal(id) {
   }
 
   // Info sectie
-  const infoHtml = `
-    <div class="section-header">Details</div>
-    <div class="field-group">
-      <div class="field-row"><label>Datum</label><span>${formatDate(b.date)}</span></div>
-      <div class="field-row"><label>Tijd</label><span>${b.start_time} – ${b.end_time}</span></div>
-      <div class="field-row"><label>Organisator</label><span>${escHtml(b.creator_name)}</span></div>
-      ${levelRow}
-      ${b.notes ? `<div class="field-row"><label>Notities</label><span>${escHtml(b.notes)}</span></div>` : ''}
-    </div>
-  `;
+  let infoHtml;
+  if (isCreator) {
+    infoHtml = `
+      <div class="section-header">Details</div>
+      <div class="field-group">
+        <div class="field-row">
+          <label>Datum</label>
+          <input type="date" id="detail-edit-date" value="${b.date}" />
+        </div>
+        <div class="field-row">
+          <label>Van</label>
+          ${buildTimeSelectHtml('detail-edit-start', b.start_time)}
+        </div>
+        <div class="field-row">
+          <label>Tot</label>
+          ${buildTimeSelectHtml('detail-edit-end', b.end_time)}
+        </div>
+        <div class="field-row">
+          <label>Notities</label>
+          <textarea id="detail-edit-notes" rows="2" placeholder="Optionele opmerkingen...">${escHtml(b.notes || '')}</textarea>
+        </div>
+        <div class="field-row">
+          <label>Privé potje</label>
+          <label class="toggle">
+            <input type="checkbox" id="detail-edit-private" ${b.is_private ? 'checked' : ''} />
+            <span class="toggle-track"></span>
+          </label>
+        </div>
+      </div>
+    `;
+  } else {
+    infoHtml = `
+      <div class="section-header">Details</div>
+      <div class="field-group">
+        <div class="field-row"><label>Datum</label><span>${formatDate(b.date)}</span></div>
+        <div class="field-row"><label>Tijd</label><span>${b.start_time} – ${b.end_time}</span></div>
+        <div class="field-row"><label>Organisator</label><span>${escHtml(b.creator_name)}</span></div>
+        ${levelRow}
+        ${b.notes ? `<div class="field-row"><label>Notities</label><span>${escHtml(b.notes)}</span></div>` : ''}
+      </div>
+    `;
+  }
 
   // Betaallink (voor deelnemers)
   let payHtml = '';
@@ -790,10 +822,10 @@ async function showDetailModal(id) {
   document.getElementById('detail-body').innerHTML =
     infoHtml + payHtml + inviteHtml + payFormHtml + participantsHtml;
 
-  // Bewerk-knop in header voor organisator
+  // Opslaan-knop in header voor organisator
   const headerRight = document.getElementById('detail-header-right');
   if (isCreator) {
-    headerRight.innerHTML = `<button class="sheet-done" onclick="showEditBookingModal()">Bewerk</button>`;
+    headerRight.innerHTML = `<button class="sheet-done" onclick="handleDetailSave(${id})">Opslaan</button>`;
   } else {
     headerRight.innerHTML = '';
   }
@@ -834,6 +866,24 @@ async function showDetailModal(id) {
 function hideDetailModal() {
   document.getElementById('detail-modal').classList.add('hidden');
   currentDetailId = null;
+}
+
+async function handleDetailSave(id) {
+  clearError('detail-error');
+  const body = {
+    date:       document.getElementById('detail-edit-date').value,
+    start_time: document.getElementById('detail-edit-start').value,
+    end_time:   document.getElementById('detail-edit-end').value,
+    notes:      document.getElementById('detail-edit-notes').value,
+    is_private: document.getElementById('detail-edit-private').checked,
+  };
+  const res  = await api(`/api/bookings/${id}`, { method: 'PUT', body });
+  const data = await res.json();
+  if (!res.ok) return showError('detail-error', data.error);
+  await showDetailModal(id);
+  loadBookings();
+  loadCalendar();
+  showToast('Wijzigingen opgeslagen');
 }
 
 async function markPaidAndRefresh(id) {
@@ -1042,7 +1092,12 @@ async function handleCreateBooking(e) {
     const data = await res.json();
     if (!res.ok) return showError('booking-error', data.error);
     hideNewBookingModal(); loadBookings(); loadCalendar();
-    if (isReeks) showToast(`${data.count} potjes aangemaakt`);
+    if (isReeks) {
+      showToast(`${data.count} potjes aangemaakt`);
+      showDetailModal(data.ids[0]);
+    } else {
+      showDetailModal(data.id);
+    }
   }
 }
 
@@ -1175,6 +1230,20 @@ function setTimeSelect(id, val) {
   for (const opt of sel.options) {
     if (opt.value === v) { opt.selected = true; break; }
   }
+}
+
+// Bouw een <select> met tijdopties als HTML-string (voor gebruik in innerHTML)
+function buildTimeSelectHtml(id, selectedVal) {
+  const v = selectedVal ? selectedVal.slice(0, 5) : '';
+  let html = `<select id="${id}" class="time-select">`;
+  for (let h = 6; h <= 23; h++) {
+    for (let m = 0; m < 60; m += 30) {
+      const val = `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`;
+      html += `<option value="${val}"${val === v ? ' selected' : ''}>${val}</option>`;
+    }
+  }
+  html += '</select>';
+  return html;
 }
 
 /* ── Admin ────────────────────────────────────────────────── */
