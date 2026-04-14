@@ -244,7 +244,7 @@ function switchTab(tab) {
     if (bl) bl.classList.remove('hidden');
     loadBuddies();
   }
-  if (tab === 'profiel')  { loadHistory(); loadUnpaid(); loadProfileStats(); loadIcalToken(); }
+  if (tab === 'profiel')  { loadHistory(); loadUnpaid(); loadProfileStats(); }
   if (tab === 'admin')    { loadAdminStats(); adminSearchUsers(); loadAdminBookings(); }
 }
 
@@ -425,27 +425,22 @@ async function loadProfileStats() {
 let icalUrl = null;
 
 async function loadIcalToken() {
-  const el = document.getElementById('ical-url-text');
-  if (!el) return;
   const res  = await api('/api/ical/token');
-  if (!res.ok) { el.textContent = 'Niet beschikbaar'; return; }
-  const data = await res.json();
-  icalUrl = data.url;
-  el.textContent = data.url;
+  if (!res.ok) return;
+  icalUrl = (await res.json()).url;
 }
 
-function copyIcalUrl() {
-  if (!icalUrl) return;
-  navigator.clipboard.writeText(icalUrl).then(() => showToast('Agenda-link gekopieerd!'));
+async function openIcalFeed() {
+  if (!icalUrl) await loadIcalToken();
+  if (!icalUrl) return showToast('Kon de link niet laden');
+  navigator.clipboard.writeText(icalUrl).catch(() => {});
+  window.location.href = icalUrl;
 }
 
 async function regenerateIcalToken() {
   if (!confirm('Dit maakt je huidige agenda-link ongeldig. Doorgaan?')) return;
-  const res  = await api('/api/ical/token/regenerate', { method: 'POST' });
-  const data = await res.json();
+  const data = await (await api('/api/ical/token/regenerate', { method: 'POST' })).json();
   icalUrl = data.url;
-  const el = document.getElementById('ical-url-text');
-  if (el) el.textContent = data.url;
   showToast('Nieuwe agenda-link aangemaakt');
 }
 
