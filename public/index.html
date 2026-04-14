@@ -209,6 +209,7 @@
       <h1 class="nav-title">Buddies</h1>
     </div>
     <div class="scroll-area">
+      <p class="buddies-hint">Voeg spelers toe als buddy via hun profiel in een potje.</p>
       <div id="buddies-list"></div>
     </div>
   </div>
@@ -584,6 +585,48 @@
         </div>
       </div>
       <div id="admin-pw-error" class="inline-error hidden"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════
+     MODAL: Speler profiel
+══════════════════════════════════════════════ -->
+<div id="player-modal" class="sheet-overlay hidden" onclick="closeSheet(event)">
+  <div class="sheet">
+    <div class="sheet-header">
+      <button class="sheet-cancel" onclick="hidePlayerModal()">Sluiten</button>
+      <h2 class="sheet-title" id="player-modal-title"></h2>
+      <div style="width:60px"></div>
+    </div>
+    <div class="sheet-body" id="player-modal-body"></div>
+    <div class="sheet-actions" id="player-modal-actions"></div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════
+     MODAL: Chat
+══════════════════════════════════════════════ -->
+<div id="chat-modal" class="sheet-overlay hidden">
+  <div class="sheet sheet-tall">
+    <div class="chat-nav">
+      <button class="chat-back-btn" onclick="hideChat()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="20" height="20">
+          <path d="M19 12H5M12 5l-7 7 7 7"/>
+        </svg>
+      </button>
+      <div class="chat-nav-info" id="chat-nav-info"></div>
+      <div style="width:40px"></div>
+    </div>
+    <div class="chat-messages" id="chat-messages"></div>
+    <div class="chat-input-bar">
+      <input type="text" id="chat-input" placeholder="Bericht..." autocomplete="off"
+             onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendChatMessage()}" />
+      <button class="chat-send-btn" onclick="sendChatMessage()">
+        <svg viewBox="0 0 24 24" fill="currentColor" width="20" height="20">
+          <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/>
+        </svg>
+      </button>
     </div>
   </div>
 </div>

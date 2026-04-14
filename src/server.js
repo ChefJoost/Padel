@@ -34,6 +34,7 @@ app.use(session({
 // Routes
 app.use('/api/auth', require('./auth'));
 app.use('/api/bookings', require('./bookings'));
+app.use('/api/buddies', require('./buddies'));
 app.use('/api/push', require('./push').router);
 app.use('/api/admin', require('./admin'));
 

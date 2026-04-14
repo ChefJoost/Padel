@@ -701,7 +701,9 @@ async function showDetailModal(id) {
     const icon = p.avatar
       ? `<span class="p-avatar" style="background-image:url('${escAttr(p.avatar)}')"></span>`
       : `🎾`;
-    return `<div class="field-row"><span class="p-player">${icon} ${escHtml(p.display_name)}</span></div>`;
+    const isSelf = p.user_id === currentUser.userId;
+    const clickAttr = isSelf ? '' : `onclick="showPlayerProfile(${p.user_id})" style="cursor:pointer"`;
+    return `<div class="field-row" ${clickAttr}><span class="p-player">${icon} ${escHtml(p.display_name)}</span>${isSelf ? '' : '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14" style="color:var(--text-3);flex-shrink:0;margin-left:auto"><path d="M9 18l6-6-6-6"/></svg>'}</div>`;
   });
   for (let i = b.participants.length; i < 4; i++) {
     playerRows.push(`<div class="field-row p-empty"><span class="p-icon">○</span> Vrije plek</div>`);
@@ -1271,37 +1273,209 @@ async function handleAdminSaveBooking() {
 
 /* ── Buddies ──────────────────────────────────────────────── */
 async function loadBuddies() {
-  const res = await api('/api/auth/users');
+  const res  = await api('/api/buddies');
   if (!res.ok) return;
-  const users = await res.json();
-  const list  = document.getElementById('buddies-list');
+  const list = await res.json();
+  renderBuddiesList(list);
+}
 
-  if (users.length === 0) {
-    list.innerHTML = `<div class="empty-state"><div class="empty-icon">👥</div>
-      <p class="empty-title">Nog geen andere spelers</p></div>`;
+function renderBuddiesList(buddies) {
+  const el = document.getElementById('buddies-list');
+  if (buddies.length === 0) {
+    el.innerHTML = `<div class="empty-state" style="padding:40px 0">
+      <div class="empty-icon">👥</div>
+      <p class="empty-title">Nog geen buddies</p>
+      <p class="empty-sub">Klik op een speler in een potje om hem toe te voegen.</p>
+    </div>`;
     return;
   }
-
-  list.innerHTML = users.map(u => {
+  el.innerHTML = buddies.map(u => {
+    const avatarStyle = u.avatar
+      ? `style="background-image:url('${escAttr(u.avatar)}')"` : '';
     const initials = u.display_name.split(' ').map(w => w[0]).join('').slice(0,2).toUpperCase();
-    const avatarInner = u.avatar
-      ? `<img src="${u.avatar}" alt="${u.display_name}">`
-      : initials;
-    const togetherLabel = u.games_together > 0
-      ? `${u.games_together} potje${u.games_together !== 1 ? 's' : ''} samen gespeeld`
-      : 'Nog niet samen gespeeld';
-    const levelLabel = u.level ? `Niveau ${u.level}` : '';
-    const meta = [levelLabel, togetherLabel].filter(Boolean).join(' · ');
-
-    return `<div class="buddy-card">
-      <div class="buddy-avatar">${avatarInner}</div>
+    const avatarContent = u.avatar ? '' : initials;
+    const unreadHtml = u.unread_count > 0
+      ? `<span class="buddy-unread-dot">${u.unread_count > 9 ? '9+' : u.unread_count}</span>` : '';
+    const lastMsg = u.last_message
+      ? `<div class="buddy-last-msg${u.unread_count > 0 ? ' buddy-last-msg--unread' : ''}">${escHtml(u.last_message)}</div>`
+      : `<div class="buddy-last-msg">${u.games_together} potje${u.games_together!==1?'s':''} samen</div>`;
+    return `<div class="buddy-card" onclick="openChat(${u.id})">
+      <div class="buddy-avatar-wrap">
+        <div class="buddy-avatar" ${avatarStyle}>${avatarContent}</div>
+        ${unreadHtml}
+      </div>
       <div class="buddy-info">
-        <div class="buddy-name">${u.display_name}</div>
-        <div class="buddy-meta">${meta}</div>
+        <div class="buddy-name">${escHtml(u.display_name)}</div>
+        ${lastMsg}
       </div>
       ${u.level ? `<span class="buddy-level">${u.level}</span>` : ''}
     </div>`;
   }).join('');
+}
+
+/* ── Speler profiel (vanuit potje detail) ─────────────────── */
+async function showPlayerProfile(userId) {
+  if (!userId || userId === currentUser.userId) return;
+  const res = await api(`/api/buddies/profile/${userId}`);
+  if (!res.ok) return;
+  const u = await res.json();
+
+  document.getElementById('player-modal-title').textContent = u.display_name;
+
+  const avatarStyle = u.avatar ? `style="background-image:url('${escAttr(u.avatar)}')"` : '';
+  const initials    = u.display_name.split(' ').map(w => w[0]).join('').slice(0,2).toUpperCase();
+
+  document.getElementById('player-modal-body').innerHTML = `
+    <div class="player-profile-hero">
+      <div class="player-profile-avatar" ${avatarStyle}>${u.avatar ? '' : initials}</div>
+      <div class="player-profile-name">${escHtml(u.display_name)}</div>
+      <div class="player-profile-meta">
+        ${u.level ? `Niveau ${u.level}` : ''}
+        ${u.games_together > 0 ? ` · ${u.games_together} potje${u.games_together!==1?'s':''} samen` : ''}
+      </div>
+    </div>`;
+
+  const actions = document.getElementById('player-modal-actions');
+  if (u.is_my_buddy) {
+    actions.innerHTML = `
+      <button class="btn btn-primary btn-full" onclick="hidePlayerModal();openChat(${u.id})">💬 Stuur een bericht</button>
+      <button class="btn btn-outline btn-full" onclick="removeBuddy(${u.id}, this)">Verwijder als buddy</button>`;
+  } else {
+    actions.innerHTML = `
+      <button class="btn btn-primary btn-full" onclick="addBuddy(${u.id}, this)">➕ Toevoegen als buddy</button>`;
+  }
+
+  document.getElementById('player-modal').classList.remove('hidden');
+}
+
+function hidePlayerModal() {
+  document.getElementById('player-modal').classList.add('hidden');
+}
+
+async function addBuddy(userId, btn) {
+  btn.disabled = true;
+  const res = await api(`/api/buddies/${userId}`, { method: 'POST' });
+  if (!res.ok) { btn.disabled = false; return; }
+  btn.textContent = '✓ Buddy toegevoegd';
+  btn.className = 'btn btn-outline btn-full';
+  // Voeg optie toe om te chatten
+  const actions = document.getElementById('player-modal-actions');
+  actions.innerHTML = `
+    <button class="btn btn-primary btn-full" onclick="hidePlayerModal();openChat(${userId})">💬 Stuur een bericht</button>
+    <button class="btn btn-outline btn-full" onclick="removeBuddy(${userId}, this)">Verwijder als buddy</button>`;
+}
+
+async function removeBuddy(userId, btn) {
+  btn.disabled = true;
+  const res = await api(`/api/buddies/${userId}`, { method: 'DELETE' });
+  if (!res.ok) { btn.disabled = false; return; }
+  const actions = document.getElementById('player-modal-actions');
+  actions.innerHTML = `
+    <button class="btn btn-primary btn-full" onclick="addBuddy(${userId}, this)">➕ Toevoegen als buddy</button>`;
+}
+
+/* ── Chat ─────────────────────────────────────────────────── */
+let chatUserId      = null;
+let chatLastId      = 0;
+let chatPollTimer   = null;
+let chatBuddyName   = '';
+
+async function openChat(userId) {
+  chatUserId = userId;
+  chatLastId = 0;
+
+  // Haal profiel op voor naam/avatar
+  const profRes = await api(`/api/buddies/profile/${userId}`);
+  if (!profRes.ok) return;
+  const u = await profRes.json();
+  chatBuddyName = u.display_name;
+
+  const avatarStyle = u.avatar ? `style="background-image:url('${escAttr(u.avatar)}')"` : '';
+  const initials    = u.display_name.split(' ').map(w => w[0]).join('').slice(0,2).toUpperCase();
+
+  document.getElementById('chat-nav-info').innerHTML = `
+    <div class="chat-nav-name">${escHtml(u.display_name)}</div>
+    ${u.games_together > 0 ? `<div class="chat-nav-games">${u.games_together} potje${u.games_together!==1?'s':''} samen</div>` : ''}`;
+
+  // Laad berichten
+  const msgRes = await api(`/api/buddies/chat/${userId}`);
+  if (!msgRes.ok) return;
+  const messages = await msgRes.json();
+  if (messages.length > 0) chatLastId = messages[messages.length - 1].id;
+
+  renderChatMessages(messages, true);
+  document.getElementById('chat-modal').classList.remove('hidden');
+  document.getElementById('chat-input').focus();
+
+  // Start polling
+  stopChatPolling();
+  chatPollTimer = setInterval(pollChat, 3000);
+}
+
+function hideChat() {
+  stopChatPolling();
+  document.getElementById('chat-modal').classList.add('hidden');
+  chatUserId = null;
+  if (currentTab === 'buddies') loadBuddies(); // vernieuw ongelezen tellers
+}
+
+function stopChatPolling() {
+  if (chatPollTimer) { clearInterval(chatPollTimer); chatPollTimer = null; }
+}
+
+async function pollChat() {
+  if (!chatUserId) return;
+  const res = await api(`/api/buddies/chat/${chatUserId}/new?after=${chatLastId}`);
+  if (!res.ok) return;
+  const msgs = await res.json();
+  if (msgs.length === 0) return;
+  chatLastId = msgs[msgs.length - 1].id;
+  renderChatMessages(msgs, false);
+}
+
+function renderChatMessages(messages, replace) {
+  const container = document.getElementById('chat-messages');
+  if (replace) container.innerHTML = '';
+
+  let lastDate = replace ? null : container.dataset.lastDate || null;
+
+  const fragment = document.createDocumentFragment();
+
+  for (const msg of messages) {
+    const d    = new Date(msg.created_at.replace(' ','T') + (msg.created_at.includes('Z') ? '' : 'Z'));
+    const dateKey = d.toLocaleDateString('nl-NL', { day:'numeric', month:'long' });
+
+    if (dateKey !== lastDate) {
+      const lbl = document.createElement('div');
+      lbl.className = 'chat-date-label';
+      lbl.textContent = dateKey;
+      fragment.appendChild(lbl);
+      lastDate = dateKey;
+    }
+
+    const isMine = msg.sender_id === currentUser.userId;
+    const bubble = document.createElement('div');
+    bubble.className = `chat-bubble chat-bubble--${isMine ? 'mine' : 'theirs'}`;
+    bubble.innerHTML = `${escHtml(msg.content)}<div class="chat-time">${d.toLocaleTimeString('nl-NL',{hour:'2-digit',minute:'2-digit'})}</div>`;
+    fragment.appendChild(bubble);
+  }
+
+  container.appendChild(fragment);
+  container.dataset.lastDate = lastDate || '';
+  container.scrollTop = container.scrollHeight;
+}
+
+async function sendChatMessage() {
+  const input   = document.getElementById('chat-input');
+  const content = input.value.trim();
+  if (!content || !chatUserId) return;
+  input.value = '';
+
+  const res = await api(`/api/buddies/chat/${chatUserId}`, { method: 'POST', body: { content } });
+  if (!res.ok) { input.value = content; return; }
+  const msg = await res.json();
+  chatLastId = msg.id;
+  renderChatMessages([msg], false);
 }
 
 /* ── Kalender — Potjes overzicht ──────────────────────────── */
