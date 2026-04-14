@@ -108,3 +108,7 @@ migrate('ALTER TABLE availability ADD COLUMN end_time TEXT');
 migrate("UPDATE users SET is_admin = 1 WHERE username = 'joosts'");
 
 module.exports = db;
+
+// Log welke tabellen aanwezig zijn bij opstarten
+const tables = db.prepare("SELECT name FROM sqlite_master WHERE type='table' ORDER BY name").all();
+console.log('[database] tabellen bij opstarten:', tables.map(t => t.name).join(', '));
