@@ -103,7 +103,7 @@ router.get('/:token.ics', (req, res) => {
   ].join('\r\n');
 
   res.setHeader('Content-Type', 'text/calendar; charset=utf-8');
-  res.setHeader('Content-Disposition', 'attachment; filename="padelpotjes.ics"');
+  res.setHeader('Content-Disposition', 'inline; filename="padelpotjes.ics"');
   res.setHeader('Cache-Control', 'no-cache, no-store');
   res.send(cal);
 });

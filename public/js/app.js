@@ -433,8 +433,10 @@ async function loadIcalToken() {
 async function openIcalFeed() {
   if (!icalUrl) await loadIcalToken();
   if (!icalUrl) return showToast('Kon de link niet laden');
+  // Kopieer de https:// URL stil naar klembord (voor handmatig plakken)
   navigator.clipboard.writeText(icalUrl).catch(() => {});
-  window.location.href = icalUrl;
+  // webcal:// laat iOS/Android direct de agenda-app kiezen
+  window.location.href = icalUrl.replace(/^https?:/, 'webcal:');
 }
 
 async function regenerateIcalToken() {
