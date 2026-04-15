@@ -475,12 +475,13 @@ async function loadHistory() {
       ? b.participants_names.split('||').map(escHtml).join(', ')
       : '';
     return `
-    <div class="field-row history-row">
+    <div class="field-row history-row" style="cursor:pointer" onclick="showDetailModal(${b.id})">
       <div class="history-info">
         <div class="history-title">Padelpotje</div>
         <div class="history-meta">${formatDate(b.date)}</div>
         ${names ? `<div class="history-players">${names}</div>` : ''}
       </div>
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="color:var(--text-3);flex-shrink:0"><path d="M9 18l6-6-6-6"/></svg>
     </div>`;
   }).join('');
 }
@@ -2263,11 +2264,13 @@ function openCalDay(dateStr) {
       if (isPast) {
         const badgeClass = joined ? 'cal-potje-badge--joined' : 'cal-potje-badge--past';
         const badgeText  = joined ? 'Jij hebt meegedaan' : `${b.player_count} speler${b.player_count !== 1 ? 's' : ''}`;
-        return `<div class="field-row cal-potje-row cal-potje-row--past">
+        const canOpen    = joined || isOrg;
+        return `<div class="field-row cal-potje-row${canOpen ? ' cal-potje-row--past' : ' cal-potje-row--past'}"${canOpen ? ` onclick="hideCalDayModal(); showDetailModal(${b.id})"` : ''} style="${canOpen ? 'cursor:pointer' : ''}">
           <div style="flex:1;min-width:0">
             <div class="cal-potje-meta">${b.start_time.slice(0,5)} – ${b.end_time.slice(0,5)}</div>
             <span class="cal-potje-badge ${badgeClass}">${badgeText}</span>
           </div>
+          ${canOpen ? `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="color:var(--text-3);flex-shrink:0"><path d="M9 18l6-6-6-6"/></svg>` : ''}
         </div>`;
       }
 
