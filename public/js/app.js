@@ -1925,7 +1925,9 @@ function renderCalendar() {
       const isJoined = !!b.user_joined && !isOrg;
       if (!isOrg && !isJoined) return '';
       const dotCls = isOrg ? 'cal-day-dot--organizer' : 'cal-day-dot--joined';
-      return `<span class="cal-day-dot ${dotCls}"></span>`;
+      const count  = b.player_count || 0;
+      const badge  = count > 0 ? `<span class="cal-day-dot-badge">${count}</span>` : '';
+      return `<span class="cal-day-dot-wrap"><span class="cal-day-dot ${dotCls}"></span>${badge}</span>`;
     }).join('');
     const dotsHtml = dots ? `<span class="cal-day-dots">${dots}</span>` : '';
 

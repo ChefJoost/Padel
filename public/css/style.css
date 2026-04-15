@@ -1131,7 +1131,6 @@ body {
   background: var(--surface);
   min-height: 40px;
   gap: 3px;
-  overflow: hidden;
 }
 .cal-day:active { transform: scale(.91); }
 
@@ -1181,18 +1180,42 @@ body {
 }
 
 /* Bolletjes onder het getal: één bolletje per potje (max 3) */
-.cal-day-dots {
-  display: flex;
-  gap: 2px;
+.cal-day-dots { display: flex; gap: 6px; }
+
+.cal-day-dot-wrap {
+  position: relative;
+  width: 9px;
+  height: 9px;
+  flex-shrink: 0;
 }
 .cal-day-dot {
-  width: 5px;
-  height: 5px;
+  width: 9px;
+  height: 9px;
   border-radius: 50%;
-  background: var(--text-3);           /* grijs: niet betrokken */
+  background: var(--text-3);
 }
-.cal-day-dot--organizer { background: var(--orange); }  /* oranje: beheerder */
-.cal-day-dot--joined    { background: var(--blue); }    /* blauw: deelnemer */
+.cal-day-dot--organizer { background: var(--orange); }
+.cal-day-dot--joined    { background: var(--blue); }
+
+/* Badge met deelnemersaantal (app-icoon stijl) */
+.cal-day-dot-badge {
+  position: absolute;
+  top: -5px;
+  right: -6px;
+  min-width: 12px;
+  height: 12px;
+  padding: 0 2px;
+  border-radius: 6px;
+  background: var(--red);
+  color: #fff;
+  font-size: 7px;
+  font-weight: 800;
+  line-height: 12px;
+  text-align: center;
+  border: 1.5px solid var(--surface);
+  box-sizing: border-box;
+  pointer-events: none;
+}
 
 /* Dag-detail sheet – potjes lijst */
 .cal-potje-row {
