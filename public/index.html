@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <title>PadelPotje</title>
-  <link rel="stylesheet" href="/css/style.css?v=15" />
+  <link rel="stylesheet" href="/css/style.css?v=16" />
 </head>
 <body>
 
@@ -294,14 +294,10 @@
       <div class="section-header">Agenda koppelen</div>
       <div class="field-group">
         <div class="field-row history-empty">Voeg je potjes automatisch toe in je agenda via een iCal!</div>
-        <div class="field-row" style="padding:10px 16px">
-          <a id="ical-google-link" class="btn btn-primary btn-full" target="_blank" rel="noopener noreferrer" style="text-decoration:none;text-align:center;display:block">Google Agenda</a>
-        </div>
-        <div class="field-row" style="padding:10px 16px">
-          <a id="ical-other-link" class="btn btn-outline btn-full" style="text-decoration:none;text-align:center;display:block">Andere agenda-app</a>
-        </div>
-        <div class="field-row">
-          <button class="btn btn-outline btn-full" style="font-size:.84rem;color:var(--text-2)" onclick="regenerateIcalToken()">Nieuwe link aanmaken</button>
+        <div class="field-row ical-btn-row">
+          <a id="ical-google-link" class="btn btn-outline ical-btn" target="_blank" rel="noopener noreferrer">Google Agenda</a>
+          <button class="btn btn-outline ical-btn" onclick="copyIcalUrl()">iCal kopiëren</button>
+          <button class="btn btn-outline ical-btn" style="color:var(--text-2)" onclick="regenerateIcalToken()">Nieuwe link</button>
         </div>
       </div>
 
@@ -721,6 +717,6 @@
 </div>
 
 <div id="toast" class="toast hidden"></div>
-<script src="/js/app.js?v=15"></script>
+<script src="/js/app.js?v=16"></script>
 </body>
 </html>

@@ -433,26 +433,17 @@ async function loadIcalToken() {
 
 function setIcalLink(url) {
   if (!url) return;
-  const isIOS = /iP(hone|ad|od)/.test(navigator.userAgent);
-
-  // Google Agenda (werkt op alle platforms)
   const googleLink = document.getElementById('ical-google-link');
   if (googleLink) {
     googleLink.href = `https://calendar.google.com/calendar/r?cid=${encodeURIComponent(url)}`;
   }
+}
 
-  // Andere app: webcal:// op iOS (werkt met Apple, Outlook, etc.),
-  // directe .ics URL op Android (Chrome downloadt → OS toont app-kiezer)
-  const otherLink = document.getElementById('ical-other-link');
-  if (otherLink) {
-    if (isIOS) {
-      otherLink.href = url.replace(/^https?:/, 'webcal:');
-      otherLink.textContent = 'Apple / andere agenda-app';
-    } else {
-      otherLink.href = url;
-      otherLink.textContent = 'Andere agenda-app (iCal)';
-    }
-  }
+function copyIcalUrl() {
+  if (!icalUrl) return showToast('Link nog niet geladen');
+  navigator.clipboard.writeText(icalUrl)
+    .then(() => showToast('iCal gekopieerd!'))
+    .catch(() => showToast('Kopiëren mislukt'));
 }
 
 async function regenerateIcalToken() {
