@@ -1738,13 +1738,19 @@ async function openGroupChat(groupId) {
 
 async function openGroupInfo() {
   if (!chatGroupId) return;
-  const res = await api(`/api/groups/${chatGroupId}`);
-  if (!res.ok) return;
-  const group = await res.json();
+  const [infoRes, buddiesRes] = await Promise.all([
+    api(`/api/groups/${chatGroupId}`),
+    api('/api/buddies'),
+  ]);
+  if (!infoRes.ok) return;
+  const group   = await infoRes.json();
+  const buddies = buddiesRes.ok ? await buddiesRes.json() : [];
 
   document.getElementById('group-info-title').textContent = group.name;
 
-  const isCreator = group.created_by === currentUser.userId;
+  const isCreator  = group.created_by === currentUser.userId;
+  const memberIds  = new Set(group.members.map(m => m.id));
+
   const membersHtml = group.members.map(m => {
     const bgStyle  = m.avatar ? `background-image:url('${escAttr(m.avatar)}');` : '';
     const initials = m.display_name.split(' ').map(w => w[0]).join('').slice(0,2).toUpperCase();
@@ -1757,6 +1763,19 @@ async function openGroupInfo() {
     </div>`;
   }).join('');
 
+  const addable = buddies.filter(b => !memberIds.has(b.id));
+  const addSection = addable.length === 0 ? '' : `
+    <div class="section-header" style="margin-top:4px">Buddy toevoegen</div>
+    <div class="field-group">${addable.map(u => {
+      const bgStyle2 = u.avatar ? `background-image:url('${escAttr(u.avatar)}');` : '';
+      const initials2 = u.display_name.split(' ').map(w => w[0]).join('').slice(0,2).toUpperCase();
+      return `<div class="group-info-member">
+        <div class="buddy-avatar" style="${bgStyle2}width:36px;height:36px;font-size:.8rem">${u.avatar ? '' : initials2}</div>
+        <div class="group-info-member-name">${escHtml(u.display_name)}</div>
+        <button class="btn btn-outline" style="padding:6px 14px;font-size:.8rem" onclick="addGroupMember(${group.id},${u.id},this)">+ Toevoegen</button>
+      </div>`;
+    }).join('')}</div>`;
+
   const actionBtn = isCreator
     ? `<button class="btn btn-destructive-outline btn-full" style="margin:16px" onclick="deleteGroup(${group.id})">Groep verwijderen</button>`
     : `<button class="btn btn-outline btn-full" style="margin:16px" onclick="leaveGroup(${group.id})">Groep verlaten</button>`;
@@ -1764,9 +1783,24 @@ async function openGroupInfo() {
   document.getElementById('group-info-body').innerHTML = `
     <div class="section-header" style="margin-top:8px">Leden (${group.members.length})</div>
     <div class="field-group">${membersHtml}</div>
+    ${addSection}
     ${actionBtn}`;
 
   document.getElementById('group-info-modal').classList.remove('hidden');
+}
+
+async function addGroupMember(groupId, userId, btn) {
+  btn.disabled = true;
+  btn.textContent = '...';
+  const res = await api(`/api/groups/${groupId}/members`, { method: 'POST', body: { userId } });
+  if (!res.ok) {
+    btn.disabled = false;
+    btn.textContent = '+ Toevoegen';
+    showToast('Toevoegen mislukt');
+    return;
+  }
+  // Verwijder de rij en herlaad de info
+  openGroupInfo();
 }
 
 function hideGroupInfo() {
