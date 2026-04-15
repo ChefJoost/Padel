@@ -1226,7 +1226,7 @@ body {
 /* Badge met deelnemersaantal (app-icoon stijl) */
 .cal-day-dot-badge {
   position: absolute;
-  top: 6px;
+  top: 0px;
   right: -6px;
   min-width: 12px;
   height: 12px;
