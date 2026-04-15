@@ -1,6 +1,7 @@
 const express = require('express');
 const router  = express.Router();
 const db      = require('./database');
+const { sendPushToUser } = require('./push');
 
 function requireAuth(req, res, next) {
   if (!req.session.userId) return res.status(401).json({ error: 'Niet ingelogd' });
@@ -211,6 +212,20 @@ router.post('/:id/chat', requireAuth, (req, res) => {
     ).get(result.lastInsertRowid);
 
     res.json(msg);
+
+    // Push naar alle andere groepsleden (fire-and-forget)
+    const group   = db.prepare('SELECT name FROM chat_groups WHERE id = ?').get(groupId);
+    const others  = db.prepare(
+      'SELECT user_id FROM group_members WHERE group_id = ? AND user_id != ?'
+    ).all(groupId, me);
+    const preview = content.trim().slice(0, 100);
+    for (const { user_id } of others) {
+      sendPushToUser(user_id, {
+        title: `${msg.sender_name} in ${group?.name || 'groep'}`,
+        body:  preview,
+        url:   '/#buddies',
+      }).catch(() => {});
+    }
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

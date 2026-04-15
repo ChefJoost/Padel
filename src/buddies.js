@@ -1,6 +1,7 @@
 const express = require('express');
 const router  = express.Router();
 const db      = require('./database');
+const { sendPushToUser } = require('./push');
 
 function requireAuth(req, res, next) {
   if (!req.session.userId) return res.status(401).json({ error: 'Niet ingelogd' });
@@ -206,6 +207,14 @@ router.post('/chat/:userId', requireAuth, (req, res) => {
     ).get(result.lastInsertRowid);
 
     res.json(msg);
+
+    // Push naar ontvanger (fire-and-forget)
+    const sender = db.prepare('SELECT display_name FROM users WHERE id = ?').get(me);
+    sendPushToUser(other, {
+      title: sender?.display_name || 'Nieuw bericht',
+      body:  content.trim().slice(0, 100),
+      url:   '/#buddies',
+    }).catch(() => {});
   } catch (err) {
     console.error('[chat POST] fout:', err.message);
     res.status(500).json({ error: err.message });
