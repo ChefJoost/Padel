@@ -2198,7 +2198,10 @@ function renderCalendar() {
   grid.innerHTML = html;
 }
 
+let currentCalDayDate = null;
+
 function openCalDay(dateStr) {
+  currentCalDayDate = dateStr;
   const potjes = calData[dateStr] || [];
   const [y, m, d] = dateStr.split('-');
   const label = new Date(+y, +m - 1, +d)
