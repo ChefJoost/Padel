@@ -140,6 +140,20 @@ router.delete('/:id/leave', requireAuth, (req, res) => {
   res.json({ success: true });
 });
 
+// POST /api/groups/:id/members → lid toevoegen
+router.post('/:id/members', requireAuth, (req, res) => {
+  const me      = req.session.userId;
+  const groupId = parseInt(req.params.id, 10);
+  const { userId } = req.body || {};
+  if (!userId) return res.status(400).json({ error: 'userId verplicht' });
+
+  const isMember = db.prepare('SELECT 1 FROM group_members WHERE group_id = ? AND user_id = ?').get(groupId, me);
+  if (!isMember) return res.status(403).json({ error: 'Geen lid' });
+
+  db.prepare('INSERT OR IGNORE INTO group_members (group_id, user_id) VALUES (?, ?)').run(groupId, Number(userId));
+  res.json({ success: true });
+});
+
 // GET /api/groups/:id/chat → berichten ophalen (markeer als gelezen)
 router.get('/:id/chat', requireAuth, (req, res) => {
   const me      = req.session.userId;
