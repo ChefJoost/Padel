@@ -1919,14 +1919,17 @@ function renderCalendar() {
     if (iJoined)            cls += ' cal-day--joined';
     else if (hasPotje)      cls += ' cal-day--has-potje';
 
-    // Bolletjes: oranje=beheerder, blauw=deelnemer, geen dot als niet betrokken
+    // Bolletjes: oranje=beheerder, blauw=deelnemer, grijs=open potje
     const dots = potjes.slice(0, 3).map(b => {
       const isOrg    = b.created_by === currentUser.userId;
       const isJoined = !!b.user_joined && !isOrg;
-      if (!isOrg && !isJoined) return '';
-      const dotCls = isOrg ? 'cal-day-dot--organizer' : 'cal-day-dot--joined';
-      const count  = b.player_count || 0;
-      const badge  = count > 0 ? `<span class="cal-day-dot-badge">${count}</span>` : '';
+      const dotCls   = isOrg ? 'cal-day-dot--organizer' : isJoined ? 'cal-day-dot--joined' : '';
+      const count    = b.player_count || 0;
+      // Badgekleur op basis van bezetting: 1-2 groen, 3 oranje, 4 rood
+      const badgeMod = count >= 4 ? 'cal-day-dot-badge--red'
+                     : count >= 3 ? 'cal-day-dot-badge--orange'
+                     :              'cal-day-dot-badge--green';
+      const badge = count > 0 ? `<span class="cal-day-dot-badge ${badgeMod}">${count}</span>` : '';
       return `<span class="cal-day-dot-wrap"><span class="cal-day-dot ${dotCls}"></span>${badge}</span>`;
     }).join('');
     const dotsHtml = dots ? `<span class="cal-day-dots">${dots}</span>` : '';

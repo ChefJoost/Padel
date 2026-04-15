@@ -1206,7 +1206,6 @@ body {
   height: 12px;
   padding: 0 2px;
   border-radius: 6px;
-  background: var(--red);
   color: #fff;
   font-size: 7px;
   font-weight: 800;
@@ -1216,6 +1215,9 @@ body {
   box-sizing: border-box;
   pointer-events: none;
 }
+.cal-day-dot-badge--green  { background: var(--green); }
+.cal-day-dot-badge--orange { background: var(--orange); }
+.cal-day-dot-badge--red    { background: var(--red); }
 
 /* Dag-detail sheet – potjes lijst */
 .cal-potje-row {
