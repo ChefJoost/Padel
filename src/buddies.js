@@ -9,6 +9,19 @@ function requireAuth(req, res, next) {
 
 // ── Buddies ──────────────────────────────────────────────────
 
+// GET /api/buddies/unread → aantal buddies met ongelezen berichten (voor tab-badge)
+router.get('/unread', requireAuth, (req, res) => {
+  const me = req.session.userId;
+  try {
+    const row = db.prepare(
+      'SELECT COUNT(DISTINCT sender_id) AS count FROM messages WHERE receiver_id = ? AND read_at IS NULL'
+    ).get(me);
+    res.json({ count: row?.count ?? 0 });
+  } catch (_) {
+    res.json({ count: 0 });
+  }
+});
+
 // GET /api/buddies  → mijn buddies met laatste bericht + ongelezen teller
 router.get('/', requireAuth, (req, res) => {
   const me = req.session.userId;

@@ -371,12 +371,15 @@
       <span>Potjes</span>
     </button>
     <button class="tab-item" id="tab-btn-buddies" onclick="switchTab('buddies')">
-      <svg class="tab-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-        <circle cx="9" cy="7" r="4"/>
-        <path d="M3 21v-2a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v2"/>
-        <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
-        <path d="M21 21v-2a4 4 0 0 0-3-3.85"/>
-      </svg>
+      <div class="tab-icon-wrap">
+        <svg class="tab-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="9" cy="7" r="4"/>
+          <path d="M3 21v-2a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v2"/>
+          <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+          <path d="M21 21v-2a4 4 0 0 0-3-3.85"/>
+        </svg>
+        <span class="tab-badge hidden" id="buddy-tab-badge"></span>
+      </div>
       <span>Buddies</span>
     </button>
     <button class="tab-item" id="tab-btn-profiel" onclick="switchTab('profiel')">

@@ -87,6 +87,7 @@ function showApp() {
   const hash = location.hash.replace('#', '');
   switchTab(validTabs.includes(hash) ? hash : 'kalender');
   renderProfile();
+  refreshBuddyBadge();
 }
 
 function setUser(data) {
@@ -1638,6 +1639,27 @@ function renderBuddiesList(buddies) {
       ${u.level ? `<span class="buddy-level">${u.level}</span>` : ''}
     </div>`;
   }).join('');
+  updateBuddyTabBadge(buddies.filter(b => b.unread_count > 0).length);
+}
+
+function updateBuddyTabBadge(n) {
+  const badge = document.getElementById('buddy-tab-badge');
+  if (!badge) return;
+  if (n > 0) {
+    badge.textContent = n > 9 ? '9+' : n;
+    badge.classList.remove('hidden');
+  } else {
+    badge.classList.add('hidden');
+  }
+}
+
+async function refreshBuddyBadge() {
+  try {
+    const res = await api('/api/buddies/unread');
+    if (!res.ok) return;
+    const { count } = await res.json();
+    updateBuddyTabBadge(count);
+  } catch (_) {}
 }
 
 /* ── Speler profiel (vanuit potje detail) ─────────────────── */

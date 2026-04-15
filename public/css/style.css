@@ -386,6 +386,32 @@ body {
 .tab-item.active { color: var(--green); }
 .tab-icon { width: 24px; height: 24px; }
 
+.tab-icon-wrap {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.tab-badge {
+  position: absolute;
+  top: -5px;
+  right: -8px;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: 8px;
+  background: var(--red);
+  color: #fff;
+  font-size: 9px;
+  font-weight: 800;
+  line-height: 16px;
+  text-align: center;
+  border: 2px solid var(--surface);
+  box-sizing: border-box;
+  pointer-events: none;
+}
+.tab-badge.hidden { display: none; }
+
 /* ══════════════════════════════════════════════
    FILTER BAR
 ══════════════════════════════════════════════ */
