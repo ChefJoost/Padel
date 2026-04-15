@@ -432,22 +432,27 @@ async function loadIcalToken() {
 }
 
 function setIcalLink(url) {
-  const link = document.getElementById('ical-open-link');
-  if (!link || !url) return;
+  if (!url) return;
   const isIOS = /iP(hone|ad|od)/.test(navigator.userAgent);
-  if (isIOS) {
-    // webcal:// opent direct de iOS Agenda-app
-    link.href = url.replace(/^https?:/, 'webcal:');
-    link.removeAttribute('target');
-  } else {
-    // Google Calendar subscribe-URL werkt op Android en desktop
-    link.href = `https://calendar.google.com/calendar/r?cid=${encodeURIComponent(url)}`;
-    link.target = '_blank';
-    link.rel    = 'noopener noreferrer';
+
+  // Google Agenda (werkt op alle platforms)
+  const googleLink = document.getElementById('ical-google-link');
+  if (googleLink) {
+    googleLink.href = `https://calendar.google.com/calendar/r?cid=${encodeURIComponent(url)}`;
   }
-  // Kopieer de ruwe https:// URL stil naar klembord — geen return value zodat
-  // de link-navigatie niet geblokkeerd wordt
-  link.onclick = () => { navigator.clipboard.writeText(url).catch(() => {}); };
+
+  // Andere app: webcal:// op iOS (werkt met Apple, Outlook, etc.),
+  // directe .ics URL op Android (Chrome downloadt → OS toont app-kiezer)
+  const otherLink = document.getElementById('ical-other-link');
+  if (otherLink) {
+    if (isIOS) {
+      otherLink.href = url.replace(/^https?:/, 'webcal:');
+      otherLink.textContent = 'Apple / andere agenda-app';
+    } else {
+      otherLink.href = url;
+      otherLink.textContent = 'Andere agenda-app (iCal)';
+    }
+  }
 }
 
 async function regenerateIcalToken() {
