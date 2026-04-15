@@ -720,7 +720,9 @@
     <div class="sheet-header">
       <button class="sheet-cancel" onclick="hideCalDayModal()">Sluiten</button>
       <h2 class="sheet-title" id="cal-day-title"></h2>
-      <button class="nav-action" style="font-size:1.6rem;font-weight:300;line-height:1;color:var(--green)" onclick="hideCalDayModal(); showNewBookingModalForDate(currentCalDayDate)">+</button>
+      <button class="nav-action" onclick="hideCalDayModal(); showNewBookingModalForDate(currentCalDayDate)">
+        <span class="nav-action-icon">+</span>
+      </button>
     </div>
     <div class="sheet-body" id="cal-day-body"></div>
   </div>
