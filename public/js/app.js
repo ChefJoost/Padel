@@ -1236,6 +1236,7 @@ function closeSheet(e) {
     hideAdminDetailModal();
     hideAdminEditModal();
     hideAdminPwModal();
+    hideGroupInfo();
   }
 }
 
@@ -1588,58 +1589,99 @@ async function handleAdminSaveBooking() {
 async function loadBuddies() {
   allUsersCache = null; // ververs cache bij laden van buddies tab
   try {
-    const res  = await api('/api/buddies');
-    if (!res.ok) {
-      const err = await res.json().catch(() => null);
-      showToast('Buddies laden mislukt: ' + (err?.error || res.status));
-      renderBuddiesList([]);
-      return;
-    }
-    const list = await res.json();
-    renderBuddiesList(Array.isArray(list) ? list : []);
+    const [buddiesRes, groupsRes] = await Promise.all([
+      api('/api/buddies'),
+      api('/api/groups'),
+    ]);
+    const buddies = buddiesRes.ok ? await buddiesRes.json() : [];
+    const groups  = groupsRes.ok  ? await groupsRes.json()  : [];
+    renderBuddiesTab(
+      Array.isArray(buddies) ? buddies : [],
+      Array.isArray(groups)  ? groups  : []
+    );
   } catch (e) {
     showToast('Buddies laden mislukt: ' + e.message);
-    renderBuddiesList([]);
+    renderBuddiesTab([], []);
   }
 }
 
-function renderBuddiesList(buddies) {
-  const el       = document.getElementById('buddies-list');
-  const countBar = document.getElementById('buddies-count-bar');
-  if (buddies.length === 0) {
+function renderBuddiesTab(buddies, groups) {
+  const buddiesEl  = document.getElementById('buddies-list');
+  const groupsEl   = document.getElementById('groups-list');
+  const countBar   = document.getElementById('buddies-count-bar');
+  const showLabels = groups.length > 0 && buddies.length > 0;
+
+  // ── Groepen ──
+  if (groups.length === 0) {
+    groupsEl.innerHTML = '';
+  } else {
+    const label = showLabels ? '<div class="buddy-section-label">Groepen</div>' : '';
+    groupsEl.innerHTML = label + groups.map(g => {
+      const initials   = g.name.slice(0, 2).toUpperCase();
+      const unreadHtml = g.unread_count > 0
+        ? `<span class="buddy-unread-dot">${g.unread_count > 9 ? '9+' : g.unread_count}</span>` : '';
+      const lastMsg = g.last_message
+        ? `<div class="buddy-last-msg${g.unread_count > 0 ? ' buddy-last-msg--unread' : ''}">${escHtml(g.last_message)}</div>`
+        : `<div class="buddy-last-msg">${g.member_count} leden</div>`;
+      return `<div class="buddy-card" onclick="openGroupChat(${g.id})">
+        <div class="buddy-avatar-wrap">
+          <div class="group-avatar">${initials}</div>
+          ${unreadHtml}
+        </div>
+        <div class="buddy-info">
+          <div class="buddy-name">${escHtml(g.name)}</div>
+          ${lastMsg}
+        </div>
+        <span class="group-member-badge">${g.member_count} leden</span>
+      </div>`;
+    }).join('');
+  }
+
+  // ── Buddies ──
+  if (buddies.length === 0 && groups.length === 0) {
     countBar.classList.add('hidden');
-    el.innerHTML = `<div class="empty-state" style="padding:40px 0">
+    buddiesEl.innerHTML = `<div class="empty-state" style="padding:40px 0">
       <div class="empty-icon">👥</div>
       <p class="empty-title">Nog geen buddies</p>
       <p class="empty-sub">Zoek een speler hierboven of klik op een speler in een potje.</p>
     </div>`;
-    return;
+  } else if (buddies.length === 0) {
+    countBar.classList.add('hidden');
+    buddiesEl.innerHTML = '';
+  } else {
+    if (showLabels) {
+      countBar.textContent = 'Buddies';
+      countBar.classList.remove('hidden');
+    } else {
+      countBar.textContent = `${buddies.length} ${buddies.length === 1 ? 'buddy' : 'buddies'}`;
+      countBar.classList.remove('hidden');
+    }
+    buddiesEl.innerHTML = buddies.map(u => {
+      const avatarStyle   = u.avatar ? `style="background-image:url('${escAttr(u.avatar)}')"` : '';
+      const initials      = u.display_name.split(' ').map(w => w[0]).join('').slice(0,2).toUpperCase();
+      const avatarContent = u.avatar ? '' : initials;
+      const unreadHtml    = u.unread_count > 0
+        ? `<span class="buddy-unread-dot">${u.unread_count > 9 ? '9+' : u.unread_count}</span>` : '';
+      const lastMsg = u.last_message
+        ? `<div class="buddy-last-msg${u.unread_count > 0 ? ' buddy-last-msg--unread' : ''}">${escHtml(u.last_message)}</div>`
+        : `<div class="buddy-last-msg">${u.games_together} potje${u.games_together!==1?'s':''} samen</div>`;
+      return `<div class="buddy-card" onclick="openChat(${u.id})">
+        <div class="buddy-avatar-wrap">
+          <div class="buddy-avatar" ${avatarStyle}>${avatarContent}</div>
+          ${unreadHtml}
+        </div>
+        <div class="buddy-info">
+          <div class="buddy-name">${escHtml(u.display_name)}</div>
+          ${lastMsg}
+        </div>
+        ${u.level ? `<span class="buddy-level">${u.level}</span>` : ''}
+      </div>`;
+    }).join('');
   }
-  countBar.textContent = `${buddies.length} ${buddies.length === 1 ? 'buddy' : 'buddies'}`;
-  countBar.classList.remove('hidden');
-  el.innerHTML = buddies.map(u => {
-    const avatarStyle = u.avatar
-      ? `style="background-image:url('${escAttr(u.avatar)}')"` : '';
-    const initials = u.display_name.split(' ').map(w => w[0]).join('').slice(0,2).toUpperCase();
-    const avatarContent = u.avatar ? '' : initials;
-    const unreadHtml = u.unread_count > 0
-      ? `<span class="buddy-unread-dot">${u.unread_count > 9 ? '9+' : u.unread_count}</span>` : '';
-    const lastMsg = u.last_message
-      ? `<div class="buddy-last-msg${u.unread_count > 0 ? ' buddy-last-msg--unread' : ''}">${escHtml(u.last_message)}</div>`
-      : `<div class="buddy-last-msg">${u.games_together} potje${u.games_together!==1?'s':''} samen</div>`;
-    return `<div class="buddy-card" onclick="openChat(${u.id})">
-      <div class="buddy-avatar-wrap">
-        <div class="buddy-avatar" ${avatarStyle}>${avatarContent}</div>
-        ${unreadHtml}
-      </div>
-      <div class="buddy-info">
-        <div class="buddy-name">${escHtml(u.display_name)}</div>
-        ${lastMsg}
-      </div>
-      ${u.level ? `<span class="buddy-level">${u.level}</span>` : ''}
-    </div>`;
-  }).join('');
-  updateBuddyTabBadge(buddies.filter(b => b.unread_count > 0).length);
+
+  const totalUnread = buddies.filter(b => b.unread_count > 0).length
+                    + groups.filter(g => g.unread_count > 0).length;
+  updateBuddyTabBadge(totalUnread);
 }
 
 function updateBuddyTabBadge(n) {
@@ -1655,11 +1697,169 @@ function updateBuddyTabBadge(n) {
 
 async function refreshBuddyBadge() {
   try {
-    const res = await api('/api/buddies/unread');
-    if (!res.ok) return;
-    const { count } = await res.json();
-    updateBuddyTabBadge(count);
+    const [buddiesRes, groupsRes] = await Promise.all([
+      api('/api/buddies/unread'),
+      api('/api/groups/unread'),
+    ]);
+    const buddyCount = buddiesRes.ok ? (await buddiesRes.json()).count : 0;
+    const groupCount = groupsRes.ok  ? (await groupsRes.json()).count  : 0;
+    updateBuddyTabBadge(buddyCount + groupCount);
   } catch (_) {}
+}
+
+/* ── Groepschat ───────────────────────────────────────────── */
+async function openGroupChat(groupId) {
+  chatMode    = 'group';
+  chatGroupId = groupId;
+  chatUserId  = null;
+  chatLastId  = 0;
+
+  const infoRes = await api(`/api/groups/${groupId}`);
+  if (!infoRes.ok) { showToast('Kon groep niet laden'); return; }
+  const group = await infoRes.json();
+
+  document.getElementById('chat-nav-info').innerHTML = `
+    <div class="chat-nav-name">${escHtml(group.name)}</div>
+    <div class="chat-nav-games">${group.members.length} leden</div>`;
+  document.getElementById('chat-info-btn').classList.remove('hidden');
+
+  const msgRes = await api(`/api/groups/${groupId}/chat`);
+  if (!msgRes.ok) { showToast('Chat laden mislukt'); return; }
+  const messages = await msgRes.json();
+  if (messages.length > 0) chatLastId = messages[messages.length - 1].id;
+
+  renderChatMessages(messages, true);
+  document.getElementById('chat-modal').classList.remove('hidden');
+  document.getElementById('chat-input').focus();
+
+  stopChatPolling();
+  chatPollTimer = setInterval(pollChat, 3000);
+}
+
+async function openGroupInfo() {
+  if (!chatGroupId) return;
+  const res = await api(`/api/groups/${chatGroupId}`);
+  if (!res.ok) return;
+  const group = await res.json();
+
+  document.getElementById('group-info-title').textContent = group.name;
+
+  const isCreator = group.created_by === currentUser.userId;
+  const membersHtml = group.members.map(m => {
+    const bgStyle  = m.avatar ? `background-image:url('${escAttr(m.avatar)}');` : '';
+    const initials = m.display_name.split(' ').map(w => w[0]).join('').slice(0,2).toUpperCase();
+    const creatorTag = m.id === group.created_by
+      ? `<span class="group-info-creator-tag">Maker</span>` : '';
+    return `<div class="group-info-member">
+      <div class="buddy-avatar" style="${bgStyle}width:36px;height:36px;font-size:.8rem">${m.avatar ? '' : initials}</div>
+      <div class="group-info-member-name">${escHtml(m.display_name)}</div>
+      ${creatorTag}
+    </div>`;
+  }).join('');
+
+  const actionBtn = isCreator
+    ? `<button class="btn btn-destructive-outline btn-full" style="margin:16px" onclick="deleteGroup(${group.id})">Groep verwijderen</button>`
+    : `<button class="btn btn-outline btn-full" style="margin:16px" onclick="leaveGroup(${group.id})">Groep verlaten</button>`;
+
+  document.getElementById('group-info-body').innerHTML = `
+    <div class="section-header" style="margin-top:8px">Leden (${group.members.length})</div>
+    <div class="field-group">${membersHtml}</div>
+    ${actionBtn}`;
+
+  document.getElementById('group-info-modal').classList.remove('hidden');
+}
+
+function hideGroupInfo() {
+  document.getElementById('group-info-modal').classList.add('hidden');
+}
+
+async function leaveGroup(groupId) {
+  const res = await api(`/api/groups/${groupId}/leave`, { method: 'DELETE' });
+  if (!res.ok) { showToast('Verlaten mislukt'); return; }
+  hideGroupInfo();
+  document.getElementById('chat-modal').classList.add('hidden');
+  stopChatPolling();
+  chatMode = 'direct'; chatGroupId = null;
+  loadBuddies();
+  showToast('Je hebt de groep verlaten');
+}
+
+async function deleteGroup(groupId) {
+  const res = await api(`/api/groups/${groupId}`, { method: 'DELETE' });
+  if (!res.ok) { showToast('Verwijderen mislukt'); return; }
+  hideGroupInfo();
+  document.getElementById('chat-modal').classList.add('hidden');
+  stopChatPolling();
+  chatMode = 'direct'; chatGroupId = null;
+  loadBuddies();
+  showToast('Groep verwijderd');
+}
+
+/* ── Groep aanmaken ───────────────────────────────────────── */
+let groupCreateSelected = new Set();
+
+async function openGroupCreate() {
+  groupCreateSelected = new Set();
+  document.getElementById('group-name-input').value = '';
+
+  // Laad buddies voor ledenlijst
+  const res = await api('/api/buddies');
+  const buddies = res.ok ? await res.json() : [];
+
+  const listEl = document.getElementById('group-member-list');
+  if (buddies.length === 0) {
+    listEl.innerHTML = `<div style="padding:16px;color:var(--text-2);font-size:.9rem">Je hebt nog geen buddies. Voeg eerst buddies toe.</div>`;
+  } else {
+    listEl.innerHTML = buddies.map(u => {
+      const avatarStyle   = u.avatar ? `style="background-image:url('${escAttr(u.avatar)}')"` : '';
+      const initials      = u.display_name.split(' ').map(w => w[0]).join('').slice(0,2).toUpperCase();
+      const avatarContent = u.avatar ? '' : initials;
+      const bgStyle2 = u.avatar ? `background-image:url('${escAttr(u.avatar)}');` : '';
+      return `<div class="group-member-item" id="gmi-${u.id}" onclick="toggleGroupMember(${u.id})">
+        <div class="group-member-check" id="gmc-${u.id}"></div>
+        <div class="buddy-avatar" style="${bgStyle2}width:36px;height:36px;font-size:.8rem">${avatarContent}</div>
+        <div style="flex:1;font-size:.95rem;font-weight:500">${escHtml(u.display_name)}</div>
+        ${u.level ? `<span class="buddy-level">${u.level}</span>` : ''}
+      </div>`;
+    }).join('');
+  }
+
+  document.getElementById('group-create-modal').classList.remove('hidden');
+}
+
+function hideGroupCreate() {
+  document.getElementById('group-create-modal').classList.add('hidden');
+}
+
+function toggleGroupMember(userId) {
+  const checkEl = document.getElementById(`gmc-${userId}`);
+  if (groupCreateSelected.has(userId)) {
+    groupCreateSelected.delete(userId);
+    checkEl?.classList.remove('group-member-check--on');
+  } else {
+    groupCreateSelected.add(userId);
+    checkEl?.classList.add('group-member-check--on');
+  }
+}
+
+async function submitGroupCreate() {
+  const name = document.getElementById('group-name-input').value.trim();
+  if (!name) { showToast('Vul een groepsnaam in'); return; }
+  if (groupCreateSelected.size === 0) { showToast('Kies minstens één lid'); return; }
+
+  const res = await api('/api/groups', {
+    method: 'POST',
+    body: { name, memberIds: [...groupCreateSelected] },
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => null);
+    showToast(err?.error || 'Aanmaken mislukt');
+    return;
+  }
+  const group = await res.json();
+  hideGroupCreate();
+  loadBuddies();
+  openGroupChat(group.id);
 }
 
 /* ── Speler profiel (vanuit potje detail) ─────────────────── */
@@ -1782,10 +1982,15 @@ let chatUserId      = null;
 let chatLastId      = 0;
 let chatPollTimer   = null;
 let chatBuddyName   = '';
+let chatMode        = 'direct'; // 'direct' | 'group'
+let chatGroupId     = null;
 
 async function openChat(userId) {
-  chatUserId = userId;
-  chatLastId = 0;
+  chatMode    = 'direct';
+  chatGroupId = null;
+  chatUserId  = userId;
+  chatLastId  = 0;
+  document.getElementById('chat-info-btn').classList.add('hidden');
 
   // Haal profiel op voor naam/avatar
   const profRes = await api(`/api/buddies/profile/${userId}`);
@@ -1822,8 +2027,11 @@ async function openChat(userId) {
 function hideChat() {
   stopChatPolling();
   document.getElementById('chat-modal').classList.add('hidden');
-  chatUserId = null;
-  if (currentTab === 'buddies') loadBuddies(); // vernieuw ongelezen tellers
+  document.getElementById('chat-info-btn').classList.add('hidden');
+  chatUserId  = null;
+  chatGroupId = null;
+  chatMode    = 'direct';
+  if (currentTab === 'buddies') loadBuddies();
 }
 
 function stopChatPolling() {
@@ -1831,8 +2039,14 @@ function stopChatPolling() {
 }
 
 async function pollChat() {
-  if (!chatUserId) return;
-  const res = await api(`/api/buddies/chat/${chatUserId}/new?after=${chatLastId}`);
+  let res;
+  if (chatMode === 'group') {
+    if (!chatGroupId) return;
+    res = await api(`/api/groups/${chatGroupId}/chat/new?after=${chatLastId}`);
+  } else {
+    if (!chatUserId) return;
+    res = await api(`/api/buddies/chat/${chatUserId}/new?after=${chatLastId}`);
+  }
   if (!res.ok) return;
   const msgs = await res.json();
   if (msgs.length === 0) return;
@@ -1861,6 +2075,14 @@ function renderChatMessages(messages, replace) {
     }
 
     const isMine = msg.sender_id === currentUser.userId;
+
+    if (chatMode === 'group' && !isMine && msg.sender_name) {
+      const nameEl = document.createElement('div');
+      nameEl.className = 'chat-sender-name';
+      nameEl.textContent = msg.sender_name;
+      fragment.appendChild(nameEl);
+    }
+
     const bubble = document.createElement('div');
     bubble.className = `chat-bubble chat-bubble--${isMine ? 'mine' : 'theirs'}`;
     bubble.innerHTML = `${escHtml(msg.content)}<div class="chat-time">${d.toLocaleTimeString('nl-NL',{hour:'2-digit',minute:'2-digit'})}</div>`;
@@ -1875,10 +2097,17 @@ function renderChatMessages(messages, replace) {
 async function sendChatMessage() {
   const input   = document.getElementById('chat-input');
   const content = input.value.trim();
-  if (!content || !chatUserId) return;
+  if (!content) return;
   input.value = '';
 
-  const res = await api(`/api/buddies/chat/${chatUserId}`, { method: 'POST', body: { content } });
+  let res;
+  if (chatMode === 'group') {
+    if (!chatGroupId) return;
+    res = await api(`/api/groups/${chatGroupId}/chat`, { method: 'POST', body: { content } });
+  } else {
+    if (!chatUserId) return;
+    res = await api(`/api/buddies/chat/${chatUserId}`, { method: 'POST', body: { content } });
+  }
   if (!res.ok) { input.value = content; return; }
   const msg = await res.json();
   chatLastId = msg.id;

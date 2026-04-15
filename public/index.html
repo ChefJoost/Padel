@@ -216,6 +216,7 @@
   <div id="tab-buddies" class="tab-content hidden">
     <div class="nav-bar">
       <h1 class="nav-title">Buddies</h1>
+      <button class="nav-action nav-text" onclick="openGroupCreate()">+ Groep</button>
     </div>
     <div class="scroll-area">
       <div class="buddy-search-wrap">
@@ -225,6 +226,7 @@
                autocomplete="off" />
       </div>
       <div id="buddy-search-results" class="hidden"></div>
+      <div id="groups-list"></div>
       <div id="buddies-count-bar" class="buddies-count-bar hidden"></div>
       <div id="buddies-list"></div>
     </div>
@@ -689,7 +691,13 @@
         </svg>
       </button>
       <div class="chat-nav-info" id="chat-nav-info"></div>
-      <div style="width:40px"></div>
+      <button class="chat-info-btn hidden" id="chat-info-btn" onclick="openGroupInfo()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20">
+          <circle cx="12" cy="12" r="10"/>
+          <line x1="12" y1="8" x2="12" y2="12"/>
+          <line x1="12" y1="16" x2="12.01" y2="16"/>
+        </svg>
+      </button>
     </div>
     <div class="chat-messages" id="chat-messages"></div>
     <div class="chat-input-bar">
@@ -718,7 +726,45 @@
   </div>
 </div>
 
+<!-- ══════════════════════════════════════════════
+     MODAL: Groep aanmaken
+══════════════════════════════════════════════ -->
+<div id="group-create-modal" class="sheet-overlay hidden">
+  <div class="sheet">
+    <div class="sheet-header">
+      <button class="sheet-cancel" onclick="hideGroupCreate()">Annuleren</button>
+      <h2 class="sheet-title">Nieuwe groep</h2>
+      <button class="sheet-done" onclick="submitGroupCreate()">Aanmaken</button>
+    </div>
+    <div class="sheet-body">
+      <div class="field-group" style="margin:16px 0 0">
+        <div class="field-row">
+          <span>Naam</span>
+          <input type="text" id="group-name-input" class="field-input"
+                 placeholder="Groepsnaam..." maxlength="50" autocomplete="off" />
+        </div>
+      </div>
+      <div class="section-header" style="margin-top:12px">Leden toevoegen</div>
+      <div id="group-member-list" class="field-group"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════
+     MODAL: Groepsinfo
+══════════════════════════════════════════════ -->
+<div id="group-info-modal" class="sheet-overlay hidden" onclick="closeSheet(event)">
+  <div class="sheet">
+    <div class="sheet-header">
+      <button class="sheet-cancel" onclick="hideGroupInfo()">Sluiten</button>
+      <h2 class="sheet-title" id="group-info-title">Groepsinfo</h2>
+      <div style="width:60px"></div>
+    </div>
+    <div class="sheet-body" id="group-info-body"></div>
+  </div>
+</div>
+
 <div id="toast" class="toast hidden"></div>
-<script src="/js/app.js?v=19"></script>
+<script src="/js/app.js?v=20"></script>
 </body>
 </html>

@@ -116,6 +116,35 @@ migrate('ALTER TABLE booking_payment_links ADD COLUMN added_by INTEGER REFERENCE
 migrate('ALTER TABLE bookings ADD COLUMN series_id TEXT');
 migrate('ALTER TABLE users ADD COLUMN ical_token TEXT');
 
+// Groepschat tabellen
+db.exec(`
+  CREATE TABLE IF NOT EXISTS chat_groups (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    created_by INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  );
+  CREATE TABLE IF NOT EXISTS group_members (
+    group_id INTEGER NOT NULL REFERENCES chat_groups(id) ON DELETE CASCADE,
+    user_id  INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    joined_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (group_id, user_id)
+  );
+  CREATE TABLE IF NOT EXISTS group_messages (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    group_id  INTEGER NOT NULL REFERENCES chat_groups(id) ON DELETE CASCADE,
+    sender_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    content TEXT NOT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  );
+  CREATE TABLE IF NOT EXISTS group_message_reads (
+    group_id     INTEGER NOT NULL REFERENCES chat_groups(id) ON DELETE CASCADE,
+    user_id      INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    last_read_id INTEGER NOT NULL DEFAULT 0,
+    PRIMARY KEY (group_id, user_id)
+  );
+`);
+
 // Migreer bestaande betaallinks naar nieuwe tabel
 {
   const toMigrate = db.prepare(
