@@ -1293,7 +1293,7 @@ async function handleRemovePaymentLink(bookingId, linkId) {
 }
 
 /* ── New / edit booking modal ─────────────────────────────── */
-function showNewBookingModal() {
+async function showNewBookingModal() {
   bookingEditId = null;
   document.getElementById('booking-modal-title').textContent = 'Nieuwe boeking';
   document.getElementById('booking-modal-done').textContent  = 'Aanmaken';
@@ -1310,7 +1310,25 @@ function showNewBookingModal() {
   document.getElementById('reeks-panel').classList.add('hidden');
   document.getElementById('reeks-count-row').classList.remove('hidden');
   document.getElementById('reeks-date-row').classList.add('hidden');
+  // Speelgroep picker: alleen tonen bij meerdere groepen
+  await loadBookingCommunityPicker();
   document.getElementById('booking-modal').classList.remove('hidden');
+}
+
+async function loadBookingCommunityPicker() {
+  const res = await api('/api/communities/mine');
+  if (!res.ok) return;
+  const communities = await res.json();
+  const group = document.getElementById('b-community-group');
+  const select = document.getElementById('b-community');
+  if (communities.length <= 1) {
+    group.style.display = 'none';
+    return;
+  }
+  select.innerHTML = communities.map(c =>
+    `<option value="${c.id}">${escHtml(c.name)}</option>`
+  ).join('');
+  group.style.display = '';
 }
 
 function showEditBookingModal() {
@@ -1350,12 +1368,17 @@ function toggleReeksEndType(value) {
 async function handleCreateBooking(e) {
   e.preventDefault();
   clearError('booking-error');
+  const communityGroup = document.getElementById('b-community-group');
+  const communityId = communityGroup?.style.display !== 'none'
+    ? document.getElementById('b-community').value
+    : null;
   const body = {
-    date:       document.getElementById('b-date').value,
-    start_time: document.getElementById('b-start').value,
-    end_time:   document.getElementById('b-end').value,
-    notes:      document.getElementById('b-notes').value,
-    is_private: document.getElementById('b-private').checked,
+    date:         document.getElementById('b-date').value,
+    start_time:   document.getElementById('b-start').value,
+    end_time:     document.getElementById('b-end').value,
+    notes:        document.getElementById('b-notes').value,
+    is_private:   document.getElementById('b-private').checked,
+    community_id: communityId || undefined,
   };
 
   // Valideer dat starttijd niet in het verleden ligt
