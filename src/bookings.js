@@ -67,9 +67,11 @@ router.get('/', requireAuth, (req, res) => {
       AND (b.is_private = 0
            OR b.created_by = ?
            OR EXISTS (SELECT 1 FROM participants WHERE booking_id = b.id AND user_id = ?))
+      AND (b.community_id IS NULL
+           OR b.community_id IN (SELECT community_id FROM community_members WHERE user_id = ?))
     GROUP BY b.id
     ORDER BY b.date ASC, b.start_time ASC
-  `).all(userId, userId, userId, userId);
+  `).all(userId, userId, userId, userId, userId);
 
   res.json(attachPaymentLinks(bookings, userId));
 });
@@ -126,7 +128,7 @@ router.get('/calendar', requireAuth, (req, res) => {
     ? 'AND (b.created_by = ? OR EXISTS (SELECT 1 FROM participants WHERE booking_id = b.id AND user_id = ?))'
     : '';
 
-  const params = [userId, from, to, userId, userId];
+  const params = [userId, from, to, userId, userId, userId];
   if (mine) params.push(userId, userId);
 
   const bookings = db.prepare(`
@@ -154,6 +156,8 @@ router.get('/calendar', requireAuth, (req, res) => {
       AND (b.is_private = 0
            OR b.created_by = ?
            OR EXISTS (SELECT 1 FROM participants WHERE booking_id = b.id AND user_id = ?))
+      AND (b.community_id IS NULL
+           OR b.community_id IN (SELECT community_id FROM community_members WHERE user_id = ?))
       ${mineClause}
     GROUP BY b.id
     ORDER BY b.date ASC, b.start_time ASC
@@ -257,7 +261,8 @@ function addInterval(dateStr, interval) {
 // Nieuwe boeking aanmaken
 router.post('/', requireAuth, (req, res) => {
   const { date, start_time, end_time, notes, is_private,
-          reeks_interval, reeks_end_type, reeks_count, reeks_end_date } = req.body;
+          reeks_interval, reeks_end_type, reeks_count, reeks_end_date,
+          community_id: reqCommunityId } = req.body;
 
   if (!date || !start_time || !end_time) {
     return res.status(400).json({ error: 'Vul alle verplichte velden in' });
@@ -271,9 +276,20 @@ router.post('/', requireAuth, (req, res) => {
   const userId      = req.session.userId;
   const privateFlag = is_private ? 1 : 0;
 
+  // Bepaal community_id: gebruik opgegeven waarde of eerste community van gebruiker
+  let communityId = reqCommunityId ? parseInt(reqCommunityId, 10) : null;
+  if (!communityId) {
+    const cm = db.prepare('SELECT community_id FROM community_members WHERE user_id = ? ORDER BY joined_at ASC LIMIT 1').get(userId);
+    communityId = cm?.community_id || null;
+  } else {
+    // Controleer of gebruiker lid is van de opgegeven community
+    const isMember = db.prepare('SELECT 1 FROM community_members WHERE community_id = ? AND user_id = ?').get(communityId, userId);
+    if (!isMember) communityId = null;
+  }
+
   const stmtBooking = db.prepare(`
-    INSERT INTO bookings (title, location, date, start_time, end_time, notes, created_by, is_private, invite_token, series_id)
-    VALUES ('Padelpotje', '', ?, ?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO bookings (title, location, date, start_time, end_time, notes, created_by, is_private, invite_token, series_id, community_id)
+    VALUES ('Padelpotje', '', ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
   const stmtParticipant = db.prepare(
     'INSERT INTO participants (booking_id, user_id, is_extra) VALUES (?, ?, 0)'
@@ -302,7 +318,7 @@ router.post('/', requireAuth, (req, res) => {
     const seriesId = crypto.randomBytes(8).toString('hex');
     const createAll = db.transaction(() => dates.map(d => {
       const tok = is_private ? crypto.randomBytes(16).toString('hex') : null;
-      const r = stmtBooking.run(d, start_time, end_time, notes || null, userId, privateFlag, tok, seriesId);
+      const r = stmtBooking.run(d, start_time, end_time, notes || null, userId, privateFlag, tok, seriesId, communityId);
       stmtParticipant.run(r.lastInsertRowid, userId);
       return r.lastInsertRowid;
     }));
@@ -313,7 +329,7 @@ router.post('/', requireAuth, (req, res) => {
 
   // Enkelvoudige boeking
   const inviteToken = is_private ? crypto.randomBytes(16).toString('hex') : null;
-  const result = stmtBooking.run(date, start_time, end_time, notes || null, userId, privateFlag, inviteToken, null);
+  const result = stmtBooking.run(date, start_time, end_time, notes || null, userId, privateFlag, inviteToken, null, communityId);
   stmtParticipant.run(result.lastInsertRowid, userId);
   res.status(201).json({ id: result.lastInsertRowid });
 });

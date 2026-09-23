@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <title>PadelPotje</title>
-  <link rel="stylesheet" href="/css/style.css?v=19" />
+  <link rel="stylesheet" href="/css/style.css?v=20" />
 </head>
 <body>
 
@@ -125,6 +125,33 @@
       <button class="btn btn-primary btn-full" id="welcome-photo-btn" onclick="document.getElementById('welcome-avatar-input').click()">Foto toevoegen</button>
       <button class="btn btn-outline btn-full" onclick="handleWelcomeDone()">Opslaan</button>
     </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════
+     SPEELGROEP SCHERM (na welkomst, voor nieuwe gebruikers)
+══════════════════════════════════════════════ -->
+<div id="community-screen" class="screen hidden">
+  <div class="auth-card">
+    <div class="auth-logo">🏓</div>
+    <h1 class="auth-title">Kies je speelgroep</h1>
+    <p class="auth-subtitle">Zoek en sluit je aan bij een of meerdere speelgroepen</p>
+
+    <div class="field-group" style="margin-bottom:12px">
+      <div class="field-row">
+        <input type="search" id="community-search-input" placeholder="Zoek speelgroep..."
+               oninput="searchCommunities(this.value)" autocomplete="off" />
+      </div>
+    </div>
+
+    <div id="community-search-results" class="community-results"></div>
+
+    <div id="community-joined-list" class="community-joined-list"></div>
+
+    <div style="margin-top:16px">
+      <button class="btn btn-primary btn-full" onclick="handleCommunityContinue()" id="community-continue-btn">Doorgaan</button>
+    </div>
+    <p class="community-skip-hint">Je kunt dit later aanpassen via je profiel</p>
   </div>
 </div>
 
@@ -292,6 +319,19 @@
         </div>
       </div>
 
+      <!-- Speelgroepen -->
+      <div class="section-header-row">
+        <span class="section-header" style="margin:0">Speelgroepen</span>
+      </div>
+      <div id="profile-communities-list" class="field-group"></div>
+      <div class="field-group" style="margin-top:8px">
+        <div class="field-row" style="flex-direction:column;align-items:stretch;gap:8px">
+          <input type="search" id="profile-community-search" placeholder="Zoek en sluit je aan bij een groep..."
+                 oninput="profileSearchCommunities(this.value)" autocomplete="off" />
+          <div id="profile-community-results" class="community-results hidden"></div>
+        </div>
+      </div>
+
       <!-- iCal -->
       <div class="section-header">Agenda koppelen</div>
       <div class="field-group">
@@ -348,6 +388,16 @@
         </div>
       </div>
       <div id="admin-users-list"></div>
+
+      <!-- Speelgroepen -->
+      <div class="section-header" style="margin-top:16px">Speelgroepen</div>
+      <div class="field-group" style="margin-bottom:8px">
+        <div class="field-row">
+          <input type="text" id="admin-community-name" placeholder="Naam nieuwe speelgroep..." />
+          <button class="btn btn-outline" style="white-space:nowrap" onclick="adminCreateCommunity()">Aanmaken</button>
+        </div>
+      </div>
+      <div id="admin-communities-list"></div>
 
       <!-- Boekingen -->
       <div class="section-header" style="margin-top:16px">Alle boekingen</div>
@@ -767,6 +817,6 @@
 </div>
 
 <div id="toast" class="toast hidden"></div>
-<script src="/js/app.js?v=20"></script>
+<script src="/js/app.js?v=21"></script>
 </body>
 </html>

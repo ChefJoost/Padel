@@ -210,9 +210,173 @@ async function handleWelcomeDone() {
     pendingWelcomeAvatar = undefined;
   }
   document.getElementById('welcome-screen').classList.add('hidden');
+  showCommunityScreen();
+}
+
+/* ── Speelgroepen (community) scherm ─────────────────────────── */
+let communityJoined = new Map(); // id → name
+
+function showCommunityScreen() {
+  document.getElementById('community-screen').classList.remove('hidden');
+  communityJoined = new Map();
+  document.getElementById('community-search-input').value = '';
+  document.getElementById('community-search-results').innerHTML = '';
+  document.getElementById('community-joined-list').innerHTML = '';
+  searchCommunities('');
+}
+
+async function searchCommunities(q) {
+  const res = await api(`/api/communities/search?q=${encodeURIComponent(q)}`);
+  if (!res.ok) return;
+  const items = await res.json();
+  // Synchroniseer al-lid items met communityJoined map
+  items.filter(c => c.is_member).forEach(c => communityJoined.set(c.id, c.name));
+  renderCommunityJoinedList();
+  const el = document.getElementById('community-search-results');
+  el.innerHTML = items.map(c => {
+    const joined = communityJoined.has(c.id);
+    return `<div class="community-result-item">
+      <div>
+        <div class="community-result-name">${escHtml(c.name)}</div>
+        <div class="community-result-count">${c.member_count} ${c.member_count === 1 ? 'lid' : 'leden'}</div>
+      </div>
+      ${joined
+        ? `<span style="color:var(--green);font-weight:600;font-size:.85rem">✓ Lid</span>`
+        : `<button class="btn btn-outline" style="padding:5px 14px;font-size:.82rem" onclick="joinCommunityOnboarding(${c.id},${JSON.stringify(c.name)})">Aansluiten</button>`
+      }
+    </div>`;
+  }).join('');
+}
+
+async function joinCommunityOnboarding(id, name) {
+  const res = await api(`/api/communities/${id}/join`, { method: 'POST' });
+  if (!res.ok) return;
+  communityJoined.set(id, name);
+  renderCommunityJoinedList();
+  searchCommunities(document.getElementById('community-search-input').value);
+}
+
+function renderCommunityJoinedList() {
+  const el = document.getElementById('community-joined-list');
+  if (!el) return;
+  if (communityJoined.size === 0) { el.innerHTML = ''; return; }
+  el.innerHTML = [...communityJoined.entries()].map(([id, name]) =>
+    `<div class="community-joined-item">
+      <span class="community-joined-name">${escHtml(name)}</span>
+      <span class="community-joined-badge">✓ Aangesloten</span>
+    </div>`
+  ).join('');
+}
+
+async function handleCommunityContinue() {
+  document.getElementById('community-screen').classList.add('hidden');
   showApp();
   setupPush();
   handleDeepLink();
+}
+
+/* ── Profiel: speelgroepen ──────────────────────────────────── */
+async function loadProfileCommunities() {
+  const res = await api('/api/communities/mine');
+  if (!res.ok) return;
+  const communities = await res.json();
+  const el = document.getElementById('profile-communities-list');
+  if (!el) return;
+  if (communities.length === 0) {
+    el.innerHTML = '<div class="field-row" style="color:var(--text-2);font-size:.9rem">Geen speelgroepen. Zoek er hieronder een.</div>';
+    return;
+  }
+  el.innerHTML = communities.map(c => `
+    <div class="community-list-item">
+      <span class="community-list-name">${escHtml(c.name)}</span>
+      <span class="community-list-count">${c.member_count} ${c.member_count === 1 ? 'lid' : 'leden'}</span>
+      <button class="community-list-leave" onclick="leaveCommunity(${c.id})">Verlaten</button>
+    </div>
+  `).join('');
+}
+
+let profileCommunitySearchTimer;
+function profileSearchCommunities(q) {
+  clearTimeout(profileCommunitySearchTimer);
+  const resultsEl = document.getElementById('profile-community-results');
+  if (!q.trim()) { resultsEl.classList.add('hidden'); resultsEl.innerHTML = ''; return; }
+  profileCommunitySearchTimer = setTimeout(async () => {
+    const res = await api(`/api/communities/search?q=${encodeURIComponent(q)}`);
+    if (!res.ok) return;
+    const items = await res.json();
+    if (items.length === 0) { resultsEl.classList.add('hidden'); return; }
+    resultsEl.classList.remove('hidden');
+    resultsEl.innerHTML = items.map(c => `
+      <div class="community-result-item">
+        <div>
+          <div class="community-result-name">${escHtml(c.name)}</div>
+          <div class="community-result-count">${c.member_count} ${c.member_count === 1 ? 'lid' : 'leden'}</div>
+        </div>
+        ${c.is_member
+          ? `<span style="color:var(--green);font-weight:600;font-size:.85rem">✓ Lid</span>`
+          : `<button class="btn btn-outline" style="padding:5px 14px;font-size:.82rem" onclick="profileJoinCommunity(${c.id})">Aansluiten</button>`
+        }
+      </div>
+    `).join('');
+  }, 300);
+}
+
+async function profileJoinCommunity(id) {
+  const res = await api(`/api/communities/${id}/join`, { method: 'POST' });
+  if (!res.ok) { showToast('Aansluiten mislukt'); return; }
+  showToast('Aangesloten!');
+  document.getElementById('profile-community-search').value = '';
+  document.getElementById('profile-community-results').classList.add('hidden');
+  loadProfileCommunities();
+}
+
+async function leaveCommunity(id) {
+  const res = await api(`/api/communities/${id}/leave`, { method: 'DELETE' });
+  const data = await res.json();
+  if (!res.ok) { showToast(data.error || 'Verlaten mislukt'); return; }
+  loadProfileCommunities();
+}
+
+/* ── Admin: speelgroepen ──────────────────────────────────────── */
+async function loadAdminCommunities() {
+  const res = await api('/api/communities');
+  if (!res.ok) return;
+  const items = await res.json();
+  const el = document.getElementById('admin-communities-list');
+  if (!el) return;
+  if (items.length === 0) {
+    el.innerHTML = '<div class="field-group"><div class="field-row" style="color:var(--text-2)">Geen speelgroepen.</div></div>';
+    return;
+  }
+  el.innerHTML = `<div class="field-group">${items.map(c => `
+    <div class="community-list-item">
+      <span class="community-list-name">${escHtml(c.name)}</span>
+      <span class="community-list-count">${c.member_count} ${c.member_count === 1 ? 'lid' : 'leden'}</span>
+      <button class="community-list-leave" onclick="adminDeleteCommunity(${c.id},'${escHtml(c.name)}')">Verwijder</button>
+    </div>
+  `).join('')}</div>`;
+}
+
+async function adminCreateCommunity() {
+  const input = document.getElementById('admin-community-name');
+  const name = input?.value?.trim();
+  if (!name) return;
+  const res = await api('/api/communities', { method: 'POST', body: { name } });
+  const data = await res.json();
+  if (!res.ok) { showToast(data.error || 'Aanmaken mislukt'); return; }
+  input.value = '';
+  showToast(`Speelgroep "${name}" aangemaakt`);
+  loadAdminCommunities();
+}
+
+function adminDeleteCommunity(id, name) {
+  document.getElementById('confirm-message').textContent = `Speelgroep "${name}" verwijderen? Alle leden worden ontkoppeld.`;
+  document.getElementById('confirm-ok').onclick = async () => {
+    closeConfirm();
+    const res = await api(`/api/communities/${id}`, { method: 'DELETE' });
+    if (res.ok) { showToast('Speelgroep verwijderd'); loadAdminCommunities(); }
+  };
+  document.getElementById('confirm-modal').classList.remove('hidden');
 }
 
 
@@ -245,8 +409,8 @@ function switchTab(tab) {
     if (bl) bl.classList.remove('hidden');
     loadBuddies();
   }
-  if (tab === 'profiel')  { loadHistory(); loadUnpaid(); loadProfileStats(); loadIcalToken(); }
-  if (tab === 'admin')    { loadAdminStats(); adminSearchUsers(); loadAdminBookings(); }
+  if (tab === 'profiel')  { loadHistory(); loadUnpaid(); loadProfileStats(); loadIcalToken(); loadProfileCommunities(); }
+  if (tab === 'admin')    { loadAdminStats(); adminSearchUsers(); loadAdminBookings(); loadAdminCommunities(); }
 }
 
 /* ── Level picker ─────────────────────────────────────────── */

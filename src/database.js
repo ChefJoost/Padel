@@ -116,6 +116,43 @@ migrate('ALTER TABLE booking_payment_links ADD COLUMN added_by INTEGER REFERENCE
 migrate('ALTER TABLE bookings ADD COLUMN series_id TEXT');
 migrate('ALTER TABLE users ADD COLUMN ical_token TEXT');
 
+// Speelgroepen (communities) tabellen
+db.exec(`
+  CREATE TABLE IF NOT EXISTS communities (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL UNIQUE,
+    created_by INTEGER REFERENCES users(id),
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  );
+  CREATE TABLE IF NOT EXISTS community_members (
+    community_id INTEGER NOT NULL REFERENCES communities(id) ON DELETE CASCADE,
+    user_id      INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    joined_at    DATETIME DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (community_id, user_id)
+  );
+`);
+
+migrate('ALTER TABLE bookings ADD COLUMN community_id INTEGER REFERENCES communities(id)');
+
+// Maak 'Los Padeloos' aan en migreer bestaande data
+{
+  let losRow = db.prepare("SELECT id FROM communities WHERE name = 'Los Padeloos'").get();
+  if (!losRow) {
+    const r = db.prepare("INSERT INTO communities (name) VALUES ('Los Padeloos')").run();
+    losRow = { id: r.lastInsertRowid };
+    console.log(`[database] community 'Los Padeloos' aangemaakt (id ${losRow.id})`);
+  }
+  const losId = losRow.id;
+  const addedMembers = db.prepare(
+    "INSERT OR IGNORE INTO community_members (community_id, user_id) SELECT ?, id FROM users"
+  ).run(losId).changes;
+  const updatedBookings = db.prepare(
+    "UPDATE bookings SET community_id = ? WHERE community_id IS NULL"
+  ).run(losId).changes;
+  if (addedMembers > 0) console.log(`[database] ${addedMembers} gebruiker(s) toegevoegd aan Los Padeloos`);
+  if (updatedBookings > 0) console.log(`[database] ${updatedBookings} potje(s) gemigreerd naar Los Padeloos`);
+}
+
 // Groepschat tabellen
 db.exec(`
   CREATE TABLE IF NOT EXISTS chat_groups (
