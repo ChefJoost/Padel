@@ -1806,3 +1806,10 @@ body {
 }
 
 .community-list-leave:active { opacity: .7; }
+
+.community-create-inline {
+  background: var(--bg);
+  border-radius: var(--radius-sm);
+  padding: 12px 14px;
+  margin-top: 8px;
+}

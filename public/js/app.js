@@ -289,6 +289,30 @@ async function handleCommunityContinue() {
   handleDeepLink();
 }
 
+function toggleCommunityCreate(show) {
+  document.getElementById('community-create-inline').classList.toggle('hidden', !show);
+  if (show) {
+    document.getElementById('community-new-name').value = '';
+    clearError('community-create-error');
+    document.getElementById('community-new-name').focus();
+  }
+}
+
+async function submitNewCommunityOnboarding() {
+  const name = document.getElementById('community-new-name').value.trim();
+  clearError('community-create-error');
+  if (!name) return showError('community-create-error', 'Vul een naam in');
+  const res = await api('/api/communities', { method: 'POST', body: { name } });
+  const data = await res.json();
+  if (!res.ok) return showError('community-create-error', data.error || 'Aanmaken mislukt');
+  communityJoined.set(data.id, data.name);
+  communityNameCache.set(data.id, data.name);
+  renderCommunityJoinedList();
+  updateCommunityButton();
+  toggleCommunityCreate(false);
+  searchCommunities(document.getElementById('community-search-input').value);
+}
+
 /* ── Profiel: speelgroepen ──────────────────────────────────── */
 let allProfileCommunities = []; // cache van alle communities
 
@@ -337,6 +361,28 @@ async function leaveCommunity(id) {
   const res = await api(`/api/communities/${id}/leave`, { method: 'DELETE' });
   const data = await res.json();
   if (!res.ok) { showToast(data.error || 'Verlaten mislukt'); return; }
+  loadProfileCommunities();
+}
+
+function toggleProfileCommunityCreate() {
+  const el = document.getElementById('profile-community-create');
+  const hidden = el.classList.toggle('hidden');
+  if (!hidden) {
+    document.getElementById('profile-community-new-name').value = '';
+    clearError('profile-community-create-error');
+    document.getElementById('profile-community-new-name').focus();
+  }
+}
+
+async function profileCreateCommunity() {
+  const name = document.getElementById('profile-community-new-name').value.trim();
+  clearError('profile-community-create-error');
+  if (!name) return showError('profile-community-create-error', 'Vul een naam in');
+  const res = await api('/api/communities', { method: 'POST', body: { name } });
+  const data = await res.json();
+  if (!res.ok) return showError('profile-community-create-error', data.error || 'Aanmaken mislukt');
+  showToast(`Speelgroep "${data.name}" aangemaakt`);
+  document.getElementById('profile-community-create').classList.add('hidden');
   loadProfileCommunities();
 }
 

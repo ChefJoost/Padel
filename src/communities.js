@@ -53,13 +53,15 @@ router.get('/', requireAuth, requireAdmin, (req, res) => {
   res.json(rows);
 });
 
-// POST /api/communities  → aanmaken (admin)
-router.post('/', requireAuth, requireAdmin, (req, res) => {
+// POST /api/communities  → aanmaken (iedereen) + automatisch lid worden
+router.post('/', requireAuth, (req, res) => {
   const { name } = req.body || {};
   if (!name?.trim()) return res.status(400).json({ error: 'Naam is verplicht' });
   try {
     const result = db.prepare('INSERT INTO communities (name, created_by) VALUES (?, ?)').run(name.trim(), req.session.userId);
-    res.status(201).json({ id: result.lastInsertRowid, name: name.trim() });
+    const id = result.lastInsertRowid;
+    db.prepare('INSERT OR IGNORE INTO community_members (community_id, user_id) VALUES (?, ?)').run(id, req.session.userId);
+    res.status(201).json({ id, name: name.trim() });
   } catch (err) {
     if (err.message.includes('UNIQUE')) return res.status(409).json({ error: 'Naam al in gebruik' });
     res.status(500).json({ error: err.message });
