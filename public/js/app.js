@@ -224,7 +224,16 @@ function showCommunityScreen() {
   document.getElementById('community-search-input').value = '';
   document.getElementById('community-search-results').innerHTML = '';
   document.getElementById('community-joined-list').innerHTML = '';
+  updateCommunityButton();
   searchCommunities('');
+}
+
+function updateCommunityButton() {
+  const btn = document.getElementById('community-continue-btn');
+  if (!btn) return;
+  const hasJoined = communityJoined.size > 0;
+  btn.disabled = !hasJoined;
+  btn.style.opacity = hasJoined ? '' : '0.4';
 }
 
 async function searchCommunities(q) {
@@ -256,6 +265,7 @@ async function joinCommunityOnboarding(id) {
   const name = communityNameCache.get(id) || '';
   communityJoined.set(id, name);
   renderCommunityJoinedList();
+  updateCommunityButton();
   searchCommunities(document.getElementById('community-search-input').value);
 }
 
@@ -272,6 +282,7 @@ function renderCommunityJoinedList() {
 }
 
 async function handleCommunityContinue() {
+  if (communityJoined.size === 0) return;
   document.getElementById('community-screen').classList.add('hidden');
   showApp();
   setupPush();
