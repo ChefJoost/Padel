@@ -215,10 +215,12 @@ async function handleWelcomeDone() {
 
 /* ── Speelgroepen (community) scherm ─────────────────────────── */
 let communityJoined = new Map(); // id → name
+let communityNameCache = new Map(); // id → name, voor onclick lookups
 
 function showCommunityScreen() {
   document.getElementById('community-screen').classList.remove('hidden');
   communityJoined = new Map();
+  communityNameCache = new Map();
   document.getElementById('community-search-input').value = '';
   document.getElementById('community-search-results').innerHTML = '';
   document.getElementById('community-joined-list').innerHTML = '';
@@ -229,7 +231,7 @@ async function searchCommunities(q) {
   const res = await api(`/api/communities/search?q=${encodeURIComponent(q)}`);
   if (!res.ok) return;
   const items = await res.json();
-  // Synchroniseer al-lid items met communityJoined map
+  items.forEach(c => communityNameCache.set(c.id, c.name));
   items.filter(c => c.is_member).forEach(c => communityJoined.set(c.id, c.name));
   renderCommunityJoinedList();
   const el = document.getElementById('community-search-results');
@@ -242,15 +244,16 @@ async function searchCommunities(q) {
       </div>
       ${joined
         ? `<span style="color:var(--green);font-weight:600;font-size:.85rem">✓ Lid</span>`
-        : `<button class="btn btn-outline" style="padding:5px 14px;font-size:.82rem" onclick="joinCommunityOnboarding(${c.id},${JSON.stringify(c.name)})">Aansluiten</button>`
+        : `<button class="btn btn-outline" style="padding:5px 14px;font-size:.82rem" onclick="joinCommunityOnboarding(${c.id})">Aansluiten</button>`
       }
     </div>`;
   }).join('');
 }
 
-async function joinCommunityOnboarding(id, name) {
+async function joinCommunityOnboarding(id) {
   const res = await api(`/api/communities/${id}/join`, { method: 'POST' });
   if (!res.ok) return;
+  const name = communityNameCache.get(id) || '';
   communityJoined.set(id, name);
   renderCommunityJoinedList();
   searchCommunities(document.getElementById('community-search-input').value);
@@ -276,57 +279,46 @@ async function handleCommunityContinue() {
 }
 
 /* ── Profiel: speelgroepen ──────────────────────────────────── */
+let allProfileCommunities = []; // cache van alle communities
+
 async function loadProfileCommunities() {
-  const res = await api('/api/communities/mine');
+  const res = await api('/api/communities/search?q=');
   if (!res.ok) return;
-  const communities = await res.json();
+  allProfileCommunities = await res.json();
+  renderProfileCommunityList(document.getElementById('profile-community-filter')?.value || '');
+}
+
+function renderProfileCommunityList(filter) {
   const el = document.getElementById('profile-communities-list');
   if (!el) return;
-  if (communities.length === 0) {
-    el.innerHTML = '<div class="field-row" style="color:var(--text-2);font-size:.9rem">Geen speelgroepen. Zoek er hieronder een.</div>';
+  const q = filter.trim().toLowerCase();
+  const items = q
+    ? allProfileCommunities.filter(c => c.name.toLowerCase().includes(q))
+    : allProfileCommunities;
+  if (items.length === 0) {
+    el.innerHTML = '<div class="field-row" style="color:var(--text-2);font-size:.9rem">Geen speelgroepen gevonden.</div>';
     return;
   }
-  el.innerHTML = communities.map(c => `
+  el.innerHTML = items.map(c => `
     <div class="community-list-item">
       <span class="community-list-name">${escHtml(c.name)}</span>
       <span class="community-list-count">${c.member_count} ${c.member_count === 1 ? 'lid' : 'leden'}</span>
-      <button class="community-list-leave" onclick="leaveCommunity(${c.id})">Verlaten</button>
+      ${c.is_member
+        ? `<button class="community-list-leave" onclick="leaveCommunity(${c.id})">Verlaten</button>`
+        : `<button class="btn btn-outline" style="padding:4px 10px;font-size:.8rem" onclick="profileJoinCommunity(${c.id})">Aansluiten</button>`
+      }
     </div>
   `).join('');
 }
 
-let profileCommunitySearchTimer;
-function profileSearchCommunities(q) {
-  clearTimeout(profileCommunitySearchTimer);
-  const resultsEl = document.getElementById('profile-community-results');
-  if (!q.trim()) { resultsEl.classList.add('hidden'); resultsEl.innerHTML = ''; return; }
-  profileCommunitySearchTimer = setTimeout(async () => {
-    const res = await api(`/api/communities/search?q=${encodeURIComponent(q)}`);
-    if (!res.ok) return;
-    const items = await res.json();
-    if (items.length === 0) { resultsEl.classList.add('hidden'); return; }
-    resultsEl.classList.remove('hidden');
-    resultsEl.innerHTML = items.map(c => `
-      <div class="community-result-item">
-        <div>
-          <div class="community-result-name">${escHtml(c.name)}</div>
-          <div class="community-result-count">${c.member_count} ${c.member_count === 1 ? 'lid' : 'leden'}</div>
-        </div>
-        ${c.is_member
-          ? `<span style="color:var(--green);font-weight:600;font-size:.85rem">✓ Lid</span>`
-          : `<button class="btn btn-outline" style="padding:5px 14px;font-size:.82rem" onclick="profileJoinCommunity(${c.id})">Aansluiten</button>`
-        }
-      </div>
-    `).join('');
-  }, 300);
+function profileFilterCommunities(q) {
+  renderProfileCommunityList(q);
 }
 
 async function profileJoinCommunity(id) {
   const res = await api(`/api/communities/${id}/join`, { method: 'POST' });
   if (!res.ok) { showToast('Aansluiten mislukt'); return; }
   showToast('Aangesloten!');
-  document.getElementById('profile-community-search').value = '';
-  document.getElementById('profile-community-results').classList.add('hidden');
   loadProfileCommunities();
 }
 

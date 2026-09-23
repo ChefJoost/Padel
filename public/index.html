@@ -320,16 +320,13 @@
       </div>
 
       <!-- Speelgroepen -->
-      <div class="section-header-row">
-        <span class="section-header" style="margin:0">Speelgroepen</span>
-      </div>
-      <div id="profile-communities-list" class="field-group"></div>
-      <div class="field-group" style="margin-top:8px">
-        <div class="field-row" style="flex-direction:column;align-items:stretch;gap:8px">
-          <input type="search" id="profile-community-search" placeholder="Zoek en sluit je aan bij een groep..."
-                 oninput="profileSearchCommunities(this.value)" autocomplete="off" />
-          <div id="profile-community-results" class="community-results hidden"></div>
+      <div class="section-header">Speelgroepen</div>
+      <div class="field-group">
+        <div class="field-row">
+          <input type="search" id="profile-community-filter" placeholder="Filter speelgroepen..."
+                 oninput="profileFilterCommunities(this.value)" autocomplete="off" />
         </div>
+        <div id="profile-communities-list"></div>
       </div>
 
       <!-- iCal -->
@@ -817,6 +814,6 @@
 </div>
 
 <div id="toast" class="toast hidden"></div>
-<script src="/js/app.js?v=21"></script>
+<script src="/js/app.js?v=22"></script>
 </body>
 </html>
