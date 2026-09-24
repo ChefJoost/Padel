@@ -1346,8 +1346,8 @@ body {
 .cal-legend-today {
   width: 14px;
   height: 14px;
-  background: var(--surface);
-  border-radius: 4px;
+  background: var(--yellow);
+  border-radius: 50%;
   flex-shrink: 0;
 }
 
