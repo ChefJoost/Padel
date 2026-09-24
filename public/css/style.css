@@ -1871,4 +1871,9 @@ body {
   .community-joined-item { background: rgba(52,199,89,.15); }
 
   .admin-stats { background: transparent; }
+
+  .nav-bar,
+  .cal-filter-bar,
+  .cal-month-nav,
+  .cal-weekdays { background: var(--bg); }
 }
