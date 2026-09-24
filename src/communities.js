@@ -18,7 +18,7 @@ router.get('/search', requireAuth, (req, res) => {
   const q = `%${(req.query.q || '').trim()}%`;
   const me = req.session.userId;
   const rows = db.prepare(`
-    SELECT c.id, c.name,
+    SELECT c.id, c.name, c.max_players,
       (SELECT COUNT(*) FROM community_members WHERE community_id = c.id) AS member_count,
       EXISTS(SELECT 1 FROM community_members WHERE community_id = c.id AND user_id = ?) AS is_member,
       (c.created_by = ?) AS is_creator
@@ -34,7 +34,7 @@ router.get('/search', requireAuth, (req, res) => {
 router.get('/mine', requireAuth, (req, res) => {
   const me = req.session.userId;
   const rows = db.prepare(`
-    SELECT c.id, c.name,
+    SELECT c.id, c.name, c.max_players,
       (SELECT COUNT(*) FROM community_members WHERE community_id = c.id) AS member_count
     FROM communities c
     JOIN community_members cm ON cm.community_id = c.id AND cm.user_id = ?
@@ -108,7 +108,7 @@ router.get('/:id/members', requireAuth, (req, res) => {
   const communityId = parseInt(req.params.id, 10);
   const me = req.session.userId;
 
-  const community = db.prepare('SELECT id, created_by FROM communities WHERE id = ?').get(communityId);
+  const community = db.prepare('SELECT id, created_by, max_players FROM communities WHERE id = ?').get(communityId);
   if (!community) return res.status(404).json({ error: 'Niet gevonden' });
 
   const user = db.prepare('SELECT is_admin FROM users WHERE id = ?').get(me);
@@ -125,7 +125,7 @@ router.get('/:id/members', requireAuth, (req, res) => {
     ORDER BY u.display_name ASC
   `).all(community.created_by, communityId);
 
-  res.json({ members, created_by: community.created_by });
+  res.json({ members, created_by: community.created_by, max_players: community.max_players ?? 4 });
 });
 
 // DELETE /api/communities/:id/members/:userId  → lid verwijderen (aanmaker of admin)
@@ -147,6 +147,25 @@ router.delete('/:id/members/:userId', requireAuth, (req, res) => {
 
   db.prepare('DELETE FROM community_members WHERE community_id = ? AND user_id = ?').run(communityId, targetId);
   res.json({ success: true });
+});
+
+// PATCH /api/communities/:id/settings  → instellingen wijzigen (aanmaker of admin)
+router.patch('/:id/settings', requireAuth, (req, res) => {
+  const communityId = parseInt(req.params.id, 10);
+  const me = req.session.userId;
+  let { max_players } = req.body || {};
+  max_players = parseInt(max_players, 10);
+  if (!max_players || max_players < 4 || max_players > 8) {
+    return res.status(400).json({ error: 'Max. spelers moet tussen 4 en 8 zijn' });
+  }
+  const community = db.prepare('SELECT id, created_by, max_players FROM communities WHERE id = ?').get(communityId);
+  if (!community) return res.status(404).json({ error: 'Speelgroep niet gevonden' });
+  const user = db.prepare('SELECT is_admin FROM users WHERE id = ?').get(me);
+  if (community.created_by !== me && !user?.is_admin) {
+    return res.status(403).json({ error: 'Alleen de aanmaker kan instellingen wijzigen' });
+  }
+  db.prepare('UPDATE communities SET max_players = ? WHERE id = ?').run(max_players, communityId);
+  res.json({ success: true, max_players });
 });
 
 // DELETE /api/communities/:id/leave

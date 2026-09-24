@@ -864,12 +864,29 @@
         <div id="community-rename-error" class="inline-error hidden" style="padding:0 16px 8px"></div>
       </div>
 
+      <div id="community-settings-section">
+        <div class="section-header" style="margin-top:8px">Instellingen</div>
+        <div class="field-group">
+          <div class="field-row" style="justify-content:space-between;align-items:center">
+            <label style="font-size:.95rem;font-weight:500">Max. spelers per potje</label>
+            <select id="community-max-players" class="select-inline" onchange="saveCommunityMaxPlayers()">
+              <option value="4">4 spelers</option>
+              <option value="5">5 spelers</option>
+              <option value="6">6 spelers</option>
+              <option value="7">7 spelers</option>
+              <option value="8">8 spelers</option>
+            </select>
+          </div>
+          <p style="font-size:.8rem;color:var(--text-secondary);padding:4px 16px 8px">Geldt voor alle huidige en toekomstige potjes in deze speelgroep.</p>
+        </div>
+      </div>
+
       <div class="section-header" style="margin-top:8px">Leden</div>
       <div id="community-members-list" class="field-group"></div>
     </div>
   </div>
 </div>
 
-<script src="/js/app.js?v=29"></script>
+<script src="/js/app.js?v=30"></script>
 </body>
 </html>

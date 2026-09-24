@@ -58,11 +58,13 @@ router.get('/', requireAuth, (req, res) => {
              UNION ALL
              SELECT '0::' AS info, bg2.added_at AS ts
              FROM booking_guests bg2 WHERE bg2.booking_id = b.id
-             ORDER BY ts ASC)) AS participants_info
+             ORDER BY ts ASC)) AS participants_info,
+      COALESCE(c.max_players, 4) AS max_players
     FROM bookings b
     JOIN users u ON b.created_by = u.id
     LEFT JOIN participants p ON b.id = p.booking_id
     LEFT JOIN users u2 ON p.user_id = u2.id
+    LEFT JOIN communities c ON c.id = b.community_id
     WHERE datetime(b.date || ' ' || b.end_time) >= datetime('now', 'localtime')
       AND (b.is_private = 0
            OR b.created_by = ?
@@ -147,11 +149,13 @@ router.get('/calendar', requireAuth, (req, res) => {
              UNION ALL
              SELECT '0::' AS info, bg2.added_at AS ts
              FROM booking_guests bg2 WHERE bg2.booking_id = b.id
-             ORDER BY ts ASC)) AS participants_info
+             ORDER BY ts ASC)) AS participants_info,
+      COALESCE(c.max_players, 4) AS max_players
     FROM bookings b
     JOIN users u ON b.created_by = u.id
     LEFT JOIN participants p ON b.id = p.booking_id
     LEFT JOIN users u2 ON p.user_id = u2.id
+    LEFT JOIN communities c ON c.id = b.community_id
     WHERE b.date >= ? AND b.date <= ?
       AND (b.is_private = 0
            OR b.created_by = ?
@@ -205,11 +209,13 @@ router.get('/:id', requireAuth, (req, res) => {
       MAX(CASE WHEN p.user_id = ? THEN 1 ELSE 0 END) AS user_joined,
       MAX(CASE WHEN p.user_id = ? THEN p.paid_at END) AS user_paid_at,
       MIN(u2.level) AS min_level,
-      MAX(u2.level) AS max_level
+      MAX(u2.level) AS max_level,
+      COALESCE(c.max_players, 4) AS max_players
     FROM bookings b
     JOIN users u ON b.created_by = u.id
     LEFT JOIN participants p ON b.id = p.booking_id
     LEFT JOIN users u2 ON p.user_id = u2.id
+    LEFT JOIN communities c ON c.id = b.community_id
     WHERE b.id = ?
     GROUP BY b.id
   `).get(userId, userId, bookingId);
@@ -564,6 +570,8 @@ router.post('/:id/join', requireAuth, (req, res) => {
   }
 
   // Capaciteitscheck + inschrijving in één transactie om race conditions te voorkomen (#3)
+  const bookingCommunity = db.prepare('SELECT COALESCE(c.max_players, 4) AS max_players FROM bookings b LEFT JOIN communities c ON c.id = b.community_id WHERE b.id = ?').get(bookingId);
+  const maxPlayers = bookingCommunity?.max_players ?? 4;
   let joinError = null;
   db.transaction(() => {
     const counts = db.prepare(`
@@ -571,8 +579,8 @@ router.post('/:id/join', requireAuth, (req, res) => {
            + (SELECT COUNT(*) FROM booking_guests WHERE booking_id = ?) AS total
     `).get(bookingId, bookingId);
 
-    if (counts.total >= 4) {
-      joinError = { status: 409, message: 'De boeking is vol (4 spelers)' };
+    if (counts.total >= maxPlayers) {
+      joinError = { status: 409, message: `De boeking is vol (${maxPlayers} spelers)` };
       return;
     }
 
@@ -642,12 +650,14 @@ router.post('/:id/guests', requireAuth, (req, res) => {
   }
 
   // Capaciteitscheck
+  const guestBookingCommunity = db.prepare('SELECT COALESCE(c.max_players, 4) AS max_players FROM bookings b LEFT JOIN communities c ON c.id = b.community_id WHERE b.id = ?').get(bookingId);
+  const guestMaxPlayers = guestBookingCommunity?.max_players ?? 4;
   const counts = db.prepare(`
     SELECT (SELECT COUNT(*) FROM participants WHERE booking_id = ?)
          + (SELECT COUNT(*) FROM booking_guests WHERE booking_id = ?) AS total
   `).get(bookingId, bookingId);
-  if (counts.total >= 4) {
-    return res.status(409).json({ error: 'De boeking is vol (4 spelers)' });
+  if (counts.total >= guestMaxPlayers) {
+    return res.status(409).json({ error: `De boeking is vol (${guestMaxPlayers} spelers)` });
   }
 
   const result = db.prepare(

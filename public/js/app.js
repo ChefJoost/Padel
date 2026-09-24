@@ -373,7 +373,7 @@ async function openCommunityManage(id) {
   manageCommunityId = id;
   const res = await api(`/api/communities/${id}/members`);
   if (!res.ok) { showToast('Laden mislukt'); return; }
-  const { members, created_by } = await res.json();
+  const { members, created_by, max_players } = await res.json();
 
   const community = allProfileCommunities.find(c => c.id === id);
   document.getElementById('community-manage-title').textContent = community?.name || 'Speelgroep beheren';
@@ -391,6 +391,9 @@ async function openCommunityManage(id) {
       }
     </div>
   `).join('');
+
+  const sel = document.getElementById('community-max-players');
+  if (sel) sel.value = max_players || 4;
 
   document.getElementById('community-manage-modal').classList.remove('hidden');
 }
@@ -416,6 +419,18 @@ async function removeCommunityMember(userId) {
   const res = await api(`/api/communities/${manageCommunityId}/members/${userId}`, { method: 'DELETE' });
   if (!res.ok) { showToast('Verwijderen mislukt'); return; }
   openCommunityManage(manageCommunityId);
+  loadProfileCommunities();
+}
+
+async function saveCommunityMaxPlayers() {
+  const sel = document.getElementById('community-max-players');
+  const max_players = parseInt(sel.value, 10);
+  const res = await api(`/api/communities/${manageCommunityId}/settings`, {
+    method: 'PATCH',
+    body: { max_players },
+  });
+  if (!res.ok) { showToast('Opslaan mislukt'); return; }
+  showToast(`Max. ${max_players} spelers ingesteld`);
   loadProfileCommunities();
 }
 
@@ -795,7 +810,7 @@ function applyFilters() {
   list.innerHTML = '';
 
   let visible = allBookings;
-  if (filterStatus === 'open') visible = allBookings.filter(b => (b.player_count || 0) < 4);
+  if (filterStatus === 'open') visible = allBookings.filter(b => (b.player_count || 0) < (b.max_players || 4));
   if (filterStatus === 'mine') visible = allBookings.filter(b => b.user_joined);
 
   const emptyTitle = document.querySelector('#bookings-empty .empty-title');
@@ -843,7 +858,7 @@ function playerSpotHtml(name, info) {
 
 function buildCard(b) {
   const playerCount = b.player_count || 0;
-  const isFull      = playerCount >= 4;
+  const isFull      = playerCount >= (b.max_players || 4);
   const names       = (b.participants_names || '').split('||').filter(Boolean);
   const infos       = (b.participants_info || '').split('||');
 
@@ -853,7 +868,7 @@ function buildCard(b) {
 
   // Spots
   let spots = '';
-  for (let i = 0; i < 4; i++) {
+  for (let i = 0; i < (b.max_players || 4); i++) {
     spots += i < names.length
       ? playerSpotHtml(names[i], infos[i])
       : `<div class="spot spot-empty"></div>`;
@@ -866,7 +881,7 @@ function buildCard(b) {
   } else if (isFull) {
     statusTag = `<span class="status-tag status-full">Vol</span>`;
   } else {
-    statusTag = `<span class="status-tag status-open">${4 - playerCount} plek${4 - playerCount > 1 ? 'ken' : ''} vrij</span>`;
+    statusTag = `<span class="status-tag status-open">${(b.max_players || 4) - playerCount} plek${(b.max_players || 4) - playerCount > 1 ? 'ken' : ''} vrij</span>`;
   }
 
   // Niveau
@@ -914,7 +929,8 @@ async function showDetailModal(id) {
   document.getElementById('detail-title').textContent = 'Padelpotje';
 
   const playerCount = b.player_count || 0;
-  const isFull      = playerCount >= 4;
+  const maxPlayers  = b.max_players || 4;
+  const isFull      = playerCount >= maxPlayers;
   const isCreator   = b.created_by === currentUser.userId;
 
   // Niveau range
@@ -1067,7 +1083,7 @@ async function showDetailModal(id) {
   }
 
   // Deelnemers (inclusief gasten)
-  const canAddGuest = (isCreator || b.user_joined) && playerCount < 4;
+  const canAddGuest = (isCreator || b.user_joined) && playerCount < (b.max_players || 4);
   const playerRows = b.participants.map(p => {
     if (p.is_guest) {
       const canRemove = isCreator || p.added_by === currentUser.userId;
@@ -1083,7 +1099,7 @@ async function showDetailModal(id) {
     const clickAttr = isSelf ? '' : `onclick="showPlayerProfile(${p.user_id})" style="cursor:pointer"`;
     return `<div class="field-row" ${clickAttr}><span class="p-player">${icon} ${escHtml(p.display_name)}</span>${isSelf ? '' : '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14" style="color:var(--text-3);flex-shrink:0;margin-left:auto"><path d="M9 18l6-6-6-6"/></svg>'}</div>`;
   });
-  for (let i = b.participants.length; i < 4; i++) {
+  for (let i = b.participants.length; i < (b.max_players || 4); i++) {
     playerRows.push(`<div class="field-row p-empty"><span class="p-icon">○</span> Vrije plek</div>`);
   }
   if (canAddGuest) {
@@ -1104,7 +1120,7 @@ async function showDetailModal(id) {
   }
 
   const participantsHtml = `
-    <div class="section-header">Spelers (${playerCount}/4)</div>
+    <div class="section-header">Spelers (${playerCount}/${b.max_players || 4})</div>
     <div class="field-group">${playerRows.join('')}</div>
   `;
 
@@ -1780,12 +1796,12 @@ async function showAdminDetailModal(id) {
       <button class="admin-btn-sm admin-btn-delete" onclick="adminRemoveParticipant(${b.id}, ${p.id}, ${p.is_guest ? 1 : 0})">Verwijder</button>
     </div>`;
   });
-  for (let i = b.participants.length; i < 4; i++) {
+  for (let i = b.participants.length; i < (b.max_players || 4); i++) {
     playerRows.push(`<div class="field-row p-empty"><span class="p-icon">○</span> Vrije plek</div>`);
   }
 
   const participantsHtml = `
-    <div class="section-header">Spelers (${b.participants.length}/4)</div>
+    <div class="section-header">Spelers (${b.participants.length}/${b.max_players || 4})</div>
     <div class="field-group">${playerRows.join('')}</div>
   `;
 

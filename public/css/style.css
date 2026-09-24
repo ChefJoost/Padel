@@ -145,6 +145,16 @@ body {
   margin-bottom: 20px;
 }
 
+.select-inline {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  font-size: .95rem;
+  padding: 6px 10px;
+  cursor: pointer;
+}
+
 .field-row {
   display: flex;
   align-items: center;

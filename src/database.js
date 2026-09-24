@@ -113,6 +113,7 @@ migrate('ALTER TABLE bookings ADD COLUMN payment_target_users TEXT');
 migrate('ALTER TABLE booking_payment_links ADD COLUMN added_by INTEGER REFERENCES users(id)');
 migrate('ALTER TABLE bookings ADD COLUMN series_id TEXT');
 migrate('ALTER TABLE users ADD COLUMN ical_token TEXT');
+migrate('ALTER TABLE communities ADD COLUMN max_players INTEGER NOT NULL DEFAULT 4');
 
 // Speelgroepen (communities) tabellen
 db.exec(`
