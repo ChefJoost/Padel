@@ -142,8 +142,9 @@ migrate('ALTER TABLE bookings ADD COLUMN community_id INTEGER REFERENCES communi
     console.log(`[database] community 'Los Padeloos' aangemaakt (id ${losRow.id})`);
   }
   const losId = losRow.id;
+  // Alleen gebruikers zonder énige speelgroep toevoegen aan Los Padeloos (eenmalige migratie)
   const addedMembers = db.prepare(
-    "INSERT OR IGNORE INTO community_members (community_id, user_id) SELECT ?, id FROM users"
+    "INSERT OR IGNORE INTO community_members (community_id, user_id) SELECT ?, id FROM users WHERE id NOT IN (SELECT DISTINCT user_id FROM community_members)"
   ).run(losId).changes;
   const updatedBookings = db.prepare(
     "UPDATE bookings SET community_id = ? WHERE community_id IS NULL"
