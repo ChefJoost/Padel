@@ -1766,7 +1766,7 @@ async function loadAdminBookings() {
         <div class="admin-booking-title">Padelpotje${b.is_private ? ' 🔒' : ''}</div>
         <div class="admin-booking-meta">${formatDate(b.date)} · ${b.start_time}–${b.end_time} · ${escHtml(b.creator_name)}</div>
       </div>
-      <div class="admin-booking-count">${b.player_count}/4</div>
+      <div class="admin-booking-count">${b.player_count}/${b.max_players || 4}</div>
     </div>
   `).join('');
 }
@@ -2678,10 +2678,11 @@ function renderCalendar() {
       const isJoined = !!b.user_joined && !isOrg;
       const dotCls   = isOrg ? 'cal-day-dot--organizer' : isJoined ? 'cal-day-dot--joined' : '';
       const count    = b.player_count || 0;
-      // Badgekleur op basis van bezetting: 1-2 groen, 3 oranje, 4 rood
-      const badgeMod = count >= 4 ? 'cal-day-dot-badge--red'
-                     : count >= 3 ? 'cal-day-dot-badge--orange'
-                     :              'cal-day-dot-badge--green';
+      // Badgekleur op basis van bezetting relatief aan max
+      const maxP     = b.max_players || 4;
+      const badgeMod = count >= maxP           ? 'cal-day-dot-badge--red'
+                     : count >= maxP - 1       ? 'cal-day-dot-badge--orange'
+                     :                           'cal-day-dot-badge--green';
       const badge = count > 0 ? `<span class="cal-day-dot-badge ${badgeMod}">${count}</span>` : '';
       return `<span class="cal-day-dot-wrap"><span class="cal-day-dot ${dotCls}"></span>${badge}</span>`;
     }).join('');
@@ -2741,7 +2742,7 @@ function openCalDay(dateStr) {
         </div>`;
       }
 
-      const spots    = 4 - b.player_count;
+      const spots    = (b.max_players || 4) - b.player_count;
       const isFull   = spots <= 0;
       let badgeClass = 'cal-potje-badge--open';
       let badgeText  = `${spots} plek${spots !== 1 ? 'ken' : ''} vrij`;
