@@ -232,6 +232,17 @@ db.exec(`
 const adminUser = process.env.ADMIN_USERNAME || 'joosts';
 migrate(`UPDATE users SET is_admin = 1 WHERE username = '${adminUser.replace(/'/g, "''")}'`);
 
+// Stel admin-gebruiker in als created_by voor Los Padeloos als dat nog null is
+{
+  const admin = db.prepare("SELECT id FROM users WHERE username = ?").get(adminUser);
+  if (admin) {
+    const changed = db.prepare(
+      "UPDATE communities SET created_by = ? WHERE name = 'Los Padeloos' AND created_by IS NULL"
+    ).run(admin.id).changes;
+    if (changed > 0) console.log(`[database] ${adminUser} ingesteld als aanmaker van Los Padeloos`);
+  }
+}
+
 // Herstel messages tabel als het schema incorrect is (legacy safeguard)
 {
   const cols = db.prepare('PRAGMA table_info(messages)').all().map(c => c.name);

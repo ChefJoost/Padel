@@ -317,7 +317,7 @@ function renderProfileCommunityList(filter) {
       <span class="community-list-name">${escHtml(c.name)}</span>
       <span class="community-list-count">${c.member_count} ${c.member_count === 1 ? 'lid' : 'leden'}</span>
       ${c.is_member
-        ? (c.is_creator
+        ? ((c.is_creator || currentUser?.is_admin)
             ? `<button class="btn btn-outline" style="padding:4px 10px;font-size:.8rem" onclick="openCommunityManage(${c.id})">Beheer</button>`
             : `<button class="community-list-leave" onclick="leaveCommunity(${c.id})">Verlaten</button>`)
         : `<button class="btn btn-outline" style="padding:4px 10px;font-size:.8rem" onclick="profileJoinCommunity(${c.id})">Aansluiten</button>`
