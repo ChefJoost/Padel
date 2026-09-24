@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <title>PadelPotje</title>
-  <link rel="stylesheet" href="/css/style.css?v=24" />
+  <link rel="stylesheet" href="/css/style.css?v=25" />
 </head>
 <body>
 
@@ -233,7 +233,16 @@
   <div id="tab-buddies" class="tab-content hidden">
     <div class="nav-bar">
       <h1 class="nav-title">Buddies</h1>
-      <button class="nav-action nav-text" onclick="openGroupCreate()">+ Groep</button>
+      <div class="nav-actions-row">
+        <button class="nav-bell-btn" onclick="openNotifications()" title="Activiteit">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="22" height="22">
+            <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/>
+            <path d="M13.73 21a2 2 0 0 1-3.46 0"/>
+          </svg>
+          <span class="nav-bell-badge hidden" id="notif-bell-badge"></span>
+        </button>
+        <button class="nav-action nav-text" onclick="openGroupCreate()">+ Groep</button>
+      </div>
     </div>
     <div class="scroll-area">
       <div class="buddy-search-wrap">
@@ -243,6 +252,7 @@
                autocomplete="off" />
       </div>
       <div id="buddy-search-results" class="hidden"></div>
+      <div id="buddy-requests-section" class="hidden"></div>
       <div id="groups-list"></div>
       <div id="buddies-count-bar" class="buddies-count-bar hidden"></div>
       <div id="buddies-list"></div>
@@ -718,6 +728,20 @@
 </div>
 
 <!-- ══════════════════════════════════════════════
+     PANEL: Notificaties / Activiteit
+══════════════════════════════════════════════ -->
+<div id="notif-panel" class="sheet-overlay hidden" onclick="closeSheet(event)">
+  <div class="sheet sheet-tall">
+    <div class="sheet-header">
+      <button class="sheet-cancel" onclick="closeNotifications()">Sluiten</button>
+      <h2 class="sheet-title">Activiteit</h2>
+      <button class="btn-text-sm" onclick="markAllNotifsRead()">Alles gelezen</button>
+    </div>
+    <div class="sheet-body" id="notif-list"></div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════
      MODAL: Speler profiel
 ══════════════════════════════════════════════ -->
 <div id="player-modal" class="sheet-overlay hidden" onclick="closeSheet(event)">
@@ -846,6 +870,6 @@
   </div>
 </div>
 
-<script src="/js/app.js?v=28"></script>
+<script src="/js/app.js?v=29"></script>
 </body>
 </html>

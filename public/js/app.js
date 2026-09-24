@@ -1499,6 +1499,7 @@ function closeSheet(e) {
     hideAdminPwModal();
     hideGroupInfo();
     hideCommunityManage();
+    closeNotifications();
   }
 }
 
@@ -1849,7 +1850,7 @@ async function handleAdminSaveBooking() {
 
 /* ── Buddies ──────────────────────────────────────────────── */
 async function loadBuddies() {
-  allUsersCache = null; // ververs cache bij laden van buddies tab
+  allUsersCache = null;
   try {
     const [buddiesRes, groupsRes] = await Promise.all([
       api('/api/buddies'),
@@ -1865,6 +1866,7 @@ async function loadBuddies() {
     showToast('Buddies laden mislukt: ' + e.message);
     renderBuddiesTab([], []);
   }
+  loadBuddyRequests();
 }
 
 function renderBuddiesTab(buddies, groups) {
@@ -1959,13 +1961,16 @@ function updateBuddyTabBadge(n) {
 
 async function refreshBuddyBadge() {
   try {
-    const [buddiesRes, groupsRes] = await Promise.all([
+    const [buddiesRes, groupsRes, notifRes] = await Promise.all([
       api('/api/buddies/unread'),
       api('/api/groups/unread'),
+      api('/api/notifications/unread'),
     ]);
-    const buddyCount = buddiesRes.ok ? (await buddiesRes.json()).count : 0;
+    const buddyData  = buddiesRes.ok ? await buddiesRes.json() : {};
     const groupCount = groupsRes.ok  ? (await groupsRes.json()).count  : 0;
-    updateBuddyTabBadge(buddyCount + groupCount);
+    const notifCount = notifRes.ok   ? (await notifRes.json()).count   : 0;
+    updateBuddyTabBadge((buddyData.count ?? 0) + (buddyData.request_count ?? 0) + groupCount);
+    updateNotifBadge(notifCount);
   } catch (_) {}
 }
 
@@ -2184,9 +2189,18 @@ async function showPlayerProfile(userId) {
     actions.innerHTML = `
       <button class="btn btn-primary btn-full" onclick="hidePlayerModal();openChat(${u.id})">💬 Stuur een bericht</button>
       <button class="btn btn-outline btn-full" onclick="removeBuddy(${u.id}, this)">Verwijder als buddy</button>`;
+  } else if (u.request_received) {
+    actions.innerHTML = `
+      <div style="text-align:center;color:var(--text-2);font-size:.88rem;margin-bottom:10px">📬 ${escHtml(u.display_name)} heeft jou een verzoek gestuurd</div>
+      <button class="btn btn-primary btn-full" onclick="acceptBuddyRequestFromProfile(${u.request_received})">✓ Accepteren</button>
+      <button class="btn btn-outline btn-full" onclick="declineBuddyRequestFromProfile(${u.request_received})">Weigeren</button>`;
+  } else if (u.request_sent) {
+    actions.innerHTML = `
+      <div style="text-align:center;color:var(--text-2);font-size:.88rem;margin-bottom:10px">⏳ Verzoek verstuurd</div>
+      <button class="btn btn-outline btn-full" onclick="cancelBuddyRequest(${u.id}, this)">Verzoek intrekken</button>`;
   } else {
     actions.innerHTML = `
-      <button class="btn btn-primary btn-full" onclick="addBuddy(${u.id}, this)">➕ Toevoegen als buddy</button>`;
+      <button class="btn btn-primary btn-full" onclick="sendBuddyRequest(${u.id}, this)">➕ Buddy verzoek sturen</button>`;
   }
 
   document.getElementById('player-modal').classList.remove('hidden');
@@ -2196,17 +2210,25 @@ function hidePlayerModal() {
   document.getElementById('player-modal').classList.add('hidden');
 }
 
-async function addBuddy(userId, btn) {
+async function sendBuddyRequest(userId, btn) {
   btn.disabled = true;
   const res = await api(`/api/buddies/${userId}`, { method: 'POST' });
-  if (!res.ok) { btn.disabled = false; return; }
-  btn.textContent = '✓ Buddy toegevoegd';
-  btn.className = 'btn btn-outline btn-full';
-  // Voeg optie toe om te chatten
+  if (!res.ok) { btn.disabled = false; showToast('Mislukt'); return; }
   const actions = document.getElementById('player-modal-actions');
   actions.innerHTML = `
-    <button class="btn btn-primary btn-full" onclick="hidePlayerModal();openChat(${userId})">💬 Stuur een bericht</button>
-    <button class="btn btn-outline btn-full" onclick="removeBuddy(${userId}, this)">Verwijder als buddy</button>`;
+    <div style="text-align:center;color:var(--text-2);font-size:.88rem;margin-bottom:10px">⏳ Verzoek verstuurd</div>
+    <button class="btn btn-outline btn-full" onclick="cancelBuddyRequest(${userId}, this)">Verzoek intrekken</button>`;
+  showToast('Verzoek verstuurd!');
+}
+
+async function cancelBuddyRequest(userId, btn) {
+  if (btn) btn.disabled = true;
+  await api(`/api/buddies/requests/${userId}/cancel`, { method: 'DELETE' });
+  const actions = document.getElementById('player-modal-actions');
+  if (actions) {
+    actions.innerHTML = `
+      <button class="btn btn-primary btn-full" onclick="sendBuddyRequest(${userId}, this)">➕ Buddy verzoek sturen</button>`;
+  }
 }
 
 async function removeBuddy(userId, btn) {
@@ -2215,36 +2237,165 @@ async function removeBuddy(userId, btn) {
   if (!res.ok) { btn.disabled = false; return; }
   const actions = document.getElementById('player-modal-actions');
   actions.innerHTML = `
-    <button class="btn btn-primary btn-full" onclick="addBuddy(${userId}, this)">➕ Toevoegen als buddy</button>`;
+    <button class="btn btn-primary btn-full" onclick="sendBuddyRequest(${userId}, this)">➕ Buddy verzoek sturen</button>`;
 }
 
-/* ── Buddies zoeken ───────────────────────────────────────── */
-let allUsersCache = null;
+async function loadBuddyRequests() {
+  const res = await api('/api/buddies/requests');
+  if (!res.ok) return;
+  const requests = await res.json();
+  const section  = document.getElementById('buddy-requests-section');
+  if (!section) return;
+  if (!requests.length) {
+    section.classList.add('hidden');
+    section.innerHTML = '';
+    return;
+  }
+  section.classList.remove('hidden');
+  section.innerHTML = `
+    <div class="section-header">Verzoeken (${requests.length})</div>
+    ${requests.map(r => {
+      const initials    = r.display_name.split(' ').map(w => w[0]).join('').slice(0,2).toUpperCase();
+      const avatarStyle = r.avatar ? `style="background-image:url('${escAttr(r.avatar)}')"` : '';
+      return `<div class="buddy-request-card">
+        <div class="buddy-avatar-wrap">
+          <div class="buddy-avatar" ${avatarStyle}>${r.avatar ? '' : initials}</div>
+        </div>
+        <div class="buddy-info">
+          <div class="buddy-name">${escHtml(r.display_name)}</div>
+          <div class="buddy-last-msg">@${escHtml(r.username)}${r.level ? ` · niveau ${r.level}` : ''}</div>
+        </div>
+        <div class="request-actions">
+          <button class="btn-request-accept" onclick="acceptBuddyRequest(${r.id})">✓</button>
+          <button class="btn-request-decline" onclick="declineBuddyRequest(${r.id})">✕</button>
+        </div>
+      </div>`;
+    }).join('')}`;
+}
 
+async function acceptBuddyRequest(requestId) {
+  const res = await api(`/api/buddies/requests/${requestId}/accept`, { method: 'POST' });
+  if (!res.ok) { showToast('Mislukt'); return; }
+  showToast('Buddy toegevoegd! 🤝');
+  await Promise.all([loadBuddyRequests(), loadBuddies(), refreshBuddyBadge()]);
+}
+
+async function declineBuddyRequest(requestId) {
+  await api(`/api/buddies/requests/${requestId}/decline`, { method: 'POST' });
+  await Promise.all([loadBuddyRequests(), refreshBuddyBadge()]);
+}
+
+async function acceptBuddyRequestFromProfile(requestId) {
+  const res = await api(`/api/buddies/requests/${requestId}/accept`, { method: 'POST' });
+  if (!res.ok) { showToast('Mislukt'); return; }
+  showToast('Buddy toegevoegd! 🤝');
+  hidePlayerModal();
+  await Promise.all([loadBuddies(), loadBuddyRequests(), refreshBuddyBadge()]);
+}
+
+async function declineBuddyRequestFromProfile(requestId) {
+  await api(`/api/buddies/requests/${requestId}/decline`, { method: 'POST' });
+  hidePlayerModal();
+  await Promise.all([loadBuddyRequests(), refreshBuddyBadge()]);
+}
+
+/* ── Notificaties (H) ────────────────────────────────────── */
+async function openNotifications() {
+  document.getElementById('notif-panel').classList.remove('hidden');
+  await loadNotifications();
+}
+function closeNotifications() {
+  document.getElementById('notif-panel')?.classList.add('hidden');
+}
+async function loadNotifications() {
+  const listEl = document.getElementById('notif-list');
+  listEl.innerHTML = '<div class="loading-spinner" style="margin:40px auto"></div>';
+  const res = await api('/api/notifications');
+  if (!res.ok) { listEl.innerHTML = '<p style="text-align:center;padding:40px 0;color:var(--text-secondary)">Kon notificaties niet laden</p>'; return; }
+  const notifs = await res.json();
+  if (notifs.length === 0) {
+    listEl.innerHTML = '<div class="empty-state" style="padding:40px 0"><p class="empty-title">Geen activiteit</p><p class="empty-sub">Nieuwe activiteit verschijnt hier</p></div>';
+    return;
+  }
+  listEl.innerHTML = notifs.map(n => `
+    <div class="notif-item${n.read_at ? '' : ' notif-item--unread'}" onclick="handleNotifClick(${n.id}, ${n.url ? `'${escAttr(n.url)}'` : 'null'})">
+      <div class="notif-icon">${notifIcon(n.type)}</div>
+      <div class="notif-content">
+        <div class="notif-title">${escHtml(n.title)}</div>
+        ${n.body ? `<div class="notif-body">${escHtml(n.body)}</div>` : ''}
+        <div class="notif-time">${timeAgo(n.created_at)}</div>
+      </div>
+      ${n.read_at ? '' : '<div class="notif-unread-dot"></div>'}
+    </div>`).join('');
+}
+async function markAllNotifsRead() {
+  await api('/api/notifications/read-all', { method: 'POST' });
+  updateNotifBadge(0);
+  await loadNotifications();
+}
+async function handleNotifClick(id, url) {
+  await api(`/api/notifications/${id}/read`, { method: 'POST' });
+  closeNotifications();
+  if (url) {
+    if (url.startsWith('#')) {
+      const tab = url.slice(1);
+      if (tab === 'buddies') showTab('buddies');
+    }
+  }
+  await refreshBuddyBadge();
+}
+function notifIcon(type) {
+  const icons = {
+    buddy_request:  '👋',
+    buddy_accepted: '🤝',
+    booking_joined: '🎾',
+    booking_left:   '📋',
+    chat_message:   '💬',
+  };
+  return icons[type] || '🔔';
+}
+function updateNotifBadge(count) {
+  const badge = document.getElementById('notif-bell-badge');
+  if (!badge) return;
+  if (count > 0) {
+    badge.textContent = count > 99 ? '99+' : count;
+    badge.classList.remove('hidden');
+  } else {
+    badge.classList.add('hidden');
+  }
+}
+function timeAgo(isoString) {
+  const diff = Date.now() - new Date(isoString).getTime();
+  const mins  = Math.floor(diff / 60000);
+  if (mins < 1)  return 'zojuist';
+  if (mins < 60) return `${mins}m geleden`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24)  return `${hrs}u geleden`;
+  const days = Math.floor(hrs / 24);
+  if (days < 7)  return `${days}d geleden`;
+  return new Date(isoString).toLocaleDateString('nl-NL', { day: 'numeric', month: 'short' });
+}
+
+/* ── Buddies zoeken (I) ──────────────────────────────────── */
 async function searchBuddyPlayers(query) {
-  const resultsEl = document.getElementById('buddy-search-results');
-  const listEl    = document.getElementById('buddies-list');
+  const resultsEl     = document.getElementById('buddy-search-results');
+  const listEl        = document.getElementById('buddies-list');
+  const requestsEl    = document.getElementById('buddy-requests-section');
 
   if (!query.trim()) {
     resultsEl.classList.add('hidden');
     resultsEl.innerHTML = '';
     listEl.classList.remove('hidden');
+    if (requestsEl) requestsEl.classList.remove('hidden');
     return;
   }
 
   listEl.classList.add('hidden');
+  if (requestsEl) requestsEl.classList.add('hidden');
 
-  if (!allUsersCache) {
-    const res = await api('/api/auth/users');
-    if (!res.ok) return;
-    allUsersCache = await res.json();
-  }
-
-  const q = query.toLowerCase().trim();
-  const matches = allUsersCache.filter(u =>
-    u.display_name.toLowerCase().includes(q) ||
-    (u.username || '').toLowerCase().includes(q)
-  );
+  const res = await api(`/api/auth/users?q=${encodeURIComponent(query.trim())}`);
+  if (!res.ok) return;
+  const matches = await res.json();
 
   if (matches.length === 0) {
     resultsEl.innerHTML = `<div class="empty-state" style="padding:30px 0">

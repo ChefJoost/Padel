@@ -93,6 +93,7 @@ app.use('/api/admin', require('./admin'));
 app.use('/api/ical',  require('./ical'));
 app.use('/api/groups', writeLimiter, require('./groups'));
 app.use('/api/communities', require('./communities'));
+app.use('/api/notifications', require('./notifications').router);
 
 // SPA catch-all – alleen voor niet-API routes (#5 audit)
 app.get('*', (req, res, next) => {

@@ -208,10 +208,18 @@ router.post('/reset-password', (req, res) => {
   res.status(410).json({ error: 'Wachtwoord resetten is alleen mogelijk via een admin. Neem contact op met een beheerder.' });
 });
 
-// Alle gebruikers ophalen (voor Buddies tab)
+// Alle gebruikers ophalen (voor Buddies tab), optioneel gefilterd op naam (#I)
 router.get('/users', (req, res) => {
   if (!req.session.userId) return res.status(401).json({ error: 'Niet ingelogd' });
   const myId = req.session.userId;
+  const q    = req.query.q?.trim();
+
+  const params = [myId, myId];
+  let extra = '';
+  if (q) {
+    extra = 'AND (u.display_name LIKE ? OR u.username LIKE ?)';
+    params.push(`%${q}%`, `%${q}%`);
+  }
 
   const users = db.prepare(`
     SELECT u.id, u.display_name, u.username, u.level, u.avatar,
@@ -220,10 +228,11 @@ router.get('/users', (req, res) => {
     LEFT JOIN participants p1 ON p1.user_id = u.id
     LEFT JOIN bookings b ON b.id = p1.booking_id
     LEFT JOIN participants p2 ON p2.booking_id = b.id AND p2.user_id = ?
-    WHERE u.id != ?
+    WHERE u.id != ? ${extra}
     GROUP BY u.id
     ORDER BY games_together DESC, u.display_name ASC
-  `).all(myId, myId);
+    ${q ? 'LIMIT 20' : ''}
+  `).all(...params);
 
   res.json(users);
 });
