@@ -1783,6 +1783,18 @@ body {
   font-weight: 600;
 }
 
+.community-joined-remove {
+  background: none;
+  border: none;
+  color: var(--text-secondary);
+  font-size: 1rem;
+  cursor: pointer;
+  padding: 2px 6px;
+  border-radius: 50%;
+  line-height: 1;
+}
+.community-joined-remove:hover { background: rgba(0,0,0,.08); }
+
 /* Profile & admin community list */
 .community-list-item {
   display: flex;

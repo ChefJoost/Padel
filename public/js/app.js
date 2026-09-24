@@ -245,9 +245,18 @@ function renderCommunityJoinedList() {
   el.innerHTML = [...communityJoined.entries()].map(([id, name]) =>
     `<div class="community-joined-item">
       <span class="community-joined-name">${escHtml(name)}</span>
-      <span class="community-joined-badge">✓ Aangesloten</span>
+      <button class="community-joined-remove" onclick="leaveCommunityOnboarding(${id})" title="Verlaten">✕</button>
     </div>`
   ).join('');
+}
+
+async function leaveCommunityOnboarding(id) {
+  const res = await api(`/api/communities/${id}/leave`, { method: 'DELETE' });
+  if (!res.ok) return;
+  communityJoined.delete(id);
+  renderCommunityJoinedList();
+  updateCommunityButton();
+  searchCommunities(document.getElementById('community-search-input').value);
 }
 
 async function handleCommunityContinue() {
@@ -1850,7 +1859,6 @@ async function handleAdminSaveBooking() {
 
 /* ── Buddies ──────────────────────────────────────────────── */
 async function loadBuddies() {
-  allUsersCache = null;
   try {
     const [buddiesRes, groupsRes] = await Promise.all([
       api('/api/buddies'),
@@ -1928,7 +1936,7 @@ function renderBuddiesTab(buddies, groups) {
         ? `<span class="buddy-unread-dot">${u.unread_count > 9 ? '9+' : u.unread_count}</span>` : '';
       const lastMsg = u.last_message
         ? `<div class="buddy-last-msg${u.unread_count > 0 ? ' buddy-last-msg--unread' : ''}">${escHtml(u.last_message)}</div>`
-        : `<div class="buddy-last-msg">${u.games_together} potje${u.games_together!==1?'s':''} samen</div>`;
+        : `<div class="buddy-last-msg">${u.games_together > 0 ? `${u.games_together} potje${u.games_together!==1?'s':''} samen` : 'Nog niet samen gespeeld'}</div>`;
       return `<div class="buddy-card" onclick="openChat(${u.id})">
         <div class="buddy-avatar-wrap">
           <div class="buddy-avatar" ${avatarStyle}>${avatarContent}</div>
@@ -2585,6 +2593,7 @@ async function sendChatMessage() {
   }
   if (!res.ok) { input.value = content; return; }
   const msg = await res.json();
+  if (msg.id <= chatLastId) return; // SSE already rendered it
   chatLastId = msg.id;
   renderChatMessages([msg], false);
 }
