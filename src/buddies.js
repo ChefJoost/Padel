@@ -2,6 +2,7 @@ const express = require('express');
 const router  = express.Router();
 const db      = require('./database');
 const { sendPushToUser } = require('./push');
+const sse = require('./sseManager');
 
 function requireAuth(req, res, next) {
   if (!req.session.userId) return res.status(401).json({ error: 'Niet ingelogd' });
@@ -208,6 +209,9 @@ router.post('/chat/:userId', requireAuth, (req, res) => {
 
     res.json(msg);
 
+    // SSE naar beide partijen (real-time)
+    sse.publish(sse.directKey(me, other), msg);
+
     // Push naar ontvanger (fire-and-forget)
     const sender = db.prepare('SELECT display_name FROM users WHERE id = ?').get(me);
     sendPushToUser(other, {
@@ -251,6 +255,21 @@ router.get('/chat/:userId/new', requireAuth, (req, res) => {
     console.error('[chat/new GET] fout:', err.message);
     res.json([]);
   }
+});
+
+// GET /api/buddies/chat/:userId/events  → SSE stream voor real-time berichten
+router.get('/chat/:userId/events', requireAuth, (req, res) => {
+  const me    = req.session.userId;
+  const other = parseInt(req.params.userId, 10);
+  if (!other) return res.status(400).end();
+
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('Connection', 'keep-alive');
+  res.flushHeaders();
+
+  const unsubscribe = sse.subscribe(sse.directKey(me, other), res);
+  req.on('close', unsubscribe);
 });
 
 module.exports = router;

@@ -1994,8 +1994,7 @@ async function openGroupChat(groupId) {
   document.getElementById('chat-modal').classList.remove('hidden');
   document.getElementById('chat-input').focus();
 
-  stopChatPolling();
-  chatPollTimer = setInterval(pollChat, 3000);
+  startChatSSE();
 }
 
 async function openGroupInfo() {
@@ -2276,7 +2275,8 @@ async function searchBuddyPlayers(query) {
 /* ── Chat ─────────────────────────────────────────────────── */
 let chatUserId      = null;
 let chatLastId      = 0;
-let chatPollTimer   = null;
+let chatPollTimer   = null;  // fallback polling als SSE niet werkt
+let chatEventSource = null;  // SSE verbinding
 let chatBuddyName   = '';
 let chatMode        = 'direct'; // 'direct' | 'group'
 let chatGroupId     = null;
@@ -2315,9 +2315,7 @@ async function openChat(userId) {
   document.getElementById('chat-modal').classList.remove('hidden');
   document.getElementById('chat-input').focus();
 
-  // Start polling
-  stopChatPolling();
-  chatPollTimer = setInterval(pollChat, 3000);
+  startChatSSE();
 }
 
 function hideChat() {
@@ -2332,6 +2330,36 @@ function hideChat() {
 
 function stopChatPolling() {
   if (chatPollTimer) { clearInterval(chatPollTimer); chatPollTimer = null; }
+  if (chatEventSource) { chatEventSource.close(); chatEventSource = null; }
+}
+
+function startChatSSE() {
+  stopChatPolling();
+  const url = chatMode === 'group'
+    ? `/api/groups/${chatGroupId}/chat/events`
+    : `/api/buddies/chat/${chatUserId}/events`;
+
+  if (!window.EventSource) {
+    // Fallback polling voor browsers zonder SSE-ondersteuning
+    chatPollTimer = setInterval(pollChat, 3000);
+    return;
+  }
+
+  chatEventSource = new EventSource(url);
+  chatEventSource.onmessage = (e) => {
+    try {
+      const msg = JSON.parse(e.data);
+      // Negeer berichten die we zelf hebben verstuurd (al in de lijst)
+      if (msg.id <= chatLastId) return;
+      chatLastId = msg.id;
+      renderChatMessages([msg], false);
+    } catch (_) {}
+  };
+  chatEventSource.onerror = () => {
+    // SSE verbinding verbroken, val terug op polling
+    if (chatEventSource) { chatEventSource.close(); chatEventSource = null; }
+    if (!chatPollTimer) chatPollTimer = setInterval(pollChat, 5000);
+  };
 }
 
 async function pollChat() {

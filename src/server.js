@@ -14,7 +14,12 @@ if (!fs.existsSync(dataDir)) {
 
 const SqliteStore = require('connect-sqlite3')(session);
 
-app.use(express.json({ limit: '2mb' }));
+app.use(express.json({ limit: '4mb' }));
+
+// Profielfoto's worden opgeslagen in DATA_DIR/avatars/ en geserveerd als /avatars/*
+const avatarsDir = path.join(dataDir, 'avatars');
+if (!fs.existsSync(avatarsDir)) fs.mkdirSync(avatarsDir, { recursive: true });
+app.use('/avatars', express.static(avatarsDir));
 
 // Rate limiting op auth-endpoints: max 20 pogingen per 15 minuten per IP
 const authLimiter = rateLimit({
@@ -50,8 +55,13 @@ app.use(session({
   },
 }));
 
-// Versie-check (helpt bevestigen welke deploy actief is)
-app.get('/api/version', (req, res) => res.json({ version: 'e892201', ts: new Date().toISOString() }));
+// Versie-check
+const { version } = require('../package.json');
+app.get('/api/version', (req, res) => res.json({
+  version,
+  commit: process.env.GIT_COMMIT || 'dev',
+  ts: new Date().toISOString(),
+}));
 
 // Routes
 app.use('/api/auth', authLimiter, require('./auth'));

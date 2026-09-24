@@ -1,8 +1,24 @@
 const express = require('express');
-const bcrypt = require('bcrypt');
-const db = require('./database');
+const bcrypt  = require('bcrypt');
+const path    = require('path');
+const fs      = require('fs');
+const db      = require('./database');
 
 const router = express.Router();
+
+const dataDir    = process.env.DATA_DIR || path.join(__dirname, '..', 'data');
+const avatarsDir = path.join(dataDir, 'avatars');
+if (!fs.existsSync(avatarsDir)) fs.mkdirSync(avatarsDir, { recursive: true });
+
+function saveAvatarFile(userId, dataUrl) {
+  const match = dataUrl.match(/^data:(image\/\w+);base64,(.+)$/);
+  if (!match) return dataUrl; // niet herkend, ongewijzigd teruggeven
+  const ext  = match[1].split('/')[1].replace('jpeg', 'jpg');
+  const data = Buffer.from(match[2], 'base64');
+  const file = path.join(avatarsDir, `${userId}.${ext}`);
+  fs.writeFileSync(file, data);
+  return `/avatars/${userId}.${ext}`;
+}
 
 function validatePassword(pw) {
   if (pw.length < 8)          return 'Wachtwoord moet minimaal 8 tekens zijn';
@@ -132,6 +148,12 @@ router.put('/profile', async (req, res) => {
     let hash = user.password_hash;
     if (new_password) hash = await bcrypt.hash(new_password, 12);
 
+    // Sla base64-avatar op als bestand; bewaar alleen het pad in de DB
+    let avatarValue = avatar !== undefined ? avatar : user.avatar;
+    if (avatarValue && avatarValue.startsWith('data:image/')) {
+      avatarValue = saveAvatarFile(userId, avatarValue);
+    }
+
     db.prepare(`
       UPDATE users SET
         display_name  = ?,
@@ -145,7 +167,7 @@ router.put('/profile', async (req, res) => {
       username ? username.toLowerCase() : user.username,
       lvl || null,
       hash,
-      avatar !== undefined ? avatar : user.avatar,
+      avatarValue,
       userId
     );
 

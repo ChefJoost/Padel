@@ -1813,3 +1813,62 @@ body {
   padding: 12px 14px;
   margin-top: 8px;
 }
+
+/* ══════════════════════════════════════════════
+   DONKERE MODUS
+══════════════════════════════════════════════ */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg:               #1C1C1E;
+    --surface:          #2C2C2E;
+    --separator:        rgba(255,255,255,.12);
+    --separator-opaque: #48484A;
+
+    --text:   #FFFFFF;
+    --text-2: rgba(235,235,245,.6);
+    --text-3: rgba(235,235,245,.3);
+
+    --green-tint: rgba(52,199,89,.18);
+  }
+
+  body { background: var(--bg); }
+
+  #auth-screen, #welcome-screen, #community-screen {
+    background: linear-gradient(160deg, #0d2b1e 0%, #1a4731 50%, #2e7d52 100%);
+  }
+
+  .auth-card { background: #2C2C2E; }
+
+  .field-group, .profile-hero, .stat-card, .booking-card,
+  .sheet, .buddy-item, .profile-stats { background: var(--surface); }
+
+  .sheet { border-top-color: var(--separator); }
+
+  .cal-cell        { background: var(--surface); }
+  .cal-cell--today { background: var(--blue); }
+  .cal-cell--other { background: transparent; color: var(--text-3); }
+
+  .seg-control, .filter-group { background: #3A3A3C; }
+  .seg-btn.active  { background: var(--surface); }
+
+  input, select, textarea {
+    background: #3A3A3C;
+    color: var(--text);
+    border-color: var(--separator-opaque);
+  }
+
+  .level-btn { background: #3A3A3C; color: var(--text); }
+  .level-btn.selected { background: var(--blue); color: #fff; }
+
+  .bottom-tab-bar { background: rgba(28,28,30,.92); border-top-color: var(--separator); }
+
+  .chat-bubble--me  { background: var(--blue); }
+  .chat-bubble--them { background: #3A3A3C; }
+  .chat-date-label  { color: var(--text-3); }
+
+  .community-result-item { background: #3A3A3C; }
+  .community-create-inline { background: #3A3A3C; }
+  .community-joined-item { background: rgba(52,199,89,.15); }
+
+  .admin-stats { background: transparent; }
+}

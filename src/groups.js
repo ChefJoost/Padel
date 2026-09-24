@@ -2,6 +2,7 @@ const express = require('express');
 const router  = express.Router();
 const db      = require('./database');
 const { sendPushToUser } = require('./push');
+const sse = require('./sseManager');
 
 function requireAuth(req, res, next) {
   if (!req.session.userId) return res.status(401).json({ error: 'Niet ingelogd' });
@@ -213,6 +214,9 @@ router.post('/:id/chat', requireAuth, (req, res) => {
 
     res.json(msg);
 
+    // SSE naar alle groepsleden (real-time)
+    sse.publish(sse.groupKey(groupId), msg);
+
     // Push naar alle andere groepsleden (fire-and-forget)
     const group   = db.prepare('SELECT name FROM chat_groups WHERE id = ?').get(groupId);
     const others  = db.prepare(
@@ -261,6 +265,23 @@ router.get('/:id/chat/new', requireAuth, (req, res) => {
   } catch (err) {
     res.json([]);
   }
+});
+
+// GET /api/groups/:id/chat/events  → SSE stream voor real-time berichten
+router.get('/:id/chat/events', requireAuth, (req, res) => {
+  const me      = req.session.userId;
+  const groupId = parseInt(req.params.id, 10);
+
+  const isMember = db.prepare('SELECT 1 FROM group_members WHERE group_id = ? AND user_id = ?').get(groupId, me);
+  if (!isMember) return res.status(403).end();
+
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('Connection', 'keep-alive');
+  res.flushHeaders();
+
+  const unsubscribe = sse.subscribe(sse.groupKey(groupId), res);
+  req.on('close', unsubscribe);
 });
 
 module.exports = router;

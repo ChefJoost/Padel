@@ -588,6 +588,12 @@ router.delete('/:id/join', requireAuth, (req, res) => {
   const booking = db.prepare('SELECT * FROM bookings WHERE id = ?').get(bookingId);
   if (!booking) return res.status(404).json({ error: 'Boeking niet gevonden' });
 
+  // Controleer of boeking vol was vóór afmelding
+  const countBefore = db.prepare(`
+    SELECT (SELECT COUNT(*) FROM participants WHERE booking_id = ?)
+         + (SELECT COUNT(*) FROM booking_guests WHERE booking_id = ?) AS total
+  `).get(bookingId, bookingId).total;
+
   const result = db.prepare(
     'DELETE FROM participants WHERE booking_id = ? AND user_id = ?'
   ).run(bookingId, userId);
@@ -597,6 +603,16 @@ router.delete('/:id/join', requireAuth, (req, res) => {
   }
 
   res.json({ success: true });
+
+  // Push naar organisator als er een plek vrijkomt (was vol)
+  if (countBefore >= 4 && booking.created_by !== userId) {
+    const leaver = db.prepare('SELECT display_name FROM users WHERE id = ?').get(userId);
+    sendPushToUser(booking.created_by, {
+      title: '🎾 Plek vrijgekomen',
+      body:  `${leaver?.display_name} heeft zich afgemeld voor het potje op ${booking.date}`,
+      url:   `/?potje=${bookingId}`,
+    }).catch(() => {});
+  }
 });
 
 // Gast toevoegen (organisator of deelnemer)
