@@ -2485,13 +2485,15 @@ function renderCalendar() {
     const potjes   = calData[dateStr] || [];
     const isToday  = dateStr === todayStr;
     const isPast   = dateStr < todayStr;
-    const iJoined  = potjes.some(b => b.user_joined);
-    const hasPotje = potjes.length > 0;
+    const hasPotje  = potjes.length > 0;
+    const isOrgDay  = potjes.some(b => b.created_by === currentUser.userId);
+    const isJoinDay = !isOrgDay && potjes.some(b => b.user_joined);
 
     let cls = 'cal-day';
     if (isPast)             cls += ' cal-day--past';
     if (isToday)            cls += ' cal-day--today';
-    if (iJoined)            cls += ' cal-day--joined';
+    if (isOrgDay)           cls += ' cal-day--organizer';
+    else if (isJoinDay)     cls += ' cal-day--joined';
     else if (hasPotje)      cls += ' cal-day--has-potje';
 
     // Bolletjes: oranje=beheerder, blauw=deelnemer, grijs=open potje

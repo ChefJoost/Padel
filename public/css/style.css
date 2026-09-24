@@ -1171,7 +1171,14 @@ body {
 }
 .cal-day.cal-day--past:active { transform: none; }
 
-/* Dag met potje waar je aan meedoet → groen */
+/* Dag waarop jij een potje organiseert → oranje tint */
+.cal-day.cal-day--organizer {
+  background: rgba(255,149,0,.20);
+  box-shadow: inset 0 0 0 2px var(--orange);
+}
+.cal-day.cal-day--organizer .cal-day-num { color: var(--orange); }
+
+/* Dag met potje waar je aan meedoet (niet organiseert) → groen */
 .cal-day.cal-day--joined {
   background: var(--green);
 }
@@ -1193,7 +1200,8 @@ body {
   align-items: center;
   justify-content: center;
 }
-.cal-day.cal-day--joined.cal-day--today .cal-day-num {
+.cal-day.cal-day--joined.cal-day--today .cal-day-num,
+.cal-day.cal-day--organizer.cal-day--today .cal-day-num {
   background: var(--yellow);
   color: #1c1c1e;
 }
@@ -1322,20 +1330,24 @@ body {
   font-size: .78rem;
   color: var(--text-2);
 }
+/* Legenda-vlakjes matchen de daadwerkelijke cel-stijlen */
 .cal-legend-dot {
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
+  width: 14px;
+  height: 14px;
+  border-radius: 4px;
   flex-shrink: 0;
 }
-.cal-legend-dot--organizer { background: var(--orange); }
-.cal-legend-dot--joined    { background: var(--blue); }
-.cal-legend-dot--open      { background: var(--text-3); }
+.cal-legend-dot--organizer {
+  background: rgba(255,149,0,.20);
+  box-shadow: inset 0 0 0 2px var(--orange);
+}
+.cal-legend-dot--joined    { background: var(--green); }
+.cal-legend-dot--open      { box-shadow: inset 0 0 0 2px var(--blue); }
 .cal-legend-today {
-  width: 10px;
-  height: 10px;
-  background: var(--yellow);
-  border-radius: 50%;
+  width: 14px;
+  height: 14px;
+  background: var(--surface);
+  border-radius: 4px;
   flex-shrink: 0;
 }
 
