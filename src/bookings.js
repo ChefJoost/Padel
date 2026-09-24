@@ -324,7 +324,23 @@ router.post('/', requireAuth, (req, res) => {
     }));
 
     const ids = createAll();
-    return res.status(201).json({ ids, count: ids.length, series_id: seriesId });
+    res.status(201).json({ ids, count: ids.length, series_id: seriesId });
+
+    // Push naar community-leden (fire-and-forget, na response)
+    if (communityId && !privateFlag) {
+      const creator = db.prepare('SELECT display_name FROM users WHERE id = ?').get(userId);
+      const members = db.prepare(
+        'SELECT user_id FROM community_members WHERE community_id = ? AND user_id != ?'
+      ).all(communityId, userId);
+      for (const { user_id } of members) {
+        sendPushToUser(user_id, {
+          title: '🎾 Nieuw potje',
+          body:  `${creator?.display_name} heeft een reeks van ${ids.length} potjes aangemaakt`,
+          url:   '/',
+        }).catch(() => {});
+      }
+    }
+    return;
   }
 
   // Enkelvoudige boeking
@@ -332,6 +348,21 @@ router.post('/', requireAuth, (req, res) => {
   const result = stmtBooking.run(date, start_time, end_time, notes || null, userId, privateFlag, inviteToken, null, communityId);
   stmtParticipant.run(result.lastInsertRowid, userId);
   res.status(201).json({ id: result.lastInsertRowid });
+
+  // Push naar community-leden (fire-and-forget, na response)
+  if (communityId && !privateFlag) {
+    const creator = db.prepare('SELECT display_name FROM users WHERE id = ?').get(userId);
+    const members = db.prepare(
+      'SELECT user_id FROM community_members WHERE community_id = ? AND user_id != ?'
+    ).all(communityId, userId);
+    for (const { user_id } of members) {
+      sendPushToUser(user_id, {
+        title: '🎾 Nieuw potje',
+        body:  `${creator?.display_name} heeft een nieuw potje aangemaakt op ${date}`,
+        url:   '/',
+      }).catch(() => {});
+    }
+  }
 });
 
 // Boeking bewerken (alleen aanmaker)

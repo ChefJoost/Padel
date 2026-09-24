@@ -105,43 +105,12 @@ function setUser(data) {
 }
 
 function showTab(tab, btn) {
-  hideForgotPassword();
   document.getElementById('login-form').classList.toggle('hidden', tab !== 'login');
   document.getElementById('register-form').classList.toggle('hidden', tab !== 'register');
   document.querySelectorAll('.seg-btn').forEach(b => b.classList.remove('active'));
   btn.classList.add('active');
 }
 
-function showForgotPassword() {
-  document.getElementById('login-form').classList.add('hidden');
-  document.getElementById('forgot-form').classList.remove('hidden');
-  clearError('forgot-error');
-  document.getElementById('forgot-username').value    = '';
-  document.getElementById('forgot-display-name').value = '';
-  document.getElementById('forgot-new-pw').value      = '';
-}
-
-function hideForgotPassword() {
-  document.getElementById('forgot-form').classList.add('hidden');
-  document.getElementById('login-form').classList.remove('hidden');
-}
-
-async function handleResetPassword(e) {
-  e.preventDefault();
-  clearError('forgot-error');
-  const username     = document.getElementById('forgot-username').value.trim();
-  const display_name = document.getElementById('forgot-display-name').value.trim();
-  const new_password = document.getElementById('forgot-new-pw').value;
-  const pwError = validatePassword(new_password);
-  if (pwError) return showError('forgot-error', pwError);
-  const res  = await api('/api/auth/reset-password', { method: 'POST', body: { username, display_name, new_password } });
-  const data = await res.json();
-  if (!res.ok) return showError('forgot-error', data.error);
-  hideForgotPassword();
-  showError('login-error', 'Wachtwoord gewijzigd. Je kunt nu inloggen.');
-  document.getElementById('login-error').style.color = 'var(--green)';
-  document.getElementById('login-username').value = username;
-}
 
 async function handleLogin(e) {
   e.preventDefault();
@@ -339,7 +308,9 @@ function renderProfileCommunityList(filter) {
       <span class="community-list-name">${escHtml(c.name)}</span>
       <span class="community-list-count">${c.member_count} ${c.member_count === 1 ? 'lid' : 'leden'}</span>
       ${c.is_member
-        ? `<button class="community-list-leave" onclick="leaveCommunity(${c.id})">Verlaten</button>`
+        ? (c.is_creator
+            ? `<button class="btn btn-outline" style="padding:4px 10px;font-size:.8rem" onclick="openCommunityManage(${c.id})">Beheer</button>`
+            : `<button class="community-list-leave" onclick="leaveCommunity(${c.id})">Verlaten</button>`)
         : `<button class="btn btn-outline" style="padding:4px 10px;font-size:.8rem" onclick="profileJoinCommunity(${c.id})">Aansluiten</button>`
       }
     </div>
@@ -383,6 +354,59 @@ async function profileCreateCommunity() {
   if (!res.ok) return showError('profile-community-create-error', data.error || 'Aanmaken mislukt');
   showToast(`Speelgroep "${data.name}" aangemaakt`);
   document.getElementById('profile-community-create').classList.add('hidden');
+  loadProfileCommunities();
+}
+
+/* ── Speelgroep beheren (aanmaker) ───────────────────────────── */
+let manageCommunityId = null;
+
+async function openCommunityManage(id) {
+  manageCommunityId = id;
+  const res = await api(`/api/communities/${id}/members`);
+  if (!res.ok) { showToast('Laden mislukt'); return; }
+  const { members, created_by } = await res.json();
+
+  const community = allProfileCommunities.find(c => c.id === id);
+  document.getElementById('community-manage-title').textContent = community?.name || 'Speelgroep beheren';
+  document.getElementById('community-rename-input').value = community?.name || '';
+  clearError('community-rename-error');
+
+  const el = document.getElementById('community-members-list');
+  el.innerHTML = members.map(m => `
+    <div class="community-list-item">
+      <span class="community-list-name">${escHtml(m.display_name)}</span>
+      <span class="community-list-count">@${escHtml(m.username || '')}</span>
+      ${m.is_creator
+        ? `<span style="font-size:.78rem;color:var(--blue);font-weight:600">Aanmaker</span>`
+        : `<button class="community-list-leave" onclick="removeCommunityMember(${m.id})">Verwijder</button>`
+      }
+    </div>
+  `).join('');
+
+  document.getElementById('community-manage-modal').classList.remove('hidden');
+}
+
+function hideCommunityManage() {
+  document.getElementById('community-manage-modal').classList.add('hidden');
+  manageCommunityId = null;
+}
+
+async function submitCommunityRename() {
+  const name = document.getElementById('community-rename-input').value.trim();
+  clearError('community-rename-error');
+  if (!name) return showError('community-rename-error', 'Vul een naam in');
+  const res = await api(`/api/communities/${manageCommunityId}`, { method: 'PUT', body: { name } });
+  const data = await res.json();
+  if (!res.ok) return showError('community-rename-error', data.error || 'Opslaan mislukt');
+  document.getElementById('community-manage-title').textContent = name;
+  showToast('Naam gewijzigd');
+  loadProfileCommunities();
+}
+
+async function removeCommunityMember(userId) {
+  const res = await api(`/api/communities/${manageCommunityId}/members/${userId}`, { method: 'DELETE' });
+  if (!res.ok) { showToast('Verwijderen mislukt'); return; }
+  openCommunityManage(manageCommunityId);
   loadProfileCommunities();
 }
 
@@ -1474,6 +1498,7 @@ function closeSheet(e) {
     hideAdminEditModal();
     hideAdminPwModal();
     hideGroupInfo();
+    hideCommunityManage();
   }
 }
 

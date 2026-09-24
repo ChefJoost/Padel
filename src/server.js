@@ -2,6 +2,7 @@ const express = require('express');
 const session = require('express-session');
 const path = require('path');
 const fs = require('fs');
+const rateLimit = require('express-rate-limit');
 
 const app = express();
 
@@ -13,7 +14,16 @@ if (!fs.existsSync(dataDir)) {
 
 const SqliteStore = require('connect-sqlite3')(session);
 
-app.use(express.json());
+app.use(express.json({ limit: '2mb' }));
+
+// Rate limiting op auth-endpoints: max 20 pogingen per 15 minuten per IP
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 20,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Te veel pogingen. Probeer het over 15 minuten opnieuw.' },
+});
 
 // Statische bestanden: JS/CSS mogen gecached worden, HTML nooit
 app.use(express.static(path.join(__dirname, '..', 'public'), {
@@ -36,6 +46,7 @@ app.use(session({
     maxAge: 7 * 24 * 60 * 60 * 1000, // 7 dagen
     httpOnly: true,
     sameSite: 'lax',
+    secure: process.env.NODE_ENV === 'production',
   },
 }));
 
@@ -43,7 +54,7 @@ app.use(session({
 app.get('/api/version', (req, res) => res.json({ version: 'e892201', ts: new Date().toISOString() }));
 
 // Routes
-app.use('/api/auth', require('./auth'));
+app.use('/api/auth', authLimiter, require('./auth'));
 app.use('/api/bookings', require('./bookings'));
 app.use('/api/buddies', require('./buddies'));
 app.use('/api/push', require('./push').router);

@@ -36,28 +36,7 @@
       </div>
       <div id="login-error" class="inline-error hidden"></div>
       <button type="submit" class="btn btn-primary btn-full">Inloggen</button>
-      <button type="button" class="btn-forgot" onclick="showForgotPassword()">Wachtwoord vergeten?</button>
-    </form>
-
-    <!-- Wachtwoord vergeten -->
-    <form id="forgot-form" class="hidden" onsubmit="handleResetPassword(event)">
-      <div class="field-group">
-        <div class="field-row">
-          <label>Gebruikersnaam</label>
-          <input type="text" id="forgot-username" autocomplete="username" placeholder="jouw gebruikersnaam" />
-        </div>
-        <div class="field-row">
-          <label>Weergavenaam</label>
-          <input type="text" id="forgot-display-name" placeholder="jouw weergavenaam" />
-        </div>
-        <div class="field-row">
-          <label>Nieuw wachtwoord</label>
-          <input type="password" id="forgot-new-pw" autocomplete="new-password" placeholder="min. 8 tekens, A-z, 0-9" />
-        </div>
-      </div>
-      <div id="forgot-error" class="inline-error hidden"></div>
-      <button type="submit" class="btn btn-primary btn-full">Wachtwoord instellen</button>
-      <button type="button" class="btn-forgot" onclick="hideForgotPassword()">Terug naar inloggen</button>
+      <p class="btn-forgot" style="cursor:default">Wachtwoord vergeten? Neem contact op met een beheerder.</p>
     </form>
 
     <!-- Register -->
@@ -840,6 +819,32 @@
 </div>
 
 <div id="toast" class="toast hidden"></div>
-<script src="/js/app.js?v=25"></script>
+<!-- ══════════════════════════════════════════════
+     MODAL: Speelgroep beheren
+══════════════════════════════════════════════ -->
+<div id="community-manage-modal" class="sheet-overlay hidden" onclick="closeSheet(event)">
+  <div class="sheet">
+    <div class="sheet-header">
+      <button class="sheet-cancel" onclick="hideCommunityManage()">Sluiten</button>
+      <h2 class="sheet-title" id="community-manage-title">Speelgroep beheren</h2>
+      <div style="width:60px"></div>
+    </div>
+    <div class="sheet-body">
+      <div class="section-header">Naam wijzigen</div>
+      <div class="field-group">
+        <div class="field-row">
+          <input type="text" id="community-rename-input" placeholder="Nieuwe naam..." maxlength="60" />
+          <button class="btn btn-outline" style="white-space:nowrap" onclick="submitCommunityRename()">Opslaan</button>
+        </div>
+        <div id="community-rename-error" class="inline-error hidden" style="padding:0 16px 8px"></div>
+      </div>
+
+      <div class="section-header" style="margin-top:8px">Leden</div>
+      <div id="community-members-list" class="field-group"></div>
+    </div>
+  </div>
+</div>
+
+<script src="/js/app.js?v=26"></script>
 </body>
 </html>
