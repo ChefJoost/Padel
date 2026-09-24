@@ -153,10 +153,21 @@ router.delete('/:id/members/:userId', requireAuth, (req, res) => {
 router.delete('/:id/leave', requireAuth, (req, res) => {
   const communityId = parseInt(req.params.id, 10);
   const me = req.session.userId;
-  const memberCount = db.prepare('SELECT COUNT(*) AS c FROM community_members WHERE user_id = ?').get(me)?.c ?? 0;
-  if (memberCount <= 1) {
+
+  const community = db.prepare('SELECT id, created_by FROM communities WHERE id = ?').get(communityId);
+  if (!community) return res.status(404).json({ error: 'Speelgroep niet gevonden' });
+
+  // Aanmaker kan zijn eigen groep niet verlaten (#5)
+  if (community.created_by === me) {
+    return res.status(400).json({ error: 'Als aanmaker kun je de groep niet verlaten. Verwijder de groep of draag hem over aan een andere beheerder.' });
+  }
+
+  // Minimaal één groep verplicht
+  const myGroupCount = db.prepare('SELECT COUNT(*) AS c FROM community_members WHERE user_id = ?').get(me)?.c ?? 0;
+  if (myGroupCount <= 1) {
     return res.status(400).json({ error: 'Je moet lid zijn van minimaal één speelgroep' });
   }
+
   db.prepare('DELETE FROM community_members WHERE community_id = ? AND user_id = ?').run(communityId, me);
   res.json({ success: true });
 });

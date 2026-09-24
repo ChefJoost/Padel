@@ -110,8 +110,6 @@ migrate('ALTER TABLE participants ADD COLUMN paid_at DATETIME');
 migrate('ALTER TABLE bookings ADD COLUMN is_private INTEGER DEFAULT 0');
 migrate('ALTER TABLE bookings ADD COLUMN invite_token TEXT');
 migrate('ALTER TABLE bookings ADD COLUMN payment_target_users TEXT');
-migrate('ALTER TABLE availability ADD COLUMN start_time TEXT');
-migrate('ALTER TABLE availability ADD COLUMN end_time TEXT');
 migrate('ALTER TABLE booking_payment_links ADD COLUMN added_by INTEGER REFERENCES users(id)');
 migrate('ALTER TABLE bookings ADD COLUMN series_id TEXT');
 migrate('ALTER TABLE users ADD COLUMN ical_token TEXT');
@@ -207,12 +205,11 @@ db.exec(`
   if (migrated) console.log(`[database] ${migrated} betaallink(s) gemigreerd naar booking_payment_links`);
 }
 
-// Stel standaard admin in
-migrate("UPDATE users SET is_admin = 1 WHERE username = 'joosts'");
+// Stel standaard admin in via env var (#15 – geen hardcoded gebruikersnaam)
+const adminUser = process.env.ADMIN_USERNAME || 'joosts';
+migrate(`UPDATE users SET is_admin = 1 WHERE username = '${adminUser.replace(/'/g, "''")}'`);
 
-module.exports = db;
-
-// Controleer messages tabel schema bij opstarten (kan verkeerd schema hebben van oude deploy)
+// Herstel messages tabel als het schema incorrect is (legacy safeguard)
 {
   const cols = db.prepare('PRAGMA table_info(messages)').all().map(c => c.name);
   if (cols.length > 0 && !cols.includes('sender_id')) {
@@ -233,3 +230,5 @@ module.exports = db;
 // Log welke tabellen aanwezig zijn bij opstarten
 const tables = db.prepare("SELECT name FROM sqlite_master WHERE type='table' ORDER BY name").all();
 console.log('[database] tabellen bij opstarten:', tables.map(t => t.name).join(', '));
+
+module.exports = db;

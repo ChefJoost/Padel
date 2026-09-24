@@ -542,17 +542,7 @@ router.post('/:id/join', requireAuth, (req, res) => {
   ).get(bookingId, userId);
   if (existing) return res.status(409).json({ error: 'Je bent al ingeschreven' });
 
-  // Tel huidige spelers (inclusief gasten)
-  const counts = db.prepare(`
-    SELECT (SELECT COUNT(*) FROM participants WHERE booking_id = ?)
-         + (SELECT COUNT(*) FROM booking_guests WHERE booking_id = ?) AS total
-  `).get(bookingId, bookingId);
-
-  if (counts.total >= 4) {
-    return res.status(409).json({ error: 'De boeking is vol (4 spelers)' });
-  }
-
-  // Niveau-check: max 2 aansluitende niveaus toegestaan
+  // Niveau-check buiten transactie (read-only)
   const user = db.prepare('SELECT level FROM users WHERE id = ?').get(userId);
   if (user.level) {
     const levelRange = db.prepare(`
@@ -573,10 +563,25 @@ router.post('/:id/join', requireAuth, (req, res) => {
     }
   }
 
-  db.prepare(
-    'INSERT INTO participants (booking_id, user_id, is_extra) VALUES (?, ?, 0)'
-  ).run(bookingId, userId);
+  // Capaciteitscheck + inschrijving in één transactie om race conditions te voorkomen (#3)
+  let joinError = null;
+  db.transaction(() => {
+    const counts = db.prepare(`
+      SELECT (SELECT COUNT(*) FROM participants WHERE booking_id = ?)
+           + (SELECT COUNT(*) FROM booking_guests WHERE booking_id = ?) AS total
+    `).get(bookingId, bookingId);
 
+    if (counts.total >= 4) {
+      joinError = { status: 409, message: 'De boeking is vol (4 spelers)' };
+      return;
+    }
+
+    db.prepare(
+      'INSERT INTO participants (booking_id, user_id, is_extra) VALUES (?, ?, 0)'
+    ).run(bookingId, userId);
+  })();
+
+  if (joinError) return res.status(joinError.status).json({ error: joinError.message });
   res.json({ success: true });
 });
 

@@ -11,12 +11,25 @@ const avatarsDir = path.join(dataDir, 'avatars');
 if (!fs.existsSync(avatarsDir)) fs.mkdirSync(avatarsDir, { recursive: true });
 
 function saveAvatarFile(userId, dataUrl) {
-  const match = dataUrl.match(/^data:(image\/\w+);base64,(.+)$/);
+  const match = dataUrl.match(/^data:(image\/[\w+.-]+);base64,(.+)$/);
   if (!match) return dataUrl; // niet herkend, ongewijzigd teruggeven
-  const ext  = match[1].split('/')[1].replace('jpeg', 'jpg');
+
+  const mime = match[1].toLowerCase();
+  // SVG kan JavaScript bevatten; weiger het (#4)
+  if (mime.includes('svg')) return null;
+
+  const ext  = mime.split('/')[1].replace('jpeg', 'jpg').replace('+xml', '');
   const data = Buffer.from(match[2], 'base64');
-  const file = path.join(avatarsDir, `${userId}.${ext}`);
-  fs.writeFileSync(file, data);
+  const newFile = path.join(avatarsDir, `${userId}.${ext}`);
+
+  // Verwijder eventuele oude avatarbestanden met een andere extensie (#9)
+  for (const candidate of ['jpg', 'jpeg', 'png', 'gif', 'webp']) {
+    if (candidate === ext) continue;
+    const old = path.join(avatarsDir, `${userId}.${candidate}`);
+    try { fs.unlinkSync(old); } catch (_) {}
+  }
+
+  fs.writeFileSync(newFile, data);
   return `/avatars/${userId}.${ext}`;
 }
 
@@ -151,7 +164,9 @@ router.put('/profile', async (req, res) => {
     // Sla base64-avatar op als bestand; bewaar alleen het pad in de DB
     let avatarValue = avatar !== undefined ? avatar : user.avatar;
     if (avatarValue && avatarValue.startsWith('data:image/')) {
-      avatarValue = saveAvatarFile(userId, avatarValue);
+      const saved = saveAvatarFile(userId, avatarValue);
+      if (saved === null) return res.status(400).json({ error: 'SVG-bestanden zijn niet toegestaan als avatar' });
+      avatarValue = saved;
     }
 
     db.prepare(`

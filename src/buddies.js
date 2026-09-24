@@ -9,6 +9,23 @@ function requireAuth(req, res, next) {
   next();
 }
 
+// Zorg eenmalig bij opstarten dat de messages tabel het juiste schema heeft (#14)
+// (wordt ook al gedaan in database.js, maar als vangnet hier bewaard)
+{
+  const cols = db.prepare('PRAGMA table_info(messages)').all().map(c => c.name);
+  if (cols.length > 0 && !cols.includes('sender_id')) {
+    db.exec('DROP TABLE messages');
+    db.exec(`CREATE TABLE messages (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      sender_id   INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      receiver_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      content TEXT NOT NULL,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      read_at DATETIME
+    )`);
+  }
+}
+
 // ── Buddies ──────────────────────────────────────────────────
 
 // GET /api/buddies/unread → aantal buddies met ongelezen berichten (voor tab-badge)
@@ -27,9 +44,7 @@ router.get('/unread', requireAuth, (req, res) => {
 // GET /api/buddies  → mijn buddies met laatste bericht + ongelezen teller
 router.get('/', requireAuth, (req, res) => {
   const me = req.session.userId;
-  console.log('[buddies GET /] userId:', me);
   try {
-    // Haal eerst de buddies op (eenvoudige query zonder messages)
     const buddies = db.prepare(`
       SELECT
         u.id, u.display_name, u.username, u.level, u.avatar,
@@ -43,9 +58,6 @@ router.get('/', requireAuth, (req, res) => {
       ORDER BY u.display_name ASC
     `).all(me, me);
 
-    console.log('[buddies GET /] gevonden:', buddies.length);
-
-    // Voeg message-stats toe per buddy (aparte query om SQLite-versie problemen te vermijden)
     const result = buddies.map(buddy => {
       try {
         const unread = db.prepare(
@@ -65,7 +77,6 @@ router.get('/', requireAuth, (req, res) => {
       }
     });
 
-    // Sorteer: buddies met recente berichten eerst
     result.sort((a, b) => {
       if (!a.last_message_at && !b.last_message_at) return 0;
       if (!a.last_message_at) return 1;
@@ -75,7 +86,6 @@ router.get('/', requireAuth, (req, res) => {
 
     res.json(result);
   } catch (err) {
-    console.error('[buddies GET /] fout:', err.message);
     res.status(500).json({ error: err.message });
   }
 });
@@ -121,46 +131,17 @@ router.delete('/:userId', requireAuth, (req, res) => {
 
 // ── Chat ─────────────────────────────────────────────────────
 
-// Zorg dat de messages tabel bestaat met het juiste schema.
-// De tabel kan bestaan met een oud/verkeerd schema – dan droppen we hem en maken opnieuw.
-function ensureMessagesTable() {
-  const cols = db.prepare('PRAGMA table_info(messages)').all().map(c => c.name);
-  if (cols.includes('sender_id')) return; // schema klopt al
-
-  if (cols.length > 0) {
-    // Tabel bestaat maar mist sender_id → oud/verkeerd schema, opnieuw aanmaken
-    console.log('[messages] verkeerd schema gevonden, tabel opnieuw aanmaken. Kolommen:', cols);
-    db.exec('DROP TABLE messages');
-  }
-
-  db.exec(`CREATE TABLE messages (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    sender_id   INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    receiver_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    content TEXT NOT NULL,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    read_at DATETIME
-  )`);
-  console.log('[messages] tabel aangemaakt');
-}
-
 // GET /api/buddies/chat/:userId  → gesprek ophalen + markeer als gelezen
 router.get('/chat/:userId', requireAuth, (req, res) => {
   const me    = req.session.userId;
   const other = parseInt(req.params.userId, 10);
-  console.log('[chat GET] me:', me, 'other:', other);
   if (!other) return res.status(400).json({ error: 'Ongeldig' });
 
   try {
-    ensureMessagesTable();
-
-    // Controleer buddy-relatie (beide richtingen: één van de twee is genoeg)
     const isBuddy = db.prepare(
       'SELECT 1 FROM buddies WHERE (user_id = ? AND buddy_id = ?) OR (user_id = ? AND buddy_id = ?)'
     ).get(me, other, other, me);
-    const buddyCount = db.prepare('SELECT COUNT(*) as c FROM buddies WHERE user_id=?').get(me);
-    console.log('[chat GET] isBuddy:', !!isBuddy, '| mijn buddy count:', buddyCount?.c);
-    if (!isBuddy) return res.status(403).json({ error: `Geen buddy (me=${me}, other=${other}, buddies=${buddyCount?.c})` });
+    if (!isBuddy) return res.status(403).json({ error: 'Geen buddy' }); // (#10) geen user-IDs lekken
 
     const messages = db.prepare(`
       SELECT id, sender_id, content, created_at
@@ -171,7 +152,6 @@ router.get('/chat/:userId', requireAuth, (req, res) => {
       LIMIT 200
     `).all(me, other, other, me);
 
-    // Markeer inkomende berichten als gelezen
     db.prepare(`
       UPDATE messages SET read_at = CURRENT_TIMESTAMP
       WHERE sender_id = ? AND receiver_id = ? AND read_at IS NULL
@@ -179,7 +159,6 @@ router.get('/chat/:userId', requireAuth, (req, res) => {
 
     res.json(messages);
   } catch (err) {
-    console.error('[chat GET] fout:', err.message);
     res.status(500).json({ error: err.message });
   }
 });
@@ -190,10 +169,9 @@ router.post('/chat/:userId', requireAuth, (req, res) => {
   const other = parseInt(req.params.userId, 10);
   const { content } = req.body || {};
   if (!content?.trim()) return res.status(400).json({ error: 'Leeg bericht' });
+  if (content.length > 4000) return res.status(400).json({ error: 'Bericht te lang (max 4000 tekens)' });
 
   try {
-    ensureMessagesTable();
-
     const isBuddy = db.prepare(
       'SELECT 1 FROM buddies WHERE (user_id = ? AND buddy_id = ?) OR (user_id = ? AND buddy_id = ?)'
     ).get(me, other, other, me);
@@ -220,7 +198,6 @@ router.post('/chat/:userId', requireAuth, (req, res) => {
       url:   '/#buddies',
     }).catch(() => {});
   } catch (err) {
-    console.error('[chat POST] fout:', err.message);
     res.status(500).json({ error: err.message });
   }
 });
@@ -232,7 +209,11 @@ router.get('/chat/:userId/new', requireAuth, (req, res) => {
   const afterId = parseInt(req.query.after, 10) || 0;
 
   try {
-    ensureMessagesTable();
+    // Buddy-check vereist (#2)
+    const isBuddy = db.prepare(
+      'SELECT 1 FROM buddies WHERE (user_id = ? AND buddy_id = ?) OR (user_id = ? AND buddy_id = ?)'
+    ).get(me, other, other, me);
+    if (!isBuddy) return res.status(403).json({ error: 'Geen buddy' });
 
     const messages = db.prepare(`
       SELECT id, sender_id, content, created_at
@@ -242,7 +223,6 @@ router.get('/chat/:userId/new', requireAuth, (req, res) => {
       ORDER BY created_at ASC
     `).all(me, other, other, me, afterId);
 
-    // Markeer nieuwe inkomende als gelezen
     if (messages.length > 0) {
       db.prepare(`
         UPDATE messages SET read_at = CURRENT_TIMESTAMP
@@ -252,7 +232,6 @@ router.get('/chat/:userId/new', requireAuth, (req, res) => {
 
     res.json(messages);
   } catch (err) {
-    console.error('[chat/new GET] fout:', err.message);
     res.json([]);
   }
 });
