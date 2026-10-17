@@ -55,10 +55,9 @@ router.get('/:token.ics', (req, res) => {
     FROM bookings b
     JOIN users u ON b.created_by = u.id
     WHERE b.date >= ?
-      AND (b.created_by = ?
-           OR EXISTS (SELECT 1 FROM participants WHERE booking_id = b.id AND user_id = ?))
+      AND EXISTS (SELECT 1 FROM participants WHERE booking_id = b.id AND user_id = ?)
     ORDER BY b.date ASC, b.start_time ASC
-  `).all(cutoffStr, user.id, user.id);
+  `).all(cutoffStr, user.id);
 
   const now = formatIcalDate(new Date());
 
