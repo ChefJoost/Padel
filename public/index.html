@@ -342,10 +342,16 @@
       <!-- iCal -->
       <div class="section-header">Agenda koppelen</div>
       <div class="field-group">
-        <div class="field-row history-empty">Voeg je potjes automatisch toe in je agenda via een iCal!</div>
+        <div class="field-row" style="color:var(--text-secondary);font-size:.9rem;padding:8px 16px">
+          Abonneer je agenda op je potjes — nieuwe potjes verschijnen automatisch.
+        </div>
         <div class="field-row ical-btn-row">
+          <a id="ical-apple-link" class="btn btn-outline ical-btn">Apple / Outlook</a>
           <a id="ical-google-link" class="btn btn-outline ical-btn" target="_blank" rel="noopener noreferrer">Google Agenda</a>
-          <button class="btn btn-outline ical-btn" onclick="copyIcalUrl()">iCal kopiëren</button>
+        </div>
+        <div class="field-row" style="padding:4px 16px 8px">
+          <button class="btn-text-sm" onclick="copyIcalUrl()" style="font-size:.82rem;color:var(--text-secondary)">Of kopieer de agenda-URL</button>
+          <button class="btn-text-sm" onclick="regenerateIcalToken()" style="font-size:.82rem;color:var(--text-secondary);margin-left:auto">Vernieuw link</button>
         </div>
       </div>
 

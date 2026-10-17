@@ -98,13 +98,17 @@ router.get('/:token.ics', (req, res) => {
     'CALSCALE:GREGORIAN',
     'METHOD:PUBLISH',
     'X-WR-TIMEZONE:Europe/Amsterdam',
+    'REFRESH-INTERVAL;VALUE=DURATION:PT1H',
+    'X-PUBLISHED-TTL:PT1H',
     ...events,
     'END:VCALENDAR',
   ].join('\r\n');
 
   res.setHeader('Content-Type', 'text/calendar; charset=utf-8');
-  res.setHeader('Content-Disposition', 'attachment; filename="padelpotjes.ics"');
-  res.setHeader('Cache-Control', 'no-cache, no-store');
+  // Geen 'attachment' — anders downloaden apps het als bestand i.p.v. als abonnement
+  res.setHeader('Content-Disposition', 'inline; filename="padelpotjes.ics"');
+  res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+  res.setHeader('Pragma', 'no-cache');
   res.send(cal);
 });
 

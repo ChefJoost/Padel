@@ -698,6 +698,12 @@ function setIcalLink(url) {
   const googleLink = document.getElementById('ical-google-link');
   if (googleLink) {
     googleLink.href = `https://calendar.google.com/calendar/r?cid=${encodeURIComponent(url)}`;
+    googleLink.target = '_blank';
+  }
+  const appleLink = document.getElementById('ical-apple-link');
+  if (appleLink) {
+    // webcal:// opent Apple Agenda / Outlook direct met abonneren-dialoog
+    appleLink.href = url.replace(/^https?:\/\//, 'webcal://');
   }
 }
 
