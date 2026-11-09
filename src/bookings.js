@@ -13,6 +13,23 @@ function requireAuth(req, res, next) {
   next();
 }
 
+// Voeg payment_link_for_me toe aan elk booking-object
+function attachPaymentLinks(bookings, userId) {
+  if (!bookings.length) return bookings;
+  const ids = bookings.map(b => b.id);
+  const links = db.prepare(
+    `SELECT booking_id, payment_url FROM booking_payment_links
+     WHERE booking_id IN (${ids.map(() => '?').join(',')})
+     AND (target_user_ids IS NULL OR INSTR(',' || target_user_ids || ',', ',' || ? || ',') > 0)
+     ORDER BY created_at ASC`
+  ).all(...ids, userId);
+  const map = {};
+  for (const link of links) {
+    if (!map[link.booking_id]) map[link.booking_id] = link.payment_url;
+  }
+  return bookings.map(b => ({ ...b, payment_link_for_me: map[b.id] || null }));
+}
+
 // Alle boekingen ophalen (toekomstig + vandaag)
 router.get('/', requireAuth, (req, res) => {
   const userId = req.session.userId;
@@ -20,7 +37,7 @@ router.get('/', requireAuth, (req, res) => {
   const bookings = db.prepare(`
     SELECT
       b.id, b.title, b.date, b.start_time, b.end_time, b.notes,
-      b.created_by, b.payment_url, b.is_private,
+      b.created_by, b.is_private,
       u.display_name AS creator_name,
       COUNT(p.id) + COALESCE((SELECT COUNT(*) FROM booking_guests bg WHERE bg.booking_id = b.id), 0) AS player_count,
       MAX(CASE WHEN p.user_id = ? THEN 1 ELSE 0 END) AS user_joined,
@@ -41,20 +58,24 @@ router.get('/', requireAuth, (req, res) => {
              UNION ALL
              SELECT '0::' AS info, bg2.added_at AS ts
              FROM booking_guests bg2 WHERE bg2.booking_id = b.id
-             ORDER BY ts ASC)) AS participants_info
+             ORDER BY ts ASC)) AS participants_info,
+      COALESCE(c.max_players, 4) AS max_players
     FROM bookings b
     JOIN users u ON b.created_by = u.id
     LEFT JOIN participants p ON b.id = p.booking_id
     LEFT JOIN users u2 ON p.user_id = u2.id
+    LEFT JOIN communities c ON c.id = b.community_id
     WHERE datetime(b.date || ' ' || b.end_time) >= datetime('now', 'localtime')
       AND (b.is_private = 0
            OR b.created_by = ?
            OR EXISTS (SELECT 1 FROM participants WHERE booking_id = b.id AND user_id = ?))
+      AND (b.community_id IS NULL
+           OR b.community_id IN (SELECT community_id FROM community_members WHERE user_id = ?))
     GROUP BY b.id
     ORDER BY b.date ASC, b.start_time ASC
-  `).all(userId, userId, userId, userId);
+  `).all(userId, userId, userId, userId, userId);
 
-  res.json(bookings);
+  res.json(attachPaymentLinks(bookings, userId));
 });
 
 // Boeking ophalen via uitnodigingstoken (voor privé potjes)
@@ -63,7 +84,7 @@ router.get('/invite/:token', requireAuth, (req, res) => {
   const booking = db.prepare(`
     SELECT
       b.id, b.title, b.date, b.start_time, b.end_time, b.notes,
-      b.created_by, b.payment_url, b.is_private, b.invite_token,
+      b.created_by, b.payment_url, b.payment_target_users, b.is_private, b.invite_token,
       u.display_name AS creator_name,
       COUNT(p.id) AS player_count,
       MAX(CASE WHEN p.user_id = ? THEN 1 ELSE 0 END) AS user_joined,
@@ -89,12 +110,73 @@ router.get('/invite/:token', requireAuth, (req, res) => {
   res.json({ ...booking, participants });
 });
 
+// Kalender: alle zichtbare potjes in een gegeven maand
+router.get('/calendar', requireAuth, (req, res) => {
+  const userId = req.session.userId;
+  const year   = parseInt(req.query.year,  10);
+  const month  = parseInt(req.query.month, 10);
+  const mine   = req.query.mine === '1';
+
+  if (!year || !month || month < 1 || month > 12) {
+    return res.status(400).json({ error: 'Ongeldige jaar/maand' });
+  }
+
+  const pad   = n => String(n).padStart(2, '0');
+  const from  = `${year}-${pad(month)}-01`;
+  const toDay = new Date(year, month, 0).getDate();
+  const to    = `${year}-${pad(month)}-${pad(toDay)}`;
+
+  const mineClause = mine
+    ? 'AND (b.created_by = ? OR EXISTS (SELECT 1 FROM participants WHERE booking_id = b.id AND user_id = ?))'
+    : '';
+
+  const params = [userId, from, to, userId, userId, userId];
+  if (mine) params.push(userId, userId);
+
+  const bookings = db.prepare(`
+    SELECT
+      b.id, b.title, b.date, b.start_time, b.end_time, b.notes,
+      b.created_by, b.is_private, b.series_id,
+      u.display_name AS creator_name,
+      COUNT(p.id) + COALESCE((SELECT COUNT(*) FROM booking_guests bg WHERE bg.booking_id = b.id), 0) AS player_count,
+      MAX(CASE WHEN p.user_id = ? THEN 1 ELSE 0 END) AS user_joined,
+      MIN(u2.level) AS min_level,
+      MAX(u2.level) AS max_level,
+      (SELECT GROUP_CONCAT(info, '||')
+       FROM (SELECT p3.user_id || '::' || COALESCE(u3.avatar, '') AS info, p3.joined_at AS ts
+             FROM participants p3
+             JOIN users u3 ON p3.user_id = u3.id WHERE p3.booking_id = b.id
+             UNION ALL
+             SELECT '0::' AS info, bg2.added_at AS ts
+             FROM booking_guests bg2 WHERE bg2.booking_id = b.id
+             ORDER BY ts ASC)) AS participants_info,
+      COALESCE(c.max_players, 4) AS max_players
+    FROM bookings b
+    JOIN users u ON b.created_by = u.id
+    LEFT JOIN participants p ON b.id = p.booking_id
+    LEFT JOIN users u2 ON p.user_id = u2.id
+    LEFT JOIN communities c ON c.id = b.community_id
+    WHERE b.date >= ? AND b.date <= ?
+      AND (b.is_private = 0
+           OR b.created_by = ?
+           OR EXISTS (SELECT 1 FROM participants WHERE booking_id = b.id AND user_id = ?))
+      AND (b.community_id IS NULL
+           OR b.community_id IN (SELECT community_id FROM community_members WHERE user_id = ?))
+      ${mineClause}
+    GROUP BY b.id
+    ORDER BY b.date ASC, b.start_time ASC
+  `).all(...params);
+
+  res.json(attachPaymentLinks(bookings, userId));
+});
+
 // Geschiedenis: afgelopen potjes van de ingelogde gebruiker
 router.get('/history', requireAuth, (req, res) => {
+  const userId = req.session.userId;
   const bookings = db.prepare(`
     SELECT
       b.id, b.title, b.location, b.date, b.start_time, b.end_time,
-      b.created_by, b.payment_url,
+      b.created_by,
       u.display_name AS creator_name,
       p.is_extra, p.paid_at,
       COUNT(CASE WHEN p2.is_extra = 0 THEN 1 END) AS player_count,
@@ -109,9 +191,9 @@ router.get('/history', requireAuth, (req, res) => {
       AND (p.user_id IS NOT NULL OR b.created_by = ?)
     GROUP BY b.id
     ORDER BY b.date DESC, b.start_time DESC
-  `).all(req.session.userId, req.session.userId);
+  `).all(userId, userId);
 
-  res.json(bookings);
+  res.json(attachPaymentLinks(bookings, userId));
 });
 
 // Eén boeking ophalen met deelnemers
@@ -121,17 +203,19 @@ router.get('/:id', requireAuth, (req, res) => {
   const booking = db.prepare(`
     SELECT
       b.id, b.title, b.location, b.date, b.start_time, b.end_time, b.notes,
-      b.created_by, b.payment_url, b.is_private, b.invite_token,
+      b.created_by, b.is_private, b.invite_token, b.series_id,
       u.display_name AS creator_name,
       COUNT(p.id) + COALESCE((SELECT COUNT(*) FROM booking_guests bg WHERE bg.booking_id = b.id), 0) AS player_count,
       MAX(CASE WHEN p.user_id = ? THEN 1 ELSE 0 END) AS user_joined,
       MAX(CASE WHEN p.user_id = ? THEN p.paid_at END) AS user_paid_at,
       MIN(u2.level) AS min_level,
-      MAX(u2.level) AS max_level
+      MAX(u2.level) AS max_level,
+      COALESCE(c.max_players, 4) AS max_players
     FROM bookings b
     JOIN users u ON b.created_by = u.id
     LEFT JOIN participants p ON b.id = p.booking_id
     LEFT JOIN users u2 ON p.user_id = u2.id
+    LEFT JOIN communities c ON c.id = b.community_id
     WHERE b.id = ?
     GROUP BY b.id
   `).get(userId, userId, bookingId);
@@ -144,7 +228,7 @@ router.get('/:id', requireAuth, (req, res) => {
   }
 
   const regularPlayers = db.prepare(`
-    SELECT p.id, u.display_name, u.level, u.avatar, p.joined_at,
+    SELECT p.id, p.user_id, u.display_name, u.level, u.avatar, p.joined_at,
            0 AS is_guest, NULL AS guest_name, NULL AS added_by
     FROM participants p
     JOIN users u ON p.user_id = u.id
@@ -164,14 +248,29 @@ router.get('/:id', requireAuth, (req, res) => {
     .sort((a, b) => (a.joined_at || '') < (b.joined_at || '') ? -1 : 1)
     .map(p => p.is_guest ? { ...p, display_name: p.guest_name } : p);
 
-  res.json({ ...booking, participants });
+  const paymentLinks = db.prepare(
+    'SELECT id, payment_url, target_user_ids, added_by, created_at FROM booking_payment_links WHERE booking_id = ? ORDER BY created_at ASC'
+  ).all(bookingId);
+  res.json({ ...booking, participants, payment_links: paymentLinks });
 });
+
+// Helper: voeg een interval toe aan een datumstring (YYYY-MM-DD)
+function addInterval(dateStr, interval) {
+  const [y, m, d] = dateStr.split('-').map(Number);
+  const dt = new Date(y, m - 1, d);
+  if (interval === 'weekly')        dt.setDate(dt.getDate() + 7);
+  else if (interval === 'biweekly') dt.setDate(dt.getDate() + 14);
+  else if (interval === 'monthly')  dt.setMonth(dt.getMonth() + 1);
+  return `${dt.getFullYear()}-${String(dt.getMonth()+1).padStart(2,'0')}-${String(dt.getDate()).padStart(2,'0')}`;
+}
 
 // Nieuwe boeking aanmaken
 router.post('/', requireAuth, (req, res) => {
-  const { title, date, start_time, end_time, notes, is_private } = req.body;
+  const { date, start_time, end_time, notes, is_private,
+          reeks_interval, reeks_end_type, reeks_count, reeks_end_date,
+          community_id: reqCommunityId } = req.body;
 
-  if (!title || !date || !start_time || !end_time) {
+  if (!date || !start_time || !end_time) {
     return res.status(400).json({ error: 'Vul alle verplichte velden in' });
   }
 
@@ -180,27 +279,103 @@ router.post('/', requireAuth, (req, res) => {
     return res.status(400).json({ error: 'Starttijd mag niet in het verleden liggen' });
   }
 
+  const userId      = req.session.userId;
   const privateFlag = is_private ? 1 : 0;
+
+  // Bepaal community_id: gebruik opgegeven waarde of eerste community van gebruiker
+  let communityId = reqCommunityId ? parseInt(reqCommunityId, 10) : null;
+  if (!communityId) {
+    const cm = db.prepare('SELECT community_id FROM community_members WHERE user_id = ? ORDER BY joined_at ASC LIMIT 1').get(userId);
+    communityId = cm?.community_id || null;
+  } else {
+    // Controleer of gebruiker lid is van de opgegeven community
+    const isMember = db.prepare('SELECT 1 FROM community_members WHERE community_id = ? AND user_id = ?').get(communityId, userId);
+    if (!isMember) communityId = null;
+  }
+
+  const stmtBooking = db.prepare(`
+    INSERT INTO bookings (title, location, date, start_time, end_time, notes, created_by, is_private, invite_token, series_id, community_id)
+    VALUES ('Padelpotje', '', ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `);
+  const stmtParticipant = db.prepare(
+    'INSERT INTO participants (booking_id, user_id, is_extra) VALUES (?, ?, 0)'
+  );
+
+  if (reeks_interval) {
+    // Reeks modus: genereer alle datums
+    const MAX = 52;
+    const dates = [date];
+    if (reeks_end_type === 'date' && reeks_end_date) {
+      let cur = date;
+      for (let i = 0; i < MAX; i++) {
+        cur = addInterval(cur, reeks_interval);
+        if (cur > reeks_end_date) break;
+        dates.push(cur);
+      }
+    } else {
+      const n = Math.min(Math.max(parseInt(reeks_count) || 4, 1), MAX);
+      let cur = date;
+      for (let i = 0; i < n; i++) {
+        cur = addInterval(cur, reeks_interval);
+        dates.push(cur);
+      }
+    }
+
+    const seriesId = crypto.randomBytes(8).toString('hex');
+    const createAll = db.transaction(() => dates.map(d => {
+      const tok = is_private ? crypto.randomBytes(16).toString('hex') : null;
+      const r = stmtBooking.run(d, start_time, end_time, notes || null, userId, privateFlag, tok, seriesId, communityId);
+      stmtParticipant.run(r.lastInsertRowid, userId);
+      return r.lastInsertRowid;
+    }));
+
+    const ids = createAll();
+    res.status(201).json({ ids, count: ids.length, series_id: seriesId });
+
+    // Push naar community-leden (fire-and-forget, na response)
+    if (communityId && !privateFlag) {
+      const creator = db.prepare('SELECT display_name FROM users WHERE id = ?').get(userId);
+      const members = db.prepare(
+        'SELECT user_id FROM community_members WHERE community_id = ? AND user_id != ?'
+      ).all(communityId, userId);
+      for (const { user_id } of members) {
+        sendPushToUser(user_id, {
+          title: '🎾 Nieuw potje',
+          body:  `${creator?.display_name} heeft een reeks van ${ids.length} potjes aangemaakt`,
+          url:   '/',
+        }).catch(() => {});
+      }
+    }
+    return;
+  }
+
+  // Enkelvoudige boeking
   const inviteToken = is_private ? crypto.randomBytes(16).toString('hex') : null;
-
-  const result = db.prepare(`
-    INSERT INTO bookings (title, location, date, start_time, end_time, notes, created_by, is_private, invite_token)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `).run(title, '', date, start_time, end_time, notes || null, req.session.userId, privateFlag, inviteToken);
-
-  // Aanmaker automatisch inschrijven als eerste speler
-  db.prepare(`
-    INSERT INTO participants (booking_id, user_id, is_extra) VALUES (?, ?, 0)
-  `).run(result.lastInsertRowid, req.session.userId);
-
+  const result = stmtBooking.run(date, start_time, end_time, notes || null, userId, privateFlag, inviteToken, null, communityId);
+  stmtParticipant.run(result.lastInsertRowid, userId);
   res.status(201).json({ id: result.lastInsertRowid });
+
+  // Push naar community-leden (fire-and-forget, na response)
+  if (communityId && !privateFlag) {
+    const creator = db.prepare('SELECT display_name FROM users WHERE id = ?').get(userId);
+    const members = db.prepare(
+      'SELECT user_id FROM community_members WHERE community_id = ? AND user_id != ?'
+    ).all(communityId, userId);
+    for (const { user_id } of members) {
+      sendPushToUser(user_id, {
+        title: '🎾 Nieuw potje',
+        body:  `${creator?.display_name} heeft een nieuw potje aangemaakt op ${date}`,
+        url:   '/',
+      }).catch(() => {});
+    }
+  }
 });
 
 // Boeking bewerken (alleen aanmaker)
 router.put('/:id', requireAuth, (req, res) => {
-  const bookingId = req.params.id;
+  const bookingId = parseInt(req.params.id, 10);
   const userId = req.session.userId;
-  const { title, date, start_time, end_time, notes, is_private } = req.body;
+  const { date, start_time, end_time, notes, is_private, scope } = req.body;
 
   const booking = db.prepare('SELECT * FROM bookings WHERE id = ?').get(bookingId);
   if (!booking) return res.status(404).json({ error: 'Boeking niet gevonden' });
@@ -208,7 +383,7 @@ router.put('/:id', requireAuth, (req, res) => {
     return res.status(403).json({ error: 'Alleen de aanmaker kan de boeking bewerken' });
   }
 
-  if (!title || !date || !start_time || !end_time) {
+  if (!date || !start_time || !end_time) {
     return res.status(400).json({ error: 'Vul alle verplichte velden in' });
   }
 
@@ -217,67 +392,117 @@ router.put('/:id', requireAuth, (req, res) => {
     return res.status(400).json({ error: 'Starttijd mag niet in het verleden liggen' });
   }
 
-  // Privé-status kan wijzigen: genereer token als nieuw privé, wis token als openbaar gemaakt
   const privateFlag = is_private ? 1 : 0;
-  let inviteToken = booking.invite_token;
-  if (is_private && !inviteToken) {
-    inviteToken = crypto.randomBytes(16).toString('hex');
-  } else if (!is_private) {
-    inviteToken = null;
-  }
 
-  db.prepare(`
-    UPDATE bookings SET title=?, date=?, start_time=?, end_time=?, notes=?, is_private=?, invite_token=? WHERE id=?
-  `).run(title, date, start_time, end_time, notes || null, privateFlag, inviteToken, bookingId);
+  if (scope === 'future' && booking.series_id) {
+    // Pas tijden/notities/privacy toe op dit + alle toekomstige potjes in de reeks
+    const futureBookings = db.prepare(
+      'SELECT id, invite_token FROM bookings WHERE series_id = ? AND date >= ? AND created_by = ?'
+    ).all(booking.series_id, booking.date, userId);
+
+    const updateStmt = db.prepare(
+      'UPDATE bookings SET start_time=?, end_time=?, notes=?, is_private=?, invite_token=? WHERE id=?'
+    );
+    db.transaction(() => {
+      for (const fb of futureBookings) {
+        let tok = fb.invite_token;
+        if (is_private && !tok) tok = crypto.randomBytes(16).toString('hex');
+        else if (!is_private) tok = null;
+        updateStmt.run(start_time, end_time, notes || null, privateFlag, tok, fb.id);
+      }
+      // Datum alleen voor dit specifieke potje aanpassen
+      db.prepare('UPDATE bookings SET date=? WHERE id=?').run(date, bookingId);
+    })();
+  } else {
+    // Enkel potje bijwerken
+    let inviteToken = booking.invite_token;
+    if (is_private && !inviteToken) {
+      inviteToken = crypto.randomBytes(16).toString('hex');
+    } else if (!is_private) {
+      inviteToken = null;
+    }
+    db.prepare(`
+      UPDATE bookings SET date=?, start_time=?, end_time=?, notes=?, is_private=?, invite_token=? WHERE id=?
+    `).run(date, start_time, end_time, notes || null, privateFlag, inviteToken, bookingId);
+  }
 
   res.json({ success: true });
 });
 
-// Betaallink instellen/bijwerken (alleen aanmaker)
-router.put('/:id/payment', requireAuth, async (req, res) => {
-  const bookingId = req.params.id;
-  const userId = req.session.userId;
-  const { payment_url } = req.body;
+// Betaallink toevoegen
+router.post('/:id/payment-links', requireAuth, async (req, res) => {
+  const bookingId = parseInt(req.params.id, 10);
+  const userId    = req.session.userId;
+  const { payment_url, target_user_ids } = req.body;
 
   const booking = db.prepare('SELECT * FROM bookings WHERE id = ?').get(bookingId);
   if (!booking) return res.status(404).json({ error: 'Boeking niet gevonden' });
-  if (booking.created_by !== userId) {
-    return res.status(403).json({ error: 'Alleen de aanmaker kan de betaallink instellen' });
+
+  const isParticipant = db.prepare('SELECT 1 FROM participants WHERE booking_id = ? AND user_id = ?').get(bookingId, userId);
+  if (!isParticipant) {
+    return res.status(403).json({ error: 'Alleen deelnemers kunnen betaallinks toevoegen' });
   }
 
-  // Valideer URL
-  if (payment_url) {
-    try {
-      const url = new URL(payment_url);
-      if (!['http:', 'https:'].includes(url.protocol)) throw new Error();
-    } catch {
-      return res.status(400).json({ error: 'Ongeldige URL. Gebruik https://...' });
-    }
+  if (!payment_url?.trim()) return res.status(400).json({ error: 'URL is verplicht' });
+  try {
+    const url = new URL(payment_url);
+    if (!['http:', 'https:'].includes(url.protocol)) throw new Error();
+  } catch {
+    return res.status(400).json({ error: 'Ongeldige URL. Gebruik https://...' });
   }
 
-  db.prepare('UPDATE bookings SET payment_url = ? WHERE id = ?')
-    .run(payment_url || null, bookingId);
-
-  // Stuur push-notificatie naar alle andere deelnemers als er een URL is ingesteld
-  if (payment_url) {
-    const participants = db.prepare(`
-      SELECT DISTINCT user_id FROM participants WHERE booking_id = ? AND user_id != ?
-    `).all(bookingId, userId);
-
-    const creatorName = db.prepare('SELECT display_name FROM users WHERE id = ?')
-      .get(userId)?.display_name || 'De organisator';
-
-    await Promise.allSettled(
-      participants.map(p =>
-        sendPushToUser(p.user_id, {
-          title: '💳 Betaallink beschikbaar',
-          body: `${creatorName} heeft een betaallink toegevoegd voor "${booking.title}"`,
-          url: '/',
-        })
-      )
-    );
+  let targetCsv = null;
+  if (Array.isArray(target_user_ids) && target_user_ids.length > 0) {
+    const ids = target_user_ids.map(Number).filter(n => Number.isInteger(n) && n > 0);
+    if (ids.length > 0) targetCsv = ids.join(',');
   }
 
+  const result = db.prepare(
+    'INSERT INTO booking_payment_links (booking_id, payment_url, target_user_ids, added_by) VALUES (?, ?, ?, ?)'
+  ).run(bookingId, payment_url.trim(), targetCsv, userId);
+
+  let participants;
+  if (targetCsv) {
+    const ids = targetCsv.split(',').map(Number);
+    participants = db.prepare(
+      `SELECT DISTINCT user_id FROM participants WHERE booking_id = ? AND user_id != ? AND user_id IN (${ids.map(() => '?').join(',')})`
+    ).all(bookingId, userId, ...ids);
+  } else {
+    participants = db.prepare(
+      'SELECT DISTINCT user_id FROM participants WHERE booking_id = ? AND user_id != ?'
+    ).all(bookingId, userId);
+  }
+
+  const creatorName = db.prepare('SELECT display_name FROM users WHERE id = ?')
+    .get(userId)?.display_name || 'De organisator';
+
+  await Promise.allSettled(
+    participants.map(p => sendPushToUser(p.user_id, {
+      title: '💳 Betaallink beschikbaar',
+      body: `${creatorName} heeft een betaallink toegevoegd voor "${booking.title}"`,
+      url: '/',
+    }))
+  );
+
+  res.status(201).json({ id: result.lastInsertRowid });
+});
+
+// Betaallink verwijderen
+router.delete('/:id/payment-links/:linkId', requireAuth, (req, res) => {
+  const bookingId = parseInt(req.params.id, 10);
+  const linkId    = parseInt(req.params.linkId, 10);
+  const userId    = req.session.userId;
+
+  const booking = db.prepare('SELECT created_by FROM bookings WHERE id = ?').get(bookingId);
+  if (!booking) return res.status(404).json({ error: 'Boeking niet gevonden' });
+
+  const link = db.prepare('SELECT added_by FROM booking_payment_links WHERE id = ? AND booking_id = ?').get(linkId, bookingId);
+  if (!link) return res.status(404).json({ error: 'Link niet gevonden' });
+  if (booking.created_by !== userId && link.added_by !== userId) {
+    return res.status(403).json({ error: 'Geen rechten om deze link te verwijderen' });
+  }
+
+  db.prepare('DELETE FROM booking_payment_links WHERE id = ? AND booking_id = ?').run(linkId, bookingId);
   res.json({ success: true });
 });
 
@@ -323,17 +548,7 @@ router.post('/:id/join', requireAuth, (req, res) => {
   ).get(bookingId, userId);
   if (existing) return res.status(409).json({ error: 'Je bent al ingeschreven' });
 
-  // Tel huidige spelers (inclusief gasten)
-  const counts = db.prepare(`
-    SELECT (SELECT COUNT(*) FROM participants WHERE booking_id = ?)
-         + (SELECT COUNT(*) FROM booking_guests WHERE booking_id = ?) AS total
-  `).get(bookingId, bookingId);
-
-  if (counts.total >= 4) {
-    return res.status(409).json({ error: 'De boeking is vol (4 spelers)' });
-  }
-
-  // Niveau-check: max 2 aansluitende niveaus toegestaan
+  // Niveau-check buiten transactie (read-only)
   const user = db.prepare('SELECT level FROM users WHERE id = ?').get(userId);
   if (user.level) {
     const levelRange = db.prepare(`
@@ -354,10 +569,27 @@ router.post('/:id/join', requireAuth, (req, res) => {
     }
   }
 
-  db.prepare(
-    'INSERT INTO participants (booking_id, user_id, is_extra) VALUES (?, ?, 0)'
-  ).run(bookingId, userId);
+  // Capaciteitscheck + inschrijving in één transactie om race conditions te voorkomen (#3)
+  const bookingCommunity = db.prepare('SELECT COALESCE(c.max_players, 4) AS max_players FROM bookings b LEFT JOIN communities c ON c.id = b.community_id WHERE b.id = ?').get(bookingId);
+  const maxPlayers = bookingCommunity?.max_players ?? 4;
+  let joinError = null;
+  db.transaction(() => {
+    const counts = db.prepare(`
+      SELECT (SELECT COUNT(*) FROM participants WHERE booking_id = ?)
+           + (SELECT COUNT(*) FROM booking_guests WHERE booking_id = ?) AS total
+    `).get(bookingId, bookingId);
 
+    if (counts.total >= maxPlayers) {
+      joinError = { status: 409, message: `De boeking is vol (${maxPlayers} spelers)` };
+      return;
+    }
+
+    db.prepare(
+      'INSERT INTO participants (booking_id, user_id, is_extra) VALUES (?, ?, 0)'
+    ).run(bookingId, userId);
+  })();
+
+  if (joinError) return res.status(joinError.status).json({ error: joinError.message });
   res.json({ success: true });
 });
 
@@ -369,9 +601,11 @@ router.delete('/:id/join', requireAuth, (req, res) => {
   const booking = db.prepare('SELECT * FROM bookings WHERE id = ?').get(bookingId);
   if (!booking) return res.status(404).json({ error: 'Boeking niet gevonden' });
 
-  if (booking.created_by === userId) {
-    return res.status(400).json({ error: 'Als aanmaker kun je niet uitschrijven. Verwijder de boeking.' });
-  }
+  // Controleer of boeking vol was vóór afmelding
+  const countBefore = db.prepare(`
+    SELECT (SELECT COUNT(*) FROM participants WHERE booking_id = ?)
+         + (SELECT COUNT(*) FROM booking_guests WHERE booking_id = ?) AS total
+  `).get(bookingId, bookingId).total;
 
   const result = db.prepare(
     'DELETE FROM participants WHERE booking_id = ? AND user_id = ?'
@@ -382,6 +616,16 @@ router.delete('/:id/join', requireAuth, (req, res) => {
   }
 
   res.json({ success: true });
+
+  // Push naar organisator als er een plek vrijkomt (was vol)
+  if (countBefore >= 4 && booking.created_by !== userId) {
+    const leaver = db.prepare('SELECT display_name FROM users WHERE id = ?').get(userId);
+    sendPushToUser(booking.created_by, {
+      title: '🎾 Plek vrijgekomen',
+      body:  `${leaver?.display_name} heeft zich afgemeld voor het potje op ${booking.date}`,
+      url:   `/?potje=${bookingId}`,
+    }).catch(() => {});
+  }
 });
 
 // Gast toevoegen (organisator of deelnemer)
@@ -406,12 +650,14 @@ router.post('/:id/guests', requireAuth, (req, res) => {
   }
 
   // Capaciteitscheck
+  const guestBookingCommunity = db.prepare('SELECT COALESCE(c.max_players, 4) AS max_players FROM bookings b LEFT JOIN communities c ON c.id = b.community_id WHERE b.id = ?').get(bookingId);
+  const guestMaxPlayers = guestBookingCommunity?.max_players ?? 4;
   const counts = db.prepare(`
     SELECT (SELECT COUNT(*) FROM participants WHERE booking_id = ?)
          + (SELECT COUNT(*) FROM booking_guests WHERE booking_id = ?) AS total
   `).get(bookingId, bookingId);
-  if (counts.total >= 4) {
-    return res.status(409).json({ error: 'De boeking is vol (4 spelers)' });
+  if (counts.total >= guestMaxPlayers) {
+    return res.status(409).json({ error: `De boeking is vol (${guestMaxPlayers} spelers)` });
   }
 
   const result = db.prepare(
@@ -443,8 +689,9 @@ router.delete('/:id/guests/:guestId', requireAuth, (req, res) => {
 
 // Boeking verwijderen (alleen aanmaker)
 router.delete('/:id', requireAuth, (req, res) => {
-  const bookingId = req.params.id;
+  const bookingId = parseInt(req.params.id, 10);
   const userId = req.session.userId;
+  const scope = req.query.scope;
 
   const booking = db.prepare('SELECT * FROM bookings WHERE id = ?').get(bookingId);
   if (!booking) return res.status(404).json({ error: 'Boeking niet gevonden' });
@@ -453,7 +700,14 @@ router.delete('/:id', requireAuth, (req, res) => {
     return res.status(403).json({ error: 'Alleen de aanmaker kan de boeking verwijderen' });
   }
 
-  db.prepare('DELETE FROM bookings WHERE id = ?').run(bookingId);
+  if (scope === 'future' && booking.series_id) {
+    db.prepare(
+      'DELETE FROM bookings WHERE series_id = ? AND date >= ? AND created_by = ?'
+    ).run(booking.series_id, booking.date, userId);
+  } else {
+    db.prepare('DELETE FROM bookings WHERE id = ?').run(bookingId);
+  }
+
   res.json({ success: true });
 });
 

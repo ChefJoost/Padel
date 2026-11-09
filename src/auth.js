@@ -1,8 +1,37 @@
 const express = require('express');
-const bcrypt = require('bcrypt');
-const db = require('./database');
+const bcrypt  = require('bcrypt');
+const path    = require('path');
+const fs      = require('fs');
+const db      = require('./database');
 
 const router = express.Router();
+
+const dataDir    = process.env.DATA_DIR || path.join(__dirname, '..', 'data');
+const avatarsDir = path.join(dataDir, 'avatars');
+if (!fs.existsSync(avatarsDir)) fs.mkdirSync(avatarsDir, { recursive: true });
+
+function saveAvatarFile(userId, dataUrl) {
+  const match = dataUrl.match(/^data:(image\/[\w+.-]+);base64,(.+)$/);
+  if (!match) return dataUrl; // niet herkend, ongewijzigd teruggeven
+
+  const mime = match[1].toLowerCase();
+  // SVG kan JavaScript bevatten; weiger het (#4)
+  if (mime.includes('svg')) return null;
+
+  const ext  = mime.split('/')[1].replace('jpeg', 'jpg').replace('+xml', '');
+  const data = Buffer.from(match[2], 'base64');
+  const newFile = path.join(avatarsDir, `${userId}.${ext}`);
+
+  // Verwijder eventuele oude avatarbestanden met een andere extensie (#9)
+  for (const candidate of ['jpg', 'jpeg', 'png', 'gif', 'webp']) {
+    if (candidate === ext) continue;
+    const old = path.join(avatarsDir, `${userId}.${candidate}`);
+    try { fs.unlinkSync(old); } catch (_) {}
+  }
+
+  fs.writeFileSync(newFile, data);
+  return `/avatars/${userId}.${ext}`;
+}
 
 function validatePassword(pw) {
   if (pw.length < 8)          return 'Wachtwoord moet minimaal 8 tekens zijn';
@@ -132,6 +161,14 @@ router.put('/profile', async (req, res) => {
     let hash = user.password_hash;
     if (new_password) hash = await bcrypt.hash(new_password, 12);
 
+    // Sla base64-avatar op als bestand; bewaar alleen het pad in de DB
+    let avatarValue = avatar !== undefined ? avatar : user.avatar;
+    if (avatarValue && avatarValue.startsWith('data:image/')) {
+      const saved = saveAvatarFile(userId, avatarValue);
+      if (saved === null) return res.status(400).json({ error: 'SVG-bestanden zijn niet toegestaan als avatar' });
+      avatarValue = saved;
+    }
+
     db.prepare(`
       UPDATE users SET
         display_name  = ?,
@@ -145,7 +182,7 @@ router.put('/profile', async (req, res) => {
       username ? username.toLowerCase() : user.username,
       lvl || null,
       hash,
-      avatar !== undefined ? avatar : user.avatar,
+      avatarValue,
       userId
     );
 
@@ -166,30 +203,38 @@ router.put('/profile', async (req, res) => {
   }
 });
 
-// Wachtwoord resetten (zonder ingelogd te zijn, via gebruikersnaam + weergavenaam)
-router.post('/reset-password', async (req, res) => {
-  const { username, display_name, new_password } = req.body;
+// Wachtwoord resetten is verplaatst naar /api/admin/users/:id/reset-password
+router.post('/reset-password', (req, res) => {
+  res.status(410).json({ error: 'Wachtwoord resetten is alleen mogelijk via een admin. Neem contact op met een beheerder.' });
+});
 
-  if (!username || !display_name || !new_password) {
-    return res.status(400).json({ error: 'Vul alle velden in' });
+// Alle gebruikers ophalen (voor Buddies tab), optioneel gefilterd op naam (#I)
+router.get('/users', (req, res) => {
+  if (!req.session.userId) return res.status(401).json({ error: 'Niet ingelogd' });
+  const myId = req.session.userId;
+  const q    = req.query.q?.trim();
+
+  const params = [myId, myId];
+  let extra = '';
+  if (q) {
+    extra = 'AND (u.display_name LIKE ? OR u.username LIKE ?)';
+    params.push(`%${q}%`, `%${q}%`);
   }
-  const pwError = validatePassword(new_password);
-  if (pwError) return res.status(400).json({ error: pwError });
 
-  const user = db.prepare('SELECT * FROM users WHERE username = ?').get(username.toLowerCase());
+  const users = db.prepare(`
+    SELECT u.id, u.display_name, u.username, u.level, u.avatar,
+           COUNT(DISTINCT b.id) AS games_together
+    FROM users u
+    LEFT JOIN participants p1 ON p1.user_id = u.id
+    LEFT JOIN bookings b ON b.id = p1.booking_id
+    LEFT JOIN participants p2 ON p2.booking_id = b.id AND p2.user_id = ?
+    WHERE u.id != ? ${extra}
+    GROUP BY u.id
+    ORDER BY games_together DESC, u.display_name ASC
+    ${q ? 'LIMIT 20' : ''}
+  `).all(...params);
 
-  if (!user || user.display_name.toLowerCase() !== display_name.trim().toLowerCase()) {
-    return res.status(401).json({ error: 'Gebruikersnaam en weergavenaam komen niet overeen' });
-  }
-
-  try {
-    const hash = await bcrypt.hash(new_password, 12);
-    db.prepare('UPDATE users SET password_hash = ? WHERE id = ?').run(hash, user.id);
-    res.json({ success: true });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: 'Server fout bij opslaan' });
-  }
+  res.json(users);
 });
 
 module.exports = router;

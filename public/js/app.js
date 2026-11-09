@@ -7,6 +7,7 @@ let currentDetailId = null;
 let currentDetailBooking = null;
 let currentTab = 'potjes';
 let pendingAvatar = undefined;
+let pendingScopeCallback = null;
 let bookingEditId = null;
 let allBookings      = [];
 let filterStatus     = 'open'; // 'open' | 'all' | 'mine'
@@ -82,8 +83,11 @@ function showAuth() {
 function showApp() {
   document.getElementById('auth-screen').classList.add('hidden');
   document.getElementById('app-screen').classList.remove('hidden');
-  switchTab('potjes');
+  const validTabs = ['potjes', 'kalender', 'buddies', 'profiel', 'admin'];
+  const hash = location.hash.replace('#', '');
+  switchTab(validTabs.includes(hash) ? hash : 'kalender');
   renderProfile();
+  refreshBuddyBadge();
 }
 
 function setUser(data) {
@@ -101,43 +105,12 @@ function setUser(data) {
 }
 
 function showTab(tab, btn) {
-  hideForgotPassword();
   document.getElementById('login-form').classList.toggle('hidden', tab !== 'login');
   document.getElementById('register-form').classList.toggle('hidden', tab !== 'register');
   document.querySelectorAll('.seg-btn').forEach(b => b.classList.remove('active'));
   btn.classList.add('active');
 }
 
-function showForgotPassword() {
-  document.getElementById('login-form').classList.add('hidden');
-  document.getElementById('forgot-form').classList.remove('hidden');
-  clearError('forgot-error');
-  document.getElementById('forgot-username').value    = '';
-  document.getElementById('forgot-display-name').value = '';
-  document.getElementById('forgot-new-pw').value      = '';
-}
-
-function hideForgotPassword() {
-  document.getElementById('forgot-form').classList.add('hidden');
-  document.getElementById('login-form').classList.remove('hidden');
-}
-
-async function handleResetPassword(e) {
-  e.preventDefault();
-  clearError('forgot-error');
-  const username     = document.getElementById('forgot-username').value.trim();
-  const display_name = document.getElementById('forgot-display-name').value.trim();
-  const new_password = document.getElementById('forgot-new-pw').value;
-  const pwError = validatePassword(new_password);
-  if (pwError) return showError('forgot-error', pwError);
-  const res  = await api('/api/auth/reset-password', { method: 'POST', body: { username, display_name, new_password } });
-  const data = await res.json();
-  if (!res.ok) return showError('forgot-error', data.error);
-  hideForgotPassword();
-  showError('login-error', 'Wachtwoord gewijzigd. Je kunt nu inloggen.');
-  document.getElementById('login-error').style.color = 'var(--green)';
-  document.getElementById('login-username').value = username;
-}
 
 async function handleLogin(e) {
   e.preventDefault();
@@ -206,9 +179,301 @@ async function handleWelcomeDone() {
     pendingWelcomeAvatar = undefined;
   }
   document.getElementById('welcome-screen').classList.add('hidden');
+  showCommunityScreen();
+}
+
+/* ── Speelgroepen (community) scherm ─────────────────────────── */
+let communityJoined = new Map(); // id → name
+let communityNameCache = new Map(); // id → name, voor onclick lookups
+
+function showCommunityScreen() {
+  document.getElementById('community-screen').classList.remove('hidden');
+  communityJoined = new Map();
+  communityNameCache = new Map();
+  document.getElementById('community-search-input').value = '';
+  document.getElementById('community-search-results').innerHTML = '';
+  document.getElementById('community-joined-list').innerHTML = '';
+  updateCommunityButton();
+  searchCommunities('');
+}
+
+function updateCommunityButton() {
+  const btn = document.getElementById('community-continue-btn');
+  if (!btn) return;
+  const hasJoined = communityJoined.size > 0;
+  btn.disabled = !hasJoined;
+  btn.style.opacity = hasJoined ? '' : '0.4';
+}
+
+async function searchCommunities(q) {
+  const res = await api(`/api/communities/search?q=${encodeURIComponent(q)}`);
+  if (!res.ok) return;
+  const items = await res.json();
+  items.forEach(c => communityNameCache.set(c.id, c.name));
+  items.filter(c => c.is_member).forEach(c => communityJoined.set(c.id, c.name));
+  renderCommunityJoinedList();
+  const el = document.getElementById('community-search-results');
+  el.innerHTML = items.map(c => {
+    const joined = communityJoined.has(c.id);
+    return `<div class="community-result-item">
+      <div>
+        <div class="community-result-name">${escHtml(c.name)}</div>
+        <div class="community-result-count">${c.member_count} ${c.member_count === 1 ? 'lid' : 'leden'}</div>
+      </div>
+      ${joined
+        ? `<span style="color:var(--green);font-weight:600;font-size:.85rem">✓ Lid</span>`
+        : `<button class="btn btn-outline" style="padding:5px 14px;font-size:.82rem" onclick="joinCommunityOnboarding(${c.id})">Aansluiten</button>`
+      }
+    </div>`;
+  }).join('');
+}
+
+async function joinCommunityOnboarding(id) {
+  const res = await api(`/api/communities/${id}/join`, { method: 'POST' });
+  if (!res.ok) return;
+  const name = communityNameCache.get(id) || '';
+  communityJoined.set(id, name);
+  renderCommunityJoinedList();
+  updateCommunityButton();
+  searchCommunities(document.getElementById('community-search-input').value);
+}
+
+function renderCommunityJoinedList() {
+  const el = document.getElementById('community-joined-list');
+  if (!el) return;
+  if (communityJoined.size === 0) { el.innerHTML = ''; return; }
+  el.innerHTML = [...communityJoined.entries()].map(([id, name]) =>
+    `<div class="community-joined-item">
+      <span class="community-joined-name">${escHtml(name)}</span>
+      <button class="community-joined-remove" onclick="leaveCommunityOnboarding(${id})" title="Verlaten">✕</button>
+    </div>`
+  ).join('');
+}
+
+async function leaveCommunityOnboarding(id) {
+  const res = await api(`/api/communities/${id}/leave`, { method: 'DELETE' });
+  if (!res.ok) return;
+  communityJoined.delete(id);
+  renderCommunityJoinedList();
+  updateCommunityButton();
+  searchCommunities(document.getElementById('community-search-input').value);
+}
+
+async function handleCommunityContinue() {
+  if (communityJoined.size === 0) return;
+  document.getElementById('community-screen').classList.add('hidden');
   showApp();
   setupPush();
   handleDeepLink();
+}
+
+function toggleCommunityCreate(show) {
+  document.getElementById('community-create-inline').classList.toggle('hidden', !show);
+  if (show) {
+    document.getElementById('community-new-name').value = '';
+    clearError('community-create-error');
+    document.getElementById('community-new-name').focus();
+  }
+}
+
+async function submitNewCommunityOnboarding() {
+  const name = document.getElementById('community-new-name').value.trim();
+  clearError('community-create-error');
+  if (!name) return showError('community-create-error', 'Vul een naam in');
+  const res = await api('/api/communities', { method: 'POST', body: { name } });
+  const data = await res.json();
+  if (!res.ok) return showError('community-create-error', data.error || 'Aanmaken mislukt');
+  communityJoined.set(data.id, data.name);
+  communityNameCache.set(data.id, data.name);
+  renderCommunityJoinedList();
+  updateCommunityButton();
+  toggleCommunityCreate(false);
+  searchCommunities(document.getElementById('community-search-input').value);
+}
+
+/* ── Profiel: speelgroepen ──────────────────────────────────── */
+let allProfileCommunities = []; // cache van alle communities
+
+async function loadProfileCommunities() {
+  const res = await api('/api/communities/search?q=');
+  if (!res.ok) return;
+  allProfileCommunities = await res.json();
+  renderProfileCommunityList(document.getElementById('profile-community-filter')?.value || '');
+}
+
+function renderProfileCommunityList(filter) {
+  const el = document.getElementById('profile-communities-list');
+  if (!el) return;
+  const q = filter.trim().toLowerCase();
+  const items = q
+    ? allProfileCommunities.filter(c => c.name.toLowerCase().includes(q))
+    : allProfileCommunities;
+  if (items.length === 0) {
+    el.innerHTML = '<div class="field-row" style="color:var(--text-2);font-size:.9rem">Geen speelgroepen gevonden.</div>';
+    return;
+  }
+  el.innerHTML = items.map(c => `
+    <div class="community-list-item">
+      <span class="community-list-name">${escHtml(c.name)}</span>
+      <span class="community-list-count">${c.member_count} ${c.member_count === 1 ? 'lid' : 'leden'}</span>
+      ${c.is_member
+        ? ((c.is_creator || currentUser?.is_admin)
+            ? `<button class="btn btn-outline" style="padding:4px 10px;font-size:.8rem" onclick="openCommunityManage(${c.id})">Beheer</button>`
+            : `<button class="community-list-leave" onclick="leaveCommunity(${c.id})">Verlaten</button>`)
+        : `<button class="btn btn-outline" style="padding:4px 10px;font-size:.8rem" onclick="profileJoinCommunity(${c.id})">Aansluiten</button>`
+      }
+    </div>
+  `).join('');
+}
+
+function profileFilterCommunities(q) {
+  renderProfileCommunityList(q);
+}
+
+async function profileJoinCommunity(id) {
+  const res = await api(`/api/communities/${id}/join`, { method: 'POST' });
+  if (!res.ok) { showToast('Aansluiten mislukt'); return; }
+  showToast('Aangesloten!');
+  loadProfileCommunities();
+}
+
+async function leaveCommunity(id) {
+  const res = await api(`/api/communities/${id}/leave`, { method: 'DELETE' });
+  const data = await res.json();
+  if (!res.ok) { showToast(data.error || 'Verlaten mislukt'); return; }
+  loadProfileCommunities();
+}
+
+function toggleProfileCommunityCreate() {
+  const el = document.getElementById('profile-community-create');
+  const hidden = el.classList.toggle('hidden');
+  if (!hidden) {
+    document.getElementById('profile-community-new-name').value = '';
+    clearError('profile-community-create-error');
+    document.getElementById('profile-community-new-name').focus();
+  }
+}
+
+async function profileCreateCommunity() {
+  const name = document.getElementById('profile-community-new-name').value.trim();
+  clearError('profile-community-create-error');
+  if (!name) return showError('profile-community-create-error', 'Vul een naam in');
+  const res = await api('/api/communities', { method: 'POST', body: { name } });
+  const data = await res.json();
+  if (!res.ok) return showError('profile-community-create-error', data.error || 'Aanmaken mislukt');
+  showToast(`Speelgroep "${data.name}" aangemaakt`);
+  document.getElementById('profile-community-create').classList.add('hidden');
+  loadProfileCommunities();
+}
+
+/* ── Speelgroep beheren (aanmaker) ───────────────────────────── */
+let manageCommunityId = null;
+
+async function openCommunityManage(id) {
+  manageCommunityId = id;
+  const res = await api(`/api/communities/${id}/members`);
+  if (!res.ok) { showToast('Laden mislukt'); return; }
+  const { members, created_by, max_players } = await res.json();
+
+  const community = allProfileCommunities.find(c => c.id === id);
+  document.getElementById('community-manage-title').textContent = community?.name || 'Speelgroep beheren';
+  document.getElementById('community-rename-input').value = community?.name || '';
+  clearError('community-rename-error');
+
+  const el = document.getElementById('community-members-list');
+  el.innerHTML = members.map(m => `
+    <div class="community-list-item">
+      <span class="community-list-name">${escHtml(m.display_name)}</span>
+      <span class="community-list-count">@${escHtml(m.username || '')}</span>
+      ${m.is_creator
+        ? `<span style="font-size:.78rem;color:var(--blue);font-weight:600">Aanmaker</span>`
+        : `<button class="community-list-leave" onclick="removeCommunityMember(${m.id})">Verwijder</button>`
+      }
+    </div>
+  `).join('');
+
+  const sel = document.getElementById('community-max-players');
+  if (sel) sel.value = max_players || 4;
+
+  document.getElementById('community-manage-modal').classList.remove('hidden');
+}
+
+function hideCommunityManage() {
+  document.getElementById('community-manage-modal').classList.add('hidden');
+  manageCommunityId = null;
+}
+
+async function submitCommunityRename() {
+  const name = document.getElementById('community-rename-input').value.trim();
+  clearError('community-rename-error');
+  if (!name) return showError('community-rename-error', 'Vul een naam in');
+  const res = await api(`/api/communities/${manageCommunityId}`, { method: 'PUT', body: { name } });
+  const data = await res.json();
+  if (!res.ok) return showError('community-rename-error', data.error || 'Opslaan mislukt');
+  document.getElementById('community-manage-title').textContent = name;
+  showToast('Naam gewijzigd');
+  loadProfileCommunities();
+}
+
+async function removeCommunityMember(userId) {
+  const res = await api(`/api/communities/${manageCommunityId}/members/${userId}`, { method: 'DELETE' });
+  if (!res.ok) { showToast('Verwijderen mislukt'); return; }
+  openCommunityManage(manageCommunityId);
+  loadProfileCommunities();
+}
+
+async function saveCommunityMaxPlayers() {
+  const sel = document.getElementById('community-max-players');
+  const max_players = parseInt(sel.value, 10);
+  const res = await api(`/api/communities/${manageCommunityId}/settings`, {
+    method: 'PATCH',
+    body: { max_players },
+  });
+  if (!res.ok) { showToast('Opslaan mislukt'); return; }
+  showToast(`Max. ${max_players} spelers ingesteld`);
+  loadProfileCommunities();
+}
+
+/* ── Admin: speelgroepen ──────────────────────────────────────── */
+async function loadAdminCommunities() {
+  const res = await api('/api/communities');
+  if (!res.ok) return;
+  const items = await res.json();
+  const el = document.getElementById('admin-communities-list');
+  if (!el) return;
+  if (items.length === 0) {
+    el.innerHTML = '<div class="field-group"><div class="field-row" style="color:var(--text-2)">Geen speelgroepen.</div></div>';
+    return;
+  }
+  el.innerHTML = `<div class="field-group">${items.map(c => `
+    <div class="community-list-item">
+      <span class="community-list-name">${escHtml(c.name)}</span>
+      <span class="community-list-count">${c.member_count} ${c.member_count === 1 ? 'lid' : 'leden'}</span>
+      <button class="community-list-leave" onclick="adminDeleteCommunity(${c.id},'${escHtml(c.name)}')">Verwijder</button>
+    </div>
+  `).join('')}</div>`;
+}
+
+async function adminCreateCommunity() {
+  const input = document.getElementById('admin-community-name');
+  const name = input?.value?.trim();
+  if (!name) return;
+  const res = await api('/api/communities', { method: 'POST', body: { name } });
+  const data = await res.json();
+  if (!res.ok) { showToast(data.error || 'Aanmaken mislukt'); return; }
+  input.value = '';
+  showToast(`Speelgroep "${name}" aangemaakt`);
+  loadAdminCommunities();
+}
+
+function adminDeleteCommunity(id, name) {
+  document.getElementById('confirm-message').textContent = `Speelgroep "${name}" verwijderen? Alle leden worden ontkoppeld.`;
+  document.getElementById('confirm-ok').onclick = async () => {
+    closeConfirm();
+    const res = await api(`/api/communities/${id}`, { method: 'DELETE' });
+    if (res.ok) { showToast('Speelgroep verwijderd'); loadAdminCommunities(); }
+  };
+  document.getElementById('confirm-modal').classList.remove('hidden');
 }
 
 
@@ -221,31 +486,28 @@ async function handleLogout() {
 /* ── Tab navigatie ────────────────────────────────────────── */
 function switchTab(tab) {
   currentTab = tab;
-  document.getElementById('tab-potjes').classList.toggle('hidden', tab !== 'potjes');
-  document.getElementById('tab-kalender').classList.toggle('hidden', tab !== 'kalender');
-  document.getElementById('tab-profiel').classList.toggle('hidden', tab !== 'profiel');
-  document.getElementById('tab-admin').classList.toggle('hidden', tab !== 'admin');
-  document.getElementById('tab-btn-potjes').classList.toggle('active', tab === 'potjes');
-  document.getElementById('tab-btn-kalender').classList.toggle('active', tab === 'kalender');
-  document.getElementById('tab-btn-profiel').classList.toggle('active', tab === 'profiel');
-  const adminBtn = document.getElementById('tab-btn-admin');
-  if (adminBtn) adminBtn.classList.toggle('active', tab === 'admin');
-  if (tab === 'potjes') {
-    loadBookings();
+  location.hash = tab;
+  // Reset scroll naar boven voor het nieuwe tabblad
+  const newScrollArea = document.querySelector(`#tab-${tab} .scroll-area`);
+  if (newScrollArea) newScrollArea.scrollTop = 0;
+
+  ['potjes','kalender','buddies','profiel','admin'].forEach(t => {
+    document.getElementById(`tab-${t}`)?.classList.toggle('hidden', tab !== t);
+    document.getElementById(`tab-btn-${t}`)?.classList.toggle('active', tab === t);
+  });
+  if (tab === 'potjes')   { loadBookings(); }
+  if (tab === 'kalender') { loadCalendar(); }
+  if (tab === 'buddies')  {
+    const si = document.getElementById('buddy-search-input');
+    const sr = document.getElementById('buddy-search-results');
+    if (si) si.value = '';
+    if (sr) { sr.classList.add('hidden'); sr.innerHTML = ''; }
+    const bl = document.getElementById('buddies-list');
+    if (bl) bl.classList.remove('hidden');
+    loadBuddies();
   }
-  if (tab === 'kalender') {
-    loadCalendar();
-  }
-  if (tab === 'profiel') {
-    loadHistory();
-    loadUnpaid();
-    loadProfileStats();
-  }
-  if (tab === 'admin') {
-    loadAdminStats();
-    adminSearchUsers();
-    loadAdminBookings();
-  }
+  if (tab === 'profiel')  { loadHistory(); loadUnpaid(); loadProfileStats(); loadIcalToken(); loadProfileCommunities(); }
+  if (tab === 'admin')    { loadAdminStats(); adminSearchUsers(); loadAdminBookings(); loadAdminCommunities(); }
 }
 
 /* ── Level picker ─────────────────────────────────────────── */
@@ -407,15 +669,57 @@ async function handleSaveProfile() {
 
 /* ── Profiel stats ────────────────────────────────────────── */
 async function loadProfileStats() {
-  const [resUpcoming, resHistory] = await Promise.all([
+  const [resUpcoming, resHistory, resBuddies] = await Promise.all([
     api('/api/bookings'),
     api('/api/bookings/history'),
+    api('/api/buddies'),
   ]);
   const upcoming = await resUpcoming.json();
   const history  = await resHistory.json();
-  const planned = upcoming.filter(b => b.user_joined).length;
-  document.getElementById('profile-stat-played').textContent = history.length;
+  const buddies  = resBuddies.ok ? await resBuddies.json() : [];
+  const planned  = upcoming.filter(b => b.user_joined).length;
+  document.getElementById('profile-stat-played').textContent  = history.length;
   document.getElementById('profile-stat-planned').textContent = planned;
+  document.getElementById('profile-stat-buddies').textContent = Array.isArray(buddies) ? buddies.length : 0;
+}
+
+/* ── iCal feed ────────────────────────────────────────────── */
+let icalUrl = null;
+
+async function loadIcalToken() {
+  const res = await api('/api/ical/token');
+  if (!res.ok) return;
+  icalUrl = (await res.json()).url;
+  setIcalLink(icalUrl);
+}
+
+function setIcalLink(url) {
+  if (!url) return;
+  const googleLink = document.getElementById('ical-google-link');
+  if (googleLink) {
+    googleLink.href = `https://calendar.google.com/calendar/r?cid=${encodeURIComponent(url)}`;
+    googleLink.target = '_blank';
+  }
+  const appleLink = document.getElementById('ical-apple-link');
+  if (appleLink) {
+    // webcal:// opent Apple Agenda / Outlook direct met abonneren-dialoog
+    appleLink.href = url.replace(/^https?:\/\//, 'webcal://');
+  }
+}
+
+function copyIcalUrl() {
+  if (!icalUrl) return showToast('Link nog niet geladen');
+  navigator.clipboard.writeText(icalUrl)
+    .then(() => showToast('iCal gekopieerd!'))
+    .catch(() => showToast('Kopiëren mislukt'));
+}
+
+async function regenerateIcalToken() {
+  if (!confirm('Dit maakt je huidige agenda-link ongeldig. Doorgaan?')) return;
+  const data = await (await api('/api/ical/token/regenerate', { method: 'POST' })).json();
+  icalUrl = data.url;
+  setIcalLink(icalUrl);
+  showToast('Nieuwe agenda-link aangemaakt');
 }
 
 /* ── Geschiedenis ─────────────────────────────────────────── */
@@ -438,12 +742,13 @@ async function loadHistory() {
       ? b.participants_names.split('||').map(escHtml).join(', ')
       : '';
     return `
-    <div class="field-row history-row">
+    <div class="field-row history-row" style="cursor:pointer" onclick="showDetailModal(${b.id})">
       <div class="history-info">
-        <div class="history-title">${escHtml(b.title)}</div>
+        <div class="history-title">Padelpotje</div>
         <div class="history-meta">${formatDate(b.date)}</div>
         ${names ? `<div class="history-players">${names}</div>` : ''}
       </div>
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="color:var(--text-3);flex-shrink:0"><path d="M9 18l6-6-6-6"/></svg>
     </div>`;
   }).join('');
 }
@@ -463,12 +768,12 @@ async function loadUnpaid() {
     ...history.map(b  => ({ ...b, _paid: b.paid_at,      _fromHistory: true  })),
   ];
 
-  // Niet betaald: deelnemer (niet organisator), niet betaald
-  // Upcoming: alleen als user meedoet (user_joined); history: al server-side gefilterd
-  const unpaid = all.filter(b =>
-    !b._paid && b.created_by !== currentUser.userId &&
-    (b._fromHistory || b.user_joined)
-  );
+  // Niet betaald: deelnemer (niet organisator), niet betaald, heeft een betaallink voor mij
+  const unpaid = all.filter(b => {
+    if (b._paid || b.created_by === currentUser.userId) return false;
+    if (!b._fromHistory && !b.user_joined) return false;
+    return true; // server filtert payment_link_for_me al op targeting
+  });
 
   const section = document.getElementById('unpaid-section');
   const list    = document.getElementById('unpaid-list');
@@ -481,11 +786,11 @@ async function loadUnpaid() {
   list.innerHTML = unpaid.map(b => `
     <div class="field-row unpaid-row">
       <div class="unpaid-info">
-        <div class="unpaid-title">${escHtml(b.title)}</div>
+        <div class="unpaid-title">Padelpotje</div>
         <div class="unpaid-meta">${formatDate(b.date)}</div>
       </div>
       <div class="unpaid-actions">
-        ${b.payment_url ? `<a href="${escAttr(b.payment_url)}" target="_blank" rel="noopener" class="btn-pay-small">Betaal</a>` : ''}
+        ${b.payment_link_for_me ? `<a href="${escAttr(b.payment_link_for_me)}" target="_blank" rel="noopener" class="btn-pay-small">Betaal</a>` : ''}
         <button class="btn-paid-manual" onclick="markPaid(${b.id})">Betaald</button>
       </div>
     </div>
@@ -511,7 +816,7 @@ function applyFilters() {
   list.innerHTML = '';
 
   let visible = allBookings;
-  if (filterStatus === 'open') visible = allBookings.filter(b => (b.player_count || 0) < 4);
+  if (filterStatus === 'open') visible = allBookings.filter(b => (b.player_count || 0) < (b.max_players || 4));
   if (filterStatus === 'mine') visible = allBookings.filter(b => b.user_joined);
 
   const emptyTitle = document.querySelector('#bookings-empty .empty-title');
@@ -559,7 +864,7 @@ function playerSpotHtml(name, info) {
 
 function buildCard(b) {
   const playerCount = b.player_count || 0;
-  const isFull      = playerCount >= 4;
+  const isFull      = playerCount >= (b.max_players || 4);
   const names       = (b.participants_names || '').split('||').filter(Boolean);
   const infos       = (b.participants_info || '').split('||');
 
@@ -569,7 +874,7 @@ function buildCard(b) {
 
   // Spots
   let spots = '';
-  for (let i = 0; i < 4; i++) {
+  for (let i = 0; i < (b.max_players || 4); i++) {
     spots += i < names.length
       ? playerSpotHtml(names[i], infos[i])
       : `<div class="spot spot-empty"></div>`;
@@ -582,7 +887,7 @@ function buildCard(b) {
   } else if (isFull) {
     statusTag = `<span class="status-tag status-full">Vol</span>`;
   } else {
-    statusTag = `<span class="status-tag status-open">${4 - playerCount} plek${4 - playerCount > 1 ? 'ken' : ''} vrij</span>`;
+    statusTag = `<span class="status-tag status-open">${(b.max_players || 4) - playerCount} plek${(b.max_players || 4) - playerCount > 1 ? 'ken' : ''} vrij</span>`;
   }
 
   // Niveau
@@ -593,7 +898,7 @@ function buildCard(b) {
   }
 
   // Betaallink indicator
-  const payDot = b.payment_url && b.user_joined && !b.user_paid_at && b.created_by !== currentUser?.userId
+  const payDot = b.payment_link_for_me && b.user_joined && !b.user_paid_at && b.created_by !== currentUser?.userId
     ? `<span class="pay-dot" title="Betaling openstaand"></span>` : '';
 
   const privateTag = b.is_private
@@ -601,7 +906,7 @@ function buildCard(b) {
 
   card.innerHTML = `
     <div class="card-top">
-      <div class="card-title">${escHtml(b.title)}${payDot}</div>
+      <div class="card-title">Padelpotje${payDot}</div>
       <div class="card-chevron">›</div>
     </div>
     <div class="card-meta">
@@ -627,10 +932,11 @@ async function showDetailModal(id) {
   const b   = await res.json();
   currentDetailBooking = b;
 
-  document.getElementById('detail-title').textContent = b.title;
+  document.getElementById('detail-title').textContent = 'Padelpotje';
 
   const playerCount = b.player_count || 0;
-  const isFull      = playerCount >= 4;
+  const maxPlayers  = b.max_players || 4;
+  const isFull      = playerCount >= maxPlayers;
   const isCreator   = b.created_by === currentUser.userId;
 
   // Niveau range
@@ -641,46 +947,128 @@ async function showDetailModal(id) {
   }
 
   // Info sectie
-  const infoHtml = `
-    <div class="section-header">Details</div>
-    <div class="field-group">
-      <div class="field-row"><label>Datum</label><span>${formatDate(b.date)}</span></div>
-      <div class="field-row"><label>Tijd</label><span>${b.start_time} – ${b.end_time}</span></div>
-      <div class="field-row"><label>Organisator</label><span>${escHtml(b.creator_name)}</span></div>
-      ${levelRow}
-      ${b.notes ? `<div class="field-row"><label>Notities</label><span>${escHtml(b.notes)}</span></div>` : ''}
-    </div>
-  `;
-
-  // Betaallink (voor deelnemers)
-  let payHtml = '';
-  if (b.payment_url && !isCreator && b.user_joined) {
-    const paid = b.user_paid_at;
-    payHtml = `
-      <div class="section-header">Betaling</div>
+  let infoHtml;
+  if (isCreator) {
+    infoHtml = `
+      <div class="section-header">Details</div>
       <div class="field-group">
         <div class="field-row">
-          ${paid
-            ? `<span class="paid-badge">✓ Betaald</span>`
-            : `<a href="${escAttr(b.payment_url)}" target="_blank" rel="noopener" class="btn-pay-full" onclick="markPaidAndRefresh(${id})">💳 Betaal hier</a>`
-          }
+          <label>Datum</label>
+          <input type="date" id="detail-edit-date" value="${b.date}" />
         </div>
-        ${paid ? '' : `<div class="field-row"><button class="btn-mark-paid" onclick="markPaidAndRefresh(${id})">Markeer als betaald</button></div>`}
+        <div class="field-row">
+          <label>Van</label>
+          ${buildTimeSelectHtml('detail-edit-start', b.start_time)}
+        </div>
+        <div class="field-row">
+          <label>Tot</label>
+          ${buildTimeSelectHtml('detail-edit-end', b.end_time)}
+        </div>
+        <div class="field-row">
+          <label>Notities</label>
+          <textarea id="detail-edit-notes" rows="2" placeholder="Optionele opmerkingen...">${escHtml(b.notes || '')}</textarea>
+        </div>
+        <div class="field-row">
+          <label>Privé potje</label>
+          <label class="toggle">
+            <input type="checkbox" id="detail-edit-private" ${b.is_private ? 'checked' : ''} />
+            <span class="toggle-track"></span>
+          </label>
+        </div>
+      </div>
+    `;
+  } else {
+    infoHtml = `
+      <div class="section-header">Details</div>
+      <div class="field-group">
+        <div class="field-row"><label>Datum</label><span>${formatDate(b.date)}</span></div>
+        <div class="field-row"><label>Tijd</label><span>${b.start_time} – ${b.end_time}</span></div>
+        <div class="field-row"><label>Organisator</label><span>${escHtml(b.creator_name)}</span></div>
+        ${levelRow}
+        ${b.notes ? `<div class="field-row"><label>Notities</label><span>${escHtml(b.notes)}</span></div>` : ''}
       </div>
     `;
   }
 
-  // Betaallink beheer (voor organisator)
+  // Betaallink (voor deelnemers)
+  let payHtml = '';
+  if (!isCreator && b.user_joined) {
+    const myLinks = (b.payment_links || []).filter(link => {
+      if (!link.target_user_ids) return true;
+      return link.target_user_ids.split(',').map(Number).includes(currentUser.userId);
+    });
+    if (myLinks.length > 0) {
+      const paid = b.user_paid_at;
+      payHtml = `
+        <div class="section-header">Betaling</div>
+        <div class="field-group">
+          ${paid ? `<div class="field-row"><span class="paid-badge">✓ Betaald</span></div>` :
+            myLinks.map(link => `<div class="field-row"><a href="${escAttr(link.payment_url)}" target="_blank" rel="noopener" class="btn-pay-full" onclick="markPaidAndRefresh(${id})">💳 Betaal hier</a></div>`).join('')
+          }
+          ${paid ? '' : `<div class="field-row"><button class="btn-mark-paid" onclick="markPaidAndRefresh(${id})">Markeer als betaald</button></div>`}
+        </div>`;
+    }
+  }
+
+  // Betaallinks beheer (voor deelnemers en organisator)
   let payFormHtml = '';
-  if (isCreator) {
-    payFormHtml = `
-      <div class="section-header">Betaallink instellen</div>
-      <div class="field-group">
-        <div class="field-row">
-          <input type="url" id="payment-url-input" placeholder="https://tikkie.me/..." value="${escAttr(b.payment_url || '')}" style="flex:1" />
+  if (isCreator || b.user_joined) {
+    const links = b.payment_links || [];
+    const pMap  = {};
+    (b.participants || []).forEach(p => { if (!p.is_guest) pMap[p.user_id] = p.display_name; });
+
+    const linkRows = links.map(link => {
+      const targetStr = link.target_user_ids
+        ? link.target_user_ids.split(',').map(uid => pMap[+uid] ? escHtml(pMap[+uid]) : `#${uid}`).join(', ')
+        : 'Iedereen';
+      const shortUrl = link.payment_url.length > 38 ? link.payment_url.slice(0, 38) + '…' : link.payment_url;
+      const canRemove = isCreator || link.added_by === currentUser.userId;
+      return `<div class="field-row pay-link-row">
+        <div class="pay-link-info">
+          <div class="pay-link-url">${escHtml(shortUrl)}</div>
+          <div class="pay-link-targets">${targetStr}</div>
         </div>
+        ${canRemove ? `<button class="pay-link-remove-btn" onclick="handleRemovePaymentLink(${id},${link.id})">✕</button>` : ''}
+      </div>`;
+    }).join('');
+
+    const targetablePlayers = (b.participants || []).filter(p => !p.is_guest && p.user_id !== currentUser.userId);
+    const checkboxRows = targetablePlayers.map(p => `
+      <div class="field-row pay-target-row">
+        <label class="pay-target-label">
+          <input type="checkbox" class="pay-target-cb" value="${p.user_id}" checked />
+          ${escHtml(p.display_name)}
+        </label>
+      </div>`).join('');
+
+    const targetToggle = targetablePlayers.length > 0 ? `
+      <div class="field-row">
+        <span style="color:var(--text-2);font-size:.88rem">Voor wie?</span>
+        <div class="seg-control" style="width:auto;min-width:150px;margin-bottom:0">
+          <button type="button" class="seg-btn active" onclick="setPayTarget('all',this)">Iedereen</button>
+          <button type="button" class="seg-btn" onclick="setPayTarget('select',this)">Selecteer</button>
+        </div>
+      </div>
+      <div id="pay-target-select" class="hidden">${checkboxRows}</div>` : '';
+
+    payFormHtml = `
+      <div class="section-header">Betaallinks</div>
+      ${links.length > 0 ? `<div class="field-group">${linkRows}</div>` : ''}
+      <div id="add-payment-link-panel" class="hidden">
+        <div class="field-group">
+          <div class="field-row">
+            <input type="url" id="new-payment-url-input" placeholder="https://tikkie.me/..." style="flex:1" />
+          </div>
+          ${targetToggle}
+          <div class="field-row" style="gap:8px">
+            <button class="btn btn-outline" style="flex:1" onclick="hideAddPaymentLinkPanel()">Annuleer</button>
+            <button class="btn btn-primary" style="flex:1" onclick="handleAddPaymentLink(${id})">Toevoegen</button>
+          </div>
+        </div>
+      </div>
+      <div class="field-group" id="add-payment-link-btn-row">
         <div class="field-row">
-          <button class="btn btn-primary btn-full" onclick="handleSetPaymentUrl()">Opslaan</button>
+          <button class="btn btn-outline btn-full" onclick="showAddPaymentLinkPanel()">+ Betaallink toevoegen</button>
         </div>
       </div>
     `;
@@ -701,7 +1089,7 @@ async function showDetailModal(id) {
   }
 
   // Deelnemers (inclusief gasten)
-  const canAddGuest = (isCreator || b.user_joined) && playerCount < 4;
+  const canAddGuest = (isCreator || b.user_joined) && playerCount < (b.max_players || 4);
   const playerRows = b.participants.map(p => {
     if (p.is_guest) {
       const canRemove = isCreator || p.added_by === currentUser.userId;
@@ -710,12 +1098,15 @@ async function showDetailModal(id) {
         : '';
       return `<div class="field-row"><span class="p-player"><span class="guest-icon">👤</span> ${escHtml(p.display_name)}<span class="guest-badge">Gast</span></span>${removeBtn}</div>`;
     }
+    const initials = escHtml((p.display_name || '?').charAt(0).toUpperCase());
     const icon = p.avatar
       ? `<span class="p-avatar" style="background-image:url('${escAttr(p.avatar)}')"></span>`
-      : `🎾`;
-    return `<div class="field-row"><span class="p-player">${icon} ${escHtml(p.display_name)}</span></div>`;
+      : `<span class="p-avatar" style="background:var(--green-dark);display:inline-flex;align-items:center;justify-content:center;font-size:.6rem;font-weight:700;color:#fff;flex-shrink:0">${initials}</span>`;
+    const isSelf = p.user_id === currentUser.userId;
+    const clickAttr = isSelf ? '' : `onclick="showPlayerProfile(${p.user_id})" style="cursor:pointer"`;
+    return `<div class="field-row" ${clickAttr}><span class="p-player">${icon} ${escHtml(p.display_name)}</span>${isSelf ? '' : '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14" style="color:var(--text-3);flex-shrink:0;margin-left:auto"><path d="M9 18l6-6-6-6"/></svg>'}</div>`;
   });
-  for (let i = b.participants.length; i < 4; i++) {
+  for (let i = b.participants.length; i < (b.max_players || 4); i++) {
     playerRows.push(`<div class="field-row p-empty"><span class="p-icon">○</span> Vrije plek</div>`);
   }
   if (canAddGuest) {
@@ -736,17 +1127,17 @@ async function showDetailModal(id) {
   }
 
   const participantsHtml = `
-    <div class="section-header">Spelers (${playerCount}/4)</div>
+    <div class="section-header">Spelers (${playerCount}/${b.max_players || 4})</div>
     <div class="field-group">${playerRows.join('')}</div>
   `;
 
   document.getElementById('detail-body').innerHTML =
     infoHtml + payHtml + inviteHtml + payFormHtml + participantsHtml;
 
-  // Bewerk-knop in header voor organisator
+  // Opslaan-knop in header voor organisator
   const headerRight = document.getElementById('detail-header-right');
   if (isCreator) {
-    headerRight.innerHTML = `<button class="sheet-done" onclick="showEditBookingModal()">Bewerk</button>`;
+    headerRight.innerHTML = `<button class="sheet-done" onclick="handleDetailSave(${id})">Opslaan</button>`;
   } else {
     headerRight.innerHTML = '';
   }
@@ -761,6 +1152,20 @@ async function showDetailModal(id) {
     waBtn.innerHTML = '<svg viewBox="0 0 24 24" fill="currentColor" width="18" height="18" style="vertical-align:middle;margin-right:6px"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/><path d="M12 0C5.373 0 0 5.373 0 12c0 2.127.558 4.126 1.533 5.859L.057 23.272a.75.75 0 0 0 .923.923l5.347-1.485A11.945 11.945 0 0 0 12 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 21.75a9.715 9.715 0 0 1-4.95-1.355l-.355-.211-3.683 1.023 1.005-3.595-.23-.371A9.718 9.718 0 0 1 2.25 12C2.25 6.615 6.615 2.25 12 2.25S21.75 6.615 21.75 12 17.385 21.75 12 21.75z"/></svg>Deel via WhatsApp';
     waBtn.onclick = () => shareWhatsApp(b);
     actions.appendChild(waBtn);
+
+    if (b.user_joined) {
+      const leaveOrgBtn = document.createElement('button');
+      leaveOrgBtn.className = 'btn btn-outline btn-full';
+      leaveOrgBtn.textContent = 'Uitschrijven';
+      leaveOrgBtn.onclick = () => handleLeaveAsOrganizer(b);
+      actions.appendChild(leaveOrgBtn);
+    } else if (!isFull) {
+      const joinOrgBtn = document.createElement('button');
+      joinOrgBtn.className = 'btn btn-primary btn-full';
+      joinOrgBtn.textContent = 'Inschrijven';
+      joinOrgBtn.onclick = handleJoinBooking;
+      actions.appendChild(joinOrgBtn);
+    }
 
     const delBtn = document.createElement('button');
     delBtn.className = 'btn btn-destructive-outline btn-full';
@@ -789,6 +1194,36 @@ function hideDetailModal() {
   currentDetailId = null;
 }
 
+async function handleDetailSave(id) {
+  clearError('detail-error');
+  const body = {
+    date:       document.getElementById('detail-edit-date').value,
+    start_time: document.getElementById('detail-edit-start').value,
+    end_time:   document.getElementById('detail-edit-end').value,
+    notes:      document.getElementById('detail-edit-notes').value,
+    is_private: document.getElementById('detail-edit-private').checked,
+  };
+
+  const doSave = async (scope) => {
+    if (scope) body.scope = scope;
+    const res  = await api(`/api/bookings/${id}`, { method: 'PUT', body });
+    const data = await res.json();
+    if (!res.ok) return showError('detail-error', data.error);
+    hideDetailModal(); loadBookings(); loadCalendar();
+    showToast(scope === 'future' ? 'Reeks bijgewerkt' : 'Wijzigingen opgeslagen');
+  };
+
+  if (currentDetailBooking && currentDetailBooking.series_id) {
+    openScopeDialog(
+      'Reeks aanpassen',
+      'Wil je de tijd en instellingen ook doorvoeren voor toekomstige potjes in deze reeks?',
+      doSave
+    );
+  } else {
+    await doSave();
+  }
+}
+
 async function markPaidAndRefresh(id) {
   await api(`/api/bookings/${id}/pay`, { method: 'POST' });
   await showDetailModal(id);
@@ -802,7 +1237,7 @@ async function handleJoinBooking() {
   const data = await res.json();
   if (!res.ok) return showError('detail-error', data.error);
   currentInviteToken = null;
-  hideDetailModal(); loadBookings();
+  hideDetailModal(); loadBookings(); loadCalendar();
 }
 
 async function handleLeaveBooking() {
@@ -810,7 +1245,25 @@ async function handleLeaveBooking() {
   const res  = await api(`/api/bookings/${currentDetailId}/join`, { method: 'DELETE' });
   const data = await res.json();
   if (!res.ok) return showError('detail-error', data.error);
-  hideDetailModal(); loadBookings();
+  hideDetailModal(); loadBookings(); loadCalendar();
+}
+
+function handleLeaveAsOrganizer(b) {
+  const alone = b.player_count <= 1;
+  document.getElementById('confirm-title').textContent = 'Uitschrijven';
+  document.getElementById('confirm-msg').textContent = alone
+    ? 'Je bent de enige deelnemer. Na uitschrijven staat het potje leeg, maar het blijft bestaan. Weet je het zeker?'
+    : 'Je schrijft je uit als deelnemer. Het potje blijft bestaan en andere spelers blijven ingeschreven. Weet je het zeker?';
+  document.getElementById('confirm-ok-btn').textContent = 'Uitschrijven';
+  document.getElementById('confirm-ok-btn').onclick = async () => {
+    closeConfirm();
+    clearError('detail-error');
+    const res  = await api(`/api/bookings/${b.id}/join`, { method: 'DELETE' });
+    const data = await res.json();
+    if (!res.ok) return showError('detail-error', data.error);
+    hideDetailModal(); loadBookings(); loadCalendar();
+  };
+  document.getElementById('confirm-modal').classList.remove('hidden');
 }
 
 function showAddGuestForm(bookingId) {
@@ -828,45 +1281,121 @@ async function handleAddGuest(bookingId) {
   const res  = await api(`/api/bookings/${bookingId}/guests`, { method: 'POST', body: { guest_name: name } });
   const data = await res.json();
   if (!res.ok) return showError('guest-error', data.error);
-  showDetailModal(bookingId); loadBookings();
+  showDetailModal(bookingId); loadBookings(); loadCalendar();
 }
 
 async function handleRemoveGuest(bookingId, guestId) {
   const res  = await api(`/api/bookings/${bookingId}/guests/${guestId}`, { method: 'DELETE' });
   const data = await res.json();
   if (!res.ok) return showError('detail-error', data.error);
-  showDetailModal(bookingId); loadBookings();
+  showDetailModal(bookingId); loadBookings(); loadCalendar();
 }
 
 function handleDeleteBooking() {
-  document.getElementById('confirm-ok-btn').onclick = async () => {
-    closeConfirm();
-    clearError('detail-error');
-    const res  = await api(`/api/bookings/${currentDetailId}`, { method: 'DELETE' });
-    const data = await res.json();
-    if (!res.ok) return showError('detail-error', data.error);
-    hideDetailModal(); loadBookings();
+  const openConfirm = (scope) => {
+    const isFuture = scope === 'future';
+    document.getElementById('confirm-title').textContent = isFuture ? 'Reeks verwijderen' : 'Boeking verwijderen';
+    document.getElementById('confirm-msg').textContent   = isFuture
+      ? 'Weet je zeker dat je dit potje en alle toekomstige potjes in de reeks wilt verwijderen?'
+      : 'Weet je zeker dat je deze boeking wilt verwijderen?';
+    document.getElementById('confirm-ok-btn').textContent = 'Verwijderen';
+    document.getElementById('confirm-ok-btn').onclick = async () => {
+      closeConfirm();
+      clearError('detail-error');
+      const url = isFuture
+        ? `/api/bookings/${currentDetailId}?scope=future`
+        : `/api/bookings/${currentDetailId}`;
+      const res  = await api(url, { method: 'DELETE' });
+      const data = await res.json();
+      if (!res.ok) return showError('detail-error', data.error);
+      hideDetailModal(); loadBookings(); loadCalendar();
+    };
+    document.getElementById('confirm-modal').classList.remove('hidden');
   };
-  document.getElementById('confirm-modal').classList.remove('hidden');
+
+  if (currentDetailBooking && currentDetailBooking.series_id) {
+    openScopeDialog(
+      'Reeks verwijderen',
+      'Wil je alleen dit potje verwijderen of ook alle toekomstige potjes in de reeks?',
+      openConfirm
+    );
+  } else {
+    openConfirm(null);
+  }
 }
 
 function closeConfirm() {
   document.getElementById('confirm-modal').classList.add('hidden');
 }
 
-async function handleSetPaymentUrl() {
+/* ── Reeks scope dialog ───────────────────────────────────── */
+function openScopeDialog(title, msg, callback) {
+  pendingScopeCallback = callback;
+  document.getElementById('scope-title').textContent = title;
+  document.getElementById('scope-msg').textContent   = msg;
+  document.getElementById('scope-modal').classList.remove('hidden');
+}
+
+function closeScopeDialog() {
+  document.getElementById('scope-modal').classList.add('hidden');
+  pendingScopeCallback = null;
+}
+
+function pickScope(scope) {
+  const cb = pendingScopeCallback;
+  closeScopeDialog();
+  if (cb) cb(scope);
+}
+
+function setPayTarget(mode, btn) {
+  btn.closest('.seg-control').querySelectorAll('.seg-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  const panel = document.getElementById('pay-target-select');
+  if (panel) panel.classList.toggle('hidden', mode === 'all');
+}
+
+function showAddPaymentLinkPanel() {
+  document.getElementById('add-payment-link-panel')?.classList.remove('hidden');
+  document.getElementById('add-payment-link-btn-row')?.classList.add('hidden');
+}
+
+function hideAddPaymentLinkPanel() {
+  document.getElementById('add-payment-link-panel')?.classList.add('hidden');
+  document.getElementById('add-payment-link-btn-row')?.classList.remove('hidden');
+}
+
+async function handleAddPaymentLink(bookingId) {
   clearError('detail-error');
-  const payment_url = document.getElementById('payment-url-input').value.trim();
-  const res  = await api(`/api/bookings/${currentDetailId}/payment`, { method: 'PUT', body: { payment_url } });
+  const payment_url = document.getElementById('new-payment-url-input')?.value.trim();
+  if (!payment_url) return showError('detail-error', 'Vul een URL in');
+
+  let target_user_ids = null;
+  const selectPanel = document.getElementById('pay-target-select');
+  if (selectPanel && !selectPanel.classList.contains('hidden')) {
+    const checked = [...document.querySelectorAll('.pay-target-cb:checked')].map(cb => parseInt(cb.value, 10));
+    if (checked.length > 0) target_user_ids = checked;
+  }
+
+  const res  = await api(`/api/bookings/${bookingId}/payment-links`, { method: 'POST', body: { payment_url, target_user_ids } });
   const data = await res.json();
   if (!res.ok) return showError('detail-error', data.error);
-  await showDetailModal(currentDetailId);
-  loadBookings();
-  showToast(payment_url ? 'Betaallink opgeslagen' : 'Betaallink verwijderd');
+  await showDetailModal(bookingId);
+  showToast('Betaallink toegevoegd');
+}
+
+async function handleRemovePaymentLink(bookingId, linkId) {
+  const res = await api(`/api/bookings/${bookingId}/payment-links/${linkId}`, { method: 'DELETE' });
+  if (!res.ok) {
+    const data = await res.json().catch(() => null);
+    showToast('Verwijderen mislukt: ' + (data?.error || 'onbekend'));
+    return;
+  }
+  await showDetailModal(bookingId);
+  showToast('Betaallink verwijderd');
 }
 
 /* ── New / edit booking modal ─────────────────────────────── */
-function showNewBookingModal() {
+async function showNewBookingModal() {
   bookingEditId = null;
   document.getElementById('booking-modal-title').textContent = 'Nieuwe boeking';
   document.getElementById('booking-modal-done').textContent  = 'Aanmaken';
@@ -878,7 +1407,30 @@ function showNewBookingModal() {
   setTimeSelect('b-start', '20:00');
   setTimeSelect('b-end',   '21:00');
   document.getElementById('b-private').closest('.field-group').style.display = '';
+  // Reeks reset
+  document.getElementById('reeks-group').classList.remove('hidden');
+  document.getElementById('reeks-panel').classList.add('hidden');
+  document.getElementById('reeks-count-row').classList.remove('hidden');
+  document.getElementById('reeks-date-row').classList.add('hidden');
+  // Speelgroep picker: alleen tonen bij meerdere groepen
+  await loadBookingCommunityPicker();
   document.getElementById('booking-modal').classList.remove('hidden');
+}
+
+async function loadBookingCommunityPicker() {
+  const res = await api('/api/communities/mine');
+  if (!res.ok) return;
+  const communities = await res.json();
+  const group = document.getElementById('b-community-group');
+  const select = document.getElementById('b-community');
+  if (communities.length <= 1) {
+    group.style.display = 'none';
+    return;
+  }
+  select.innerHTML = communities.map(c =>
+    `<option value="${c.id}">${escHtml(c.name)}</option>`
+  ).join('');
+  group.style.display = '';
 }
 
 function showEditBookingModal() {
@@ -887,7 +1439,6 @@ function showEditBookingModal() {
   document.getElementById('booking-modal-title').textContent = 'Boeking bewerken';
   document.getElementById('booking-modal-done').textContent  = 'Opslaan';
   clearError('booking-error');
-  document.getElementById('b-title').value = b.title;
   document.getElementById('b-date').value  = b.date;
   document.getElementById('b-date').min    = new Date().toISOString().split('T')[0];
   setTimeSelect('b-start', b.start_time);
@@ -895,6 +1446,9 @@ function showEditBookingModal() {
   document.getElementById('b-notes').value   = b.notes || '';
   document.getElementById('b-private').checked = !!b.is_private;
   document.getElementById('b-private').closest('.field-group').style.display = '';
+  // Reeks niet van toepassing bij bewerken
+  document.getElementById('reeks-group').classList.add('hidden');
+  document.getElementById('reeks-panel').classList.add('hidden');
   hideDetailModal();
   document.getElementById('booking-modal').classList.remove('hidden');
 }
@@ -904,16 +1458,29 @@ function hideNewBookingModal() {
   bookingEditId = null;
 }
 
+function toggleReeksPanel(checked) {
+  document.getElementById('reeks-panel').classList.toggle('hidden', !checked);
+}
+
+function toggleReeksEndType(value) {
+  document.getElementById('reeks-count-row').classList.toggle('hidden', value !== 'count');
+  document.getElementById('reeks-date-row').classList.toggle('hidden', value !== 'date');
+}
+
 async function handleCreateBooking(e) {
   e.preventDefault();
   clearError('booking-error');
+  const communityGroup = document.getElementById('b-community-group');
+  const communityId = communityGroup?.style.display !== 'none'
+    ? document.getElementById('b-community').value
+    : null;
   const body = {
-    title:      document.getElementById('b-title').value,
-    date:       document.getElementById('b-date').value,
-    start_time: document.getElementById('b-start').value,
-    end_time:   document.getElementById('b-end').value,
-    notes:      document.getElementById('b-notes').value,
-    is_private: document.getElementById('b-private').checked,
+    date:         document.getElementById('b-date').value,
+    start_time:   document.getElementById('b-start').value,
+    end_time:     document.getElementById('b-end').value,
+    notes:        document.getElementById('b-notes').value,
+    is_private:   document.getElementById('b-private').checked,
+    community_id: communityId || undefined,
   };
 
   // Valideer dat starttijd niet in het verleden ligt
@@ -927,12 +1494,29 @@ async function handleCreateBooking(e) {
     const res  = await api(`/api/bookings/${bookingEditId}`, { method: 'PUT', body });
     const data = await res.json();
     if (!res.ok) return showError('booking-error', data.error);
-    hideNewBookingModal(); loadBookings();
+    hideNewBookingModal(); loadBookings(); loadCalendar();
   } else {
+    const isReeks = document.getElementById('b-reeks').checked;
+    if (isReeks) {
+      body.reeks_interval = document.getElementById('reeks-interval').value;
+      body.reeks_end_type = document.getElementById('reeks-end-type').value;
+      if (body.reeks_end_type === 'count') {
+        body.reeks_count = parseInt(document.getElementById('reeks-count').value) || 4;
+      } else {
+        body.reeks_end_date = document.getElementById('reeks-end-date').value;
+        if (!body.reeks_end_date) return showError('booking-error', 'Kies een einddatum voor de reeks');
+      }
+    }
     const res  = await api('/api/bookings', { method: 'POST', body });
     const data = await res.json();
     if (!res.ok) return showError('booking-error', data.error);
-    hideNewBookingModal(); loadBookings();
+    hideNewBookingModal(); loadBookings(); loadCalendar();
+    if (isReeks) {
+      showToast(`${data.count} potjes aangemaakt`);
+      showDetailModal(data.ids[0]);
+    } else {
+      showDetailModal(data.id);
+    }
   }
 }
 
@@ -945,6 +1529,9 @@ function closeSheet(e) {
     hideAdminDetailModal();
     hideAdminEditModal();
     hideAdminPwModal();
+    hideGroupInfo();
+    hideCommunityManage();
+    closeNotifications();
   }
 }
 
@@ -1003,7 +1590,7 @@ function shareWhatsApp(b) {
   const url = (b.is_private && b.invite_token)
     ? `${location.origin}/?invite=${b.invite_token}`
     : `${location.origin}/?potje=${b.id}`;
-  const msg = `🎾 ${b.title}\n\n${datumKap}, ${b.start_time} - ${b.end_time}\n\nDoe mee:\n${url}`;
+  const msg = `🎾 Padelpotje\n\n${datumKap}, ${b.start_time} - ${b.end_time}\n\nDoe mee:\n${url}`;
   window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`, '_blank');
 }
 
@@ -1065,6 +1652,20 @@ function setTimeSelect(id, val) {
   for (const opt of sel.options) {
     if (opt.value === v) { opt.selected = true; break; }
   }
+}
+
+// Bouw een <select> met tijdopties als HTML-string (voor gebruik in innerHTML)
+function buildTimeSelectHtml(id, selectedVal) {
+  const v = selectedVal ? selectedVal.slice(0, 5) : '';
+  let html = `<select id="${id}" class="time-select">`;
+  for (let h = 6; h <= 23; h++) {
+    for (let m = 0; m < 60; m += 30) {
+      const val = `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`;
+      html += `<option value="${val}"${val === v ? ' selected' : ''}>${val}</option>`;
+    }
+  }
+  html += '</select>';
+  return html;
 }
 
 /* ── Admin ────────────────────────────────────────────────── */
@@ -1169,10 +1770,10 @@ async function loadAdminBookings() {
   list.innerHTML = bookings.map(b => `
     <div class="admin-booking-card" onclick="showAdminDetailModal(${b.id})">
       <div class="admin-booking-info">
-        <div class="admin-booking-title">${escHtml(b.title)}${b.is_private ? ' 🔒' : ''}</div>
+        <div class="admin-booking-title">Padelpotje${b.is_private ? ' 🔒' : ''}</div>
         <div class="admin-booking-meta">${formatDate(b.date)} · ${b.start_time}–${b.end_time} · ${escHtml(b.creator_name)}</div>
       </div>
-      <div class="admin-booking-count">${b.player_count}/4</div>
+      <div class="admin-booking-count">${b.player_count}/${b.max_players || 4}</div>
     </div>
   `).join('');
 }
@@ -1183,7 +1784,7 @@ async function showAdminDetailModal(id) {
   const b = await res.json();
   adminCurrentBooking = b;
 
-  document.getElementById('admin-detail-title').textContent = b.title;
+  document.getElementById('admin-detail-title').textContent = 'Padelpotje';
 
   const infoHtml = `
     <div class="section-header">Details</div>
@@ -1196,18 +1797,24 @@ async function showAdminDetailModal(id) {
   `;
 
   const playerRows = b.participants.map(p => {
-    const name = p.is_guest ? `👤 ${escHtml(p.display_name)} <span class="guest-badge">Gast</span>` : `🎾 ${escHtml(p.display_name)}`;
+    const pInitials = escHtml((p.display_name || '?').charAt(0).toUpperCase());
+    const pAvatar = p.avatar
+      ? `<span class="p-avatar" style="background-image:url('${escAttr(p.avatar)}')"></span>`
+      : `<span class="p-avatar" style="background:var(--green-dark);display:inline-flex;align-items:center;justify-content:center;font-size:.6rem;font-weight:700;color:#fff;flex-shrink:0">${pInitials}</span>`;
+    const name = p.is_guest
+      ? `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="rgba(60,60,67,0.5)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg> ${escHtml(p.display_name)} <span class="guest-badge">Gast</span>`
+      : `${pAvatar} ${escHtml(p.display_name)}`;
     return `<div class="field-row">
       <span class="p-player">${name}</span>
       <button class="admin-btn-sm admin-btn-delete" onclick="adminRemoveParticipant(${b.id}, ${p.id}, ${p.is_guest ? 1 : 0})">Verwijder</button>
     </div>`;
   });
-  for (let i = b.participants.length; i < 4; i++) {
+  for (let i = b.participants.length; i < (b.max_players || 4); i++) {
     playerRows.push(`<div class="field-row p-empty"><span class="p-icon">○</span> Vrije plek</div>`);
   }
 
   const participantsHtml = `
-    <div class="section-header">Spelers (${b.participants.length}/4)</div>
+    <div class="section-header">Spelers (${b.participants.length}/${b.max_players || 4})</div>
     <div class="field-group">${playerRows.join('')}</div>
   `;
 
@@ -1249,7 +1856,6 @@ function adminDeleteBooking(bookingId) {
 function showAdminEditBooking() {
   const b = adminCurrentBooking;
   if (!b) return;
-  document.getElementById('ae-title').value = b.title;
   document.getElementById('ae-date').value = b.date;
   setTimeSelect('ae-start', b.start_time);
   setTimeSelect('ae-end', b.end_time);
@@ -1266,7 +1872,6 @@ function hideAdminEditModal() {
 async function handleAdminSaveBooking() {
   clearError('admin-edit-error');
   const body = {
-    title:      document.getElementById('ae-title').value,
     date:       document.getElementById('ae-date').value,
     start_time: document.getElementById('ae-start').value,
     end_time:   document.getElementById('ae-end').value,
@@ -1281,16 +1886,767 @@ async function handleAdminSaveBooking() {
   showToast('Boeking bijgewerkt');
 }
 
-/* ── Kalender / Beschikbaarheid ───────────────────────────── */
-let calYear  = new Date().getFullYear();
-let calMonth = new Date().getMonth() + 1; // 1-12
-let calData  = {};  // { "YYYY-MM-DD": { count, me, users } }
+/* ── Buddies ──────────────────────────────────────────────── */
+async function loadBuddies() {
+  try {
+    const [buddiesRes, groupsRes] = await Promise.all([
+      api('/api/buddies'),
+      api('/api/groups'),
+    ]);
+    const buddies = buddiesRes.ok ? await buddiesRes.json() : [];
+    const groups  = groupsRes.ok  ? await groupsRes.json()  : [];
+    renderBuddiesTab(
+      Array.isArray(buddies) ? buddies : [],
+      Array.isArray(groups)  ? groups  : []
+    );
+  } catch (e) {
+    showToast('Buddies laden mislukt: ' + e.message);
+    renderBuddiesTab([], []);
+  }
+  loadBuddyRequests();
+}
+
+function renderBuddiesTab(buddies, groups) {
+  const buddiesEl  = document.getElementById('buddies-list');
+  const groupsEl   = document.getElementById('groups-list');
+  const countBar   = document.getElementById('buddies-count-bar');
+  const showLabels = groups.length > 0 && buddies.length > 0;
+
+  // ── Groepen ──
+  if (groups.length === 0) {
+    groupsEl.innerHTML = '';
+  } else {
+    const label = showLabels ? '<div class="buddy-section-label">Groepen</div>' : '';
+    groupsEl.innerHTML = label + groups.map(g => {
+      const initials   = g.name.slice(0, 2).toUpperCase();
+      const unreadHtml = g.unread_count > 0
+        ? `<span class="buddy-unread-dot">${g.unread_count > 9 ? '9+' : g.unread_count}</span>` : '';
+      const lastMsg = g.last_message
+        ? `<div class="buddy-last-msg${g.unread_count > 0 ? ' buddy-last-msg--unread' : ''}">${escHtml(g.last_message)}</div>`
+        : `<div class="buddy-last-msg">${g.member_count} leden</div>`;
+      return `<div class="buddy-card" onclick="openGroupChat(${g.id})">
+        <div class="buddy-avatar-wrap">
+          <div class="group-avatar">${initials}</div>
+          ${unreadHtml}
+        </div>
+        <div class="buddy-info">
+          <div class="buddy-name">${escHtml(g.name)}</div>
+          ${lastMsg}
+        </div>
+        <span class="group-member-badge">${g.member_count} leden</span>
+      </div>`;
+    }).join('');
+  }
+
+  // ── Buddies ──
+  if (buddies.length === 0 && groups.length === 0) {
+    countBar.classList.add('hidden');
+    buddiesEl.innerHTML = `<div class="empty-state" style="padding:40px 0">
+      <div class="empty-icon">👥</div>
+      <p class="empty-title">Nog geen buddies</p>
+      <p class="empty-sub">Zoek een speler hierboven of klik op een speler in een potje.</p>
+    </div>`;
+  } else if (buddies.length === 0) {
+    countBar.classList.add('hidden');
+    buddiesEl.innerHTML = '';
+  } else {
+    if (showLabels) {
+      countBar.textContent = 'Buddies';
+      countBar.classList.remove('hidden');
+    } else {
+      countBar.textContent = `${buddies.length} ${buddies.length === 1 ? 'buddy' : 'buddies'}`;
+      countBar.classList.remove('hidden');
+    }
+    buddiesEl.innerHTML = buddies.map(u => {
+      const avatarStyle   = u.avatar ? `style="background-image:url('${escAttr(u.avatar)}')"` : '';
+      const initials      = u.display_name.split(' ').map(w => w[0]).join('').slice(0,2).toUpperCase();
+      const avatarContent = u.avatar ? '' : initials;
+      const unreadHtml    = u.unread_count > 0
+        ? `<span class="buddy-unread-dot">${u.unread_count > 9 ? '9+' : u.unread_count}</span>` : '';
+      const lastMsg = u.last_message
+        ? `<div class="buddy-last-msg${u.unread_count > 0 ? ' buddy-last-msg--unread' : ''}">${escHtml(u.last_message)}</div>`
+        : `<div class="buddy-last-msg">${u.games_together > 0 ? `${u.games_together} potje${u.games_together!==1?'s':''} samen` : 'Nog niet samen gespeeld'}</div>`;
+      return `<div class="buddy-card" onclick="openChat(${u.id})">
+        <div class="buddy-avatar-wrap">
+          <div class="buddy-avatar" ${avatarStyle}>${avatarContent}</div>
+          ${unreadHtml}
+        </div>
+        <div class="buddy-info">
+          <div class="buddy-name">${escHtml(u.display_name)}</div>
+          ${lastMsg}
+        </div>
+        ${u.level ? `<span class="buddy-level">${u.level}</span>` : ''}
+      </div>`;
+    }).join('');
+  }
+
+  const totalUnread = buddies.filter(b => b.unread_count > 0).length
+                    + groups.filter(g => g.unread_count > 0).length;
+  updateBuddyTabBadge(totalUnread);
+}
+
+function updateBuddyTabBadge(n) {
+  const badge = document.getElementById('buddy-tab-badge');
+  if (!badge) return;
+  if (n > 0) {
+    badge.textContent = n > 9 ? '9+' : n;
+    badge.classList.remove('hidden');
+  } else {
+    badge.classList.add('hidden');
+  }
+}
+
+async function refreshBuddyBadge() {
+  try {
+    const [buddiesRes, groupsRes, notifRes] = await Promise.all([
+      api('/api/buddies/unread'),
+      api('/api/groups/unread'),
+      api('/api/notifications/unread'),
+    ]);
+    const buddyData  = buddiesRes.ok ? await buddiesRes.json() : {};
+    const groupCount = groupsRes.ok  ? (await groupsRes.json()).count  : 0;
+    const notifCount = notifRes.ok   ? (await notifRes.json()).count   : 0;
+    updateBuddyTabBadge((buddyData.count ?? 0) + (buddyData.request_count ?? 0) + groupCount);
+    updateNotifBadge(notifCount);
+  } catch (_) {}
+}
+
+/* ── Groepschat ───────────────────────────────────────────── */
+async function openGroupChat(groupId) {
+  chatMode    = 'group';
+  chatGroupId = groupId;
+  chatUserId  = null;
+  chatLastId  = 0;
+
+  const infoRes = await api(`/api/groups/${groupId}`);
+  if (!infoRes.ok) { showToast('Kon groep niet laden'); return; }
+  const group = await infoRes.json();
+
+  document.getElementById('chat-nav-info').innerHTML = `
+    <div class="chat-nav-name">${escHtml(group.name)}</div>
+    <div class="chat-nav-games">${group.members.length} leden</div>`;
+  document.getElementById('chat-info-btn').classList.remove('hidden');
+
+  const msgRes = await api(`/api/groups/${groupId}/chat`);
+  if (!msgRes.ok) { showToast('Chat laden mislukt'); return; }
+  const messages = await msgRes.json();
+  if (messages.length > 0) chatLastId = messages[messages.length - 1].id;
+
+  renderChatMessages(messages, true);
+  document.getElementById('chat-modal').classList.remove('hidden');
+  document.getElementById('chat-input').focus();
+
+  startChatSSE();
+}
+
+async function openGroupInfo() {
+  if (!chatGroupId) return;
+  const [infoRes, buddiesRes] = await Promise.all([
+    api(`/api/groups/${chatGroupId}`),
+    api('/api/buddies'),
+  ]);
+  if (!infoRes.ok) return;
+  const group   = await infoRes.json();
+  const buddies = buddiesRes.ok ? await buddiesRes.json() : [];
+
+  document.getElementById('group-info-title').textContent = group.name;
+
+  const isCreator  = group.created_by === currentUser.userId;
+  const memberIds  = new Set(group.members.map(m => m.id));
+
+  const membersHtml = group.members.map(m => {
+    const bgStyle  = m.avatar ? `background-image:url('${escAttr(m.avatar)}');` : '';
+    const initials = m.display_name.split(' ').map(w => w[0]).join('').slice(0,2).toUpperCase();
+    const creatorTag = m.id === group.created_by
+      ? `<span class="group-info-creator-tag">Maker</span>` : '';
+    return `<div class="group-info-member">
+      <div class="buddy-avatar" style="${bgStyle}width:36px;height:36px;font-size:.8rem">${m.avatar ? '' : initials}</div>
+      <div class="group-info-member-name">${escHtml(m.display_name)}</div>
+      ${creatorTag}
+    </div>`;
+  }).join('');
+
+  const addable = buddies.filter(b => !memberIds.has(b.id));
+  const addSection = addable.length === 0 ? '' : `
+    <div class="section-header" style="margin-top:4px">Buddy toevoegen</div>
+    <div class="field-group">${addable.map(u => {
+      const bgStyle2 = u.avatar ? `background-image:url('${escAttr(u.avatar)}');` : '';
+      const initials2 = u.display_name.split(' ').map(w => w[0]).join('').slice(0,2).toUpperCase();
+      return `<div class="group-info-member">
+        <div class="buddy-avatar" style="${bgStyle2}width:36px;height:36px;font-size:.8rem">${u.avatar ? '' : initials2}</div>
+        <div class="group-info-member-name">${escHtml(u.display_name)}</div>
+        <button class="btn btn-outline" style="padding:6px 14px;font-size:.8rem" onclick="addGroupMember(${group.id},${u.id},this)">+ Toevoegen</button>
+      </div>`;
+    }).join('')}</div>`;
+
+  const actionBtn = isCreator
+    ? `<button class="btn btn-destructive-outline btn-full" style="margin:16px" onclick="deleteGroup(${group.id})">Groep verwijderen</button>`
+    : `<button class="btn btn-outline btn-full" style="margin:16px" onclick="leaveGroup(${group.id})">Groep verlaten</button>`;
+
+  document.getElementById('group-info-body').innerHTML = `
+    <div class="section-header" style="margin-top:8px">Leden (${group.members.length})</div>
+    <div class="field-group">${membersHtml}</div>
+    ${addSection}
+    ${actionBtn}`;
+
+  document.getElementById('group-info-modal').classList.remove('hidden');
+}
+
+async function addGroupMember(groupId, userId, btn) {
+  btn.disabled = true;
+  btn.textContent = '...';
+  const res = await api(`/api/groups/${groupId}/members`, { method: 'POST', body: { userId } });
+  if (!res.ok) {
+    btn.disabled = false;
+    btn.textContent = '+ Toevoegen';
+    showToast('Toevoegen mislukt');
+    return;
+  }
+  // Verwijder de rij en herlaad de info
+  openGroupInfo();
+}
+
+function hideGroupInfo() {
+  document.getElementById('group-info-modal').classList.add('hidden');
+}
+
+async function leaveGroup(groupId) {
+  const res = await api(`/api/groups/${groupId}/leave`, { method: 'DELETE' });
+  if (!res.ok) { showToast('Verlaten mislukt'); return; }
+  hideGroupInfo();
+  document.getElementById('chat-modal').classList.add('hidden');
+  stopChatPolling();
+  chatMode = 'direct'; chatGroupId = null;
+  loadBuddies();
+  showToast('Je hebt de groep verlaten');
+}
+
+async function deleteGroup(groupId) {
+  const res = await api(`/api/groups/${groupId}`, { method: 'DELETE' });
+  if (!res.ok) { showToast('Verwijderen mislukt'); return; }
+  hideGroupInfo();
+  document.getElementById('chat-modal').classList.add('hidden');
+  stopChatPolling();
+  chatMode = 'direct'; chatGroupId = null;
+  loadBuddies();
+  showToast('Groep verwijderd');
+}
+
+/* ── Groep aanmaken ───────────────────────────────────────── */
+let groupCreateSelected = new Set();
+
+async function openGroupCreate() {
+  groupCreateSelected = new Set();
+  document.getElementById('group-name-input').value = '';
+
+  // Laad buddies voor ledenlijst
+  const res = await api('/api/buddies');
+  const buddies = res.ok ? await res.json() : [];
+
+  const listEl = document.getElementById('group-member-list');
+  if (buddies.length === 0) {
+    listEl.innerHTML = `<div style="padding:16px;color:var(--text-2);font-size:.9rem">Je hebt nog geen buddies. Voeg eerst buddies toe.</div>`;
+  } else {
+    listEl.innerHTML = buddies.map(u => {
+      const avatarStyle   = u.avatar ? `style="background-image:url('${escAttr(u.avatar)}')"` : '';
+      const initials      = u.display_name.split(' ').map(w => w[0]).join('').slice(0,2).toUpperCase();
+      const avatarContent = u.avatar ? '' : initials;
+      const bgStyle2 = u.avatar ? `background-image:url('${escAttr(u.avatar)}');` : '';
+      return `<div class="group-member-item" id="gmi-${u.id}" onclick="toggleGroupMember(${u.id})">
+        <div class="group-member-check" id="gmc-${u.id}"></div>
+        <div class="buddy-avatar" style="${bgStyle2}width:36px;height:36px;font-size:.8rem">${avatarContent}</div>
+        <div style="flex:1;font-size:.95rem;font-weight:500">${escHtml(u.display_name)}</div>
+        ${u.level ? `<span class="buddy-level">${u.level}</span>` : ''}
+      </div>`;
+    }).join('');
+  }
+
+  document.getElementById('group-create-modal').classList.remove('hidden');
+}
+
+function hideGroupCreate() {
+  document.getElementById('group-create-modal').classList.add('hidden');
+}
+
+function toggleGroupMember(userId) {
+  const checkEl = document.getElementById(`gmc-${userId}`);
+  if (groupCreateSelected.has(userId)) {
+    groupCreateSelected.delete(userId);
+    checkEl?.classList.remove('group-member-check--on');
+  } else {
+    groupCreateSelected.add(userId);
+    checkEl?.classList.add('group-member-check--on');
+  }
+}
+
+async function submitGroupCreate() {
+  const name = document.getElementById('group-name-input').value.trim();
+  if (!name) { showToast('Vul een groepsnaam in'); return; }
+  if (groupCreateSelected.size === 0) { showToast('Kies minstens één lid'); return; }
+
+  const res = await api('/api/groups', {
+    method: 'POST',
+    body: { name, memberIds: [...groupCreateSelected] },
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => null);
+    showToast(err?.error || 'Aanmaken mislukt');
+    return;
+  }
+  const group = await res.json();
+  hideGroupCreate();
+  loadBuddies();
+  openGroupChat(group.id);
+}
+
+/* ── Speler profiel (vanuit potje detail) ─────────────────── */
+async function showPlayerProfile(userId) {
+  if (!userId || userId === currentUser.userId) return;
+  const res = await api(`/api/buddies/profile/${userId}`);
+  if (!res.ok) return;
+  const u = await res.json();
+
+  document.getElementById('player-modal-title').textContent = u.display_name;
+
+  const avatarStyle = u.avatar ? `style="background-image:url('${escAttr(u.avatar)}')"` : '';
+  const initials    = u.display_name.split(' ').map(w => w[0]).join('').slice(0,2).toUpperCase();
+
+  document.getElementById('player-modal-body').innerHTML = `
+    <div class="player-profile-hero">
+      <div class="player-profile-avatar" ${avatarStyle}>${u.avatar ? '' : initials}</div>
+      <div class="player-profile-name">${escHtml(u.display_name)}</div>
+      <div class="player-profile-meta">
+        ${u.level ? `Niveau ${u.level}` : ''}
+        ${u.games_together > 0 ? ` · ${u.games_together} potje${u.games_together!==1?'s':''} samen` : ''}
+      </div>
+    </div>`;
+
+  const actions = document.getElementById('player-modal-actions');
+  if (u.is_my_buddy) {
+    actions.innerHTML = `
+      <button class="btn btn-primary btn-full" onclick="hidePlayerModal();openChat(${u.id})">💬 Stuur een bericht</button>
+      <button class="btn btn-outline btn-full" onclick="removeBuddy(${u.id}, this)">Verwijder als buddy</button>`;
+  } else if (u.request_received) {
+    actions.innerHTML = `
+      <div style="text-align:center;color:var(--text-2);font-size:.88rem;margin-bottom:10px">📬 ${escHtml(u.display_name)} heeft jou een verzoek gestuurd</div>
+      <button class="btn btn-primary btn-full" onclick="acceptBuddyRequestFromProfile(${u.request_received})">✓ Accepteren</button>
+      <button class="btn btn-outline btn-full" onclick="declineBuddyRequestFromProfile(${u.request_received})">Weigeren</button>`;
+  } else if (u.request_sent) {
+    actions.innerHTML = `
+      <div style="text-align:center;color:var(--text-2);font-size:.88rem;margin-bottom:10px">⏳ Verzoek verstuurd</div>
+      <button class="btn btn-outline btn-full" onclick="cancelBuddyRequest(${u.id}, this)">Verzoek intrekken</button>`;
+  } else {
+    actions.innerHTML = `
+      <button class="btn btn-primary btn-full" onclick="sendBuddyRequest(${u.id}, this)">➕ Buddy verzoek sturen</button>`;
+  }
+
+  document.getElementById('player-modal').classList.remove('hidden');
+}
+
+function hidePlayerModal() {
+  document.getElementById('player-modal').classList.add('hidden');
+}
+
+async function sendBuddyRequest(userId, btn) {
+  btn.disabled = true;
+  const res = await api(`/api/buddies/${userId}`, { method: 'POST' });
+  if (!res.ok) { btn.disabled = false; showToast('Mislukt'); return; }
+  const actions = document.getElementById('player-modal-actions');
+  actions.innerHTML = `
+    <div style="text-align:center;color:var(--text-2);font-size:.88rem;margin-bottom:10px">⏳ Verzoek verstuurd</div>
+    <button class="btn btn-outline btn-full" onclick="cancelBuddyRequest(${userId}, this)">Verzoek intrekken</button>`;
+  showToast('Verzoek verstuurd!');
+}
+
+async function cancelBuddyRequest(userId, btn) {
+  if (btn) btn.disabled = true;
+  await api(`/api/buddies/requests/${userId}/cancel`, { method: 'DELETE' });
+  const actions = document.getElementById('player-modal-actions');
+  if (actions) {
+    actions.innerHTML = `
+      <button class="btn btn-primary btn-full" onclick="sendBuddyRequest(${userId}, this)">➕ Buddy verzoek sturen</button>`;
+  }
+}
+
+async function removeBuddy(userId, btn) {
+  btn.disabled = true;
+  const res = await api(`/api/buddies/${userId}`, { method: 'DELETE' });
+  if (!res.ok) { btn.disabled = false; return; }
+  const actions = document.getElementById('player-modal-actions');
+  actions.innerHTML = `
+    <button class="btn btn-primary btn-full" onclick="sendBuddyRequest(${userId}, this)">➕ Buddy verzoek sturen</button>`;
+}
+
+async function loadBuddyRequests() {
+  const res = await api('/api/buddies/requests');
+  if (!res.ok) return;
+  const requests = await res.json();
+  const section  = document.getElementById('buddy-requests-section');
+  if (!section) return;
+  if (!requests.length) {
+    section.classList.add('hidden');
+    section.innerHTML = '';
+    return;
+  }
+  section.classList.remove('hidden');
+  section.innerHTML = `
+    <div class="section-header">Verzoeken (${requests.length})</div>
+    ${requests.map(r => {
+      const initials    = r.display_name.split(' ').map(w => w[0]).join('').slice(0,2).toUpperCase();
+      const avatarStyle = r.avatar ? `style="background-image:url('${escAttr(r.avatar)}')"` : '';
+      return `<div class="buddy-request-card">
+        <div class="buddy-avatar-wrap">
+          <div class="buddy-avatar" ${avatarStyle}>${r.avatar ? '' : initials}</div>
+        </div>
+        <div class="buddy-info">
+          <div class="buddy-name">${escHtml(r.display_name)}</div>
+          <div class="buddy-last-msg">@${escHtml(r.username)}${r.level ? ` · niveau ${r.level}` : ''}</div>
+        </div>
+        <div class="request-actions">
+          <button class="btn-request-accept" onclick="acceptBuddyRequest(${r.id})">✓</button>
+          <button class="btn-request-decline" onclick="declineBuddyRequest(${r.id})">✕</button>
+        </div>
+      </div>`;
+    }).join('')}`;
+}
+
+async function acceptBuddyRequest(requestId) {
+  const res = await api(`/api/buddies/requests/${requestId}/accept`, { method: 'POST' });
+  if (!res.ok) { showToast('Mislukt'); return; }
+  showToast('Buddy toegevoegd! 🤝');
+  await Promise.all([loadBuddyRequests(), loadBuddies(), refreshBuddyBadge()]);
+}
+
+async function declineBuddyRequest(requestId) {
+  await api(`/api/buddies/requests/${requestId}/decline`, { method: 'POST' });
+  await Promise.all([loadBuddyRequests(), refreshBuddyBadge()]);
+}
+
+async function acceptBuddyRequestFromProfile(requestId) {
+  const res = await api(`/api/buddies/requests/${requestId}/accept`, { method: 'POST' });
+  if (!res.ok) { showToast('Mislukt'); return; }
+  showToast('Buddy toegevoegd! 🤝');
+  hidePlayerModal();
+  await Promise.all([loadBuddies(), loadBuddyRequests(), refreshBuddyBadge()]);
+}
+
+async function declineBuddyRequestFromProfile(requestId) {
+  await api(`/api/buddies/requests/${requestId}/decline`, { method: 'POST' });
+  hidePlayerModal();
+  await Promise.all([loadBuddyRequests(), refreshBuddyBadge()]);
+}
+
+/* ── Notificaties (H) ────────────────────────────────────── */
+async function openNotifications() {
+  document.getElementById('notif-panel').classList.remove('hidden');
+  await loadNotifications();
+}
+function closeNotifications() {
+  document.getElementById('notif-panel')?.classList.add('hidden');
+}
+async function loadNotifications() {
+  const listEl = document.getElementById('notif-list');
+  listEl.innerHTML = '<div class="loading-spinner" style="margin:40px auto"></div>';
+  const res = await api('/api/notifications');
+  if (!res.ok) { listEl.innerHTML = '<p style="text-align:center;padding:40px 0;color:var(--text-secondary)">Kon notificaties niet laden</p>'; return; }
+  const notifs = await res.json();
+  if (notifs.length === 0) {
+    listEl.innerHTML = '<div class="empty-state" style="padding:40px 0"><p class="empty-title">Geen activiteit</p><p class="empty-sub">Nieuwe activiteit verschijnt hier</p></div>';
+    return;
+  }
+  listEl.innerHTML = notifs.map(n => `
+    <div class="notif-item${n.read_at ? '' : ' notif-item--unread'}" onclick="handleNotifClick(${n.id}, ${n.url ? `'${escAttr(n.url)}'` : 'null'})">
+      <div class="notif-icon">${notifIcon(n.type)}</div>
+      <div class="notif-content">
+        <div class="notif-title">${escHtml(n.title)}</div>
+        ${n.body ? `<div class="notif-body">${escHtml(n.body)}</div>` : ''}
+        <div class="notif-time">${timeAgo(n.created_at)}</div>
+      </div>
+      ${n.read_at ? '' : '<div class="notif-unread-dot"></div>'}
+    </div>`).join('');
+}
+async function markAllNotifsRead() {
+  await api('/api/notifications/read-all', { method: 'POST' });
+  updateNotifBadge(0);
+  await loadNotifications();
+}
+async function handleNotifClick(id, url) {
+  await api(`/api/notifications/${id}/read`, { method: 'POST' });
+  closeNotifications();
+  if (url) {
+    if (url.startsWith('#')) {
+      const tab = url.slice(1);
+      if (tab === 'buddies') showTab('buddies');
+    }
+  }
+  await refreshBuddyBadge();
+}
+function notifIcon(type) {
+  const s = 'width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="rgba(60,60,67,0.55)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"';
+  const icons = {
+    buddy_request:  `<svg ${s}><circle cx="9" cy="7" r="4"/><path d="M3 21v-2a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v2"/><line x1="19" y1="8" x2="19" y2="14"/><line x1="16" y1="11" x2="22" y2="11"/></svg>`,
+    buddy_accepted: `<svg ${s}><circle cx="9" cy="7" r="4"/><path d="M3 21v-2a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v2"/><polyline points="16 11 18 13 22 9"/></svg>`,
+    booking_joined: `<svg ${s}><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/><path d="M8 14h.01M12 14h.01M16 14h.01"/></svg>`,
+    booking_left:   `<svg ${s}><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/><line x1="9" y1="14" x2="15" y2="14"/></svg>`,
+    chat_message:   `<svg ${s}><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>`,
+  };
+  return icons[type] || `<svg ${s}><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>`;
+}
+function updateNotifBadge(count) {
+  const badge = document.getElementById('notif-bell-badge');
+  if (!badge) return;
+  if (count > 0) {
+    badge.textContent = count > 99 ? '99+' : count;
+    badge.classList.remove('hidden');
+  } else {
+    badge.classList.add('hidden');
+  }
+}
+function timeAgo(isoString) {
+  const diff = Date.now() - new Date(isoString).getTime();
+  const mins  = Math.floor(diff / 60000);
+  if (mins < 1)  return 'zojuist';
+  if (mins < 60) return `${mins}m geleden`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24)  return `${hrs}u geleden`;
+  const days = Math.floor(hrs / 24);
+  if (days < 7)  return `${days}d geleden`;
+  return new Date(isoString).toLocaleDateString('nl-NL', { day: 'numeric', month: 'short' });
+}
+
+/* ── Buddies zoeken (I) ──────────────────────────────────── */
+async function searchBuddyPlayers(query) {
+  const resultsEl     = document.getElementById('buddy-search-results');
+  const listEl        = document.getElementById('buddies-list');
+  const requestsEl    = document.getElementById('buddy-requests-section');
+
+  if (!query.trim()) {
+    resultsEl.classList.add('hidden');
+    resultsEl.innerHTML = '';
+    listEl.classList.remove('hidden');
+    if (requestsEl) requestsEl.classList.remove('hidden');
+    return;
+  }
+
+  listEl.classList.add('hidden');
+  if (requestsEl) requestsEl.classList.add('hidden');
+
+  const res = await api(`/api/auth/users?q=${encodeURIComponent(query.trim())}`);
+  if (!res.ok) return;
+  const matches = await res.json();
+
+  if (matches.length === 0) {
+    resultsEl.innerHTML = `<div class="empty-state" style="padding:30px 0">
+      <p class="empty-title">Geen spelers gevonden</p>
+    </div>`;
+  } else {
+    resultsEl.innerHTML = matches.map(u => {
+      const initials    = u.display_name.split(' ').map(w => w[0]).join('').slice(0,2).toUpperCase();
+      const avatarStyle = u.avatar ? `style="background-image:url('${escAttr(u.avatar)}')"` : '';
+      const sub = u.games_together > 0
+        ? `${u.games_together} potje${u.games_together !== 1 ? 's' : ''} samen`
+        : 'Nog niet samen gespeeld';
+      return `<div class="buddy-card" onclick="showPlayerProfile(${u.id})">
+        <div class="buddy-avatar-wrap">
+          <div class="buddy-avatar" ${avatarStyle}>${u.avatar ? '' : initials}</div>
+        </div>
+        <div class="buddy-info">
+          <div class="buddy-name">${escHtml(u.display_name)}</div>
+          <div class="buddy-last-msg">${escHtml(sub)}</div>
+        </div>
+        ${u.level ? `<span class="buddy-level">${u.level}</span>` : ''}
+      </div>`;
+    }).join('');
+  }
+  resultsEl.classList.remove('hidden');
+}
+
+/* ── Chat ─────────────────────────────────────────────────── */
+let chatUserId      = null;
+let chatLastId      = 0;
+let chatPollTimer   = null;  // fallback polling als SSE niet werkt
+let chatEventSource = null;  // SSE verbinding
+let chatBuddyName   = '';
+let chatMode        = 'direct'; // 'direct' | 'group'
+let chatGroupId     = null;
+
+async function openChat(userId) {
+  chatMode    = 'direct';
+  chatGroupId = null;
+  chatUserId  = userId;
+  chatLastId  = 0;
+  document.getElementById('chat-info-btn').classList.add('hidden');
+
+  // Haal profiel op voor naam/avatar
+  const profRes = await api(`/api/buddies/profile/${userId}`);
+  if (!profRes.ok) { showToast('Kon profiel niet laden'); return; }
+  const u = await profRes.json();
+  chatBuddyName = u.display_name;
+
+  const avatarStyle = u.avatar ? `style="background-image:url('${escAttr(u.avatar)}')"` : '';
+  const initials    = u.display_name.split(' ').map(w => w[0]).join('').slice(0,2).toUpperCase();
+
+  document.getElementById('chat-nav-info').innerHTML = `
+    <div class="chat-nav-name">${escHtml(u.display_name)}</div>
+    ${u.games_together > 0 ? `<div class="chat-nav-games">${u.games_together} potje${u.games_together!==1?'s':''} samen</div>` : ''}`;
+
+  // Laad berichten
+  const msgRes = await api(`/api/buddies/chat/${userId}`);
+  if (!msgRes.ok) {
+    const errBody = await msgRes.json().catch(() => null);
+    showToast('Chat fout (' + msgRes.status + '): ' + (errBody?.error || 'onbekend'));
+    return;
+  }
+  const messages = await msgRes.json();
+  if (messages.length > 0) chatLastId = messages[messages.length - 1].id;
+
+  renderChatMessages(messages, true);
+  document.getElementById('chat-modal').classList.remove('hidden');
+  document.getElementById('chat-input').focus();
+
+  startChatSSE();
+}
+
+function hideChat() {
+  stopChatPolling();
+  document.getElementById('chat-modal').classList.add('hidden');
+  document.getElementById('chat-info-btn').classList.add('hidden');
+  chatUserId  = null;
+  chatGroupId = null;
+  chatMode    = 'direct';
+  if (currentTab === 'buddies') loadBuddies();
+}
+
+function stopChatPolling() {
+  if (chatPollTimer) { clearInterval(chatPollTimer); chatPollTimer = null; }
+  if (chatEventSource) { chatEventSource.close(); chatEventSource = null; }
+}
+
+function startChatSSE() {
+  stopChatPolling();
+  const url = chatMode === 'group'
+    ? `/api/groups/${chatGroupId}/chat/events`
+    : `/api/buddies/chat/${chatUserId}/events`;
+
+  if (!window.EventSource) {
+    // Fallback polling voor browsers zonder SSE-ondersteuning
+    chatPollTimer = setInterval(pollChat, 3000);
+    return;
+  }
+
+  chatEventSource = new EventSource(url);
+  chatEventSource.onmessage = (e) => {
+    try {
+      const msg = JSON.parse(e.data);
+      // Negeer berichten die we zelf hebben verstuurd (al in de lijst)
+      if (msg.id <= chatLastId) return;
+      chatLastId = msg.id;
+      renderChatMessages([msg], false);
+    } catch (_) {}
+  };
+  chatEventSource.onerror = () => {
+    // SSE verbinding verbroken, val terug op polling
+    if (chatEventSource) { chatEventSource.close(); chatEventSource = null; }
+    if (!chatPollTimer) chatPollTimer = setInterval(pollChat, 5000);
+  };
+}
+
+async function pollChat() {
+  let res;
+  if (chatMode === 'group') {
+    if (!chatGroupId) return;
+    res = await api(`/api/groups/${chatGroupId}/chat/new?after=${chatLastId}`);
+  } else {
+    if (!chatUserId) return;
+    res = await api(`/api/buddies/chat/${chatUserId}/new?after=${chatLastId}`);
+  }
+  if (!res.ok) return;
+  const msgs = await res.json();
+  if (msgs.length === 0) return;
+  chatLastId = msgs[msgs.length - 1].id;
+  renderChatMessages(msgs, false);
+}
+
+function renderChatMessages(messages, replace) {
+  const container = document.getElementById('chat-messages');
+  if (replace) container.innerHTML = '';
+
+  let lastDate = replace ? null : container.dataset.lastDate || null;
+
+  const fragment = document.createDocumentFragment();
+
+  for (const msg of messages) {
+    const d    = new Date(msg.created_at.replace(' ','T') + (msg.created_at.includes('Z') ? '' : 'Z'));
+    const dateKey = d.toLocaleDateString('nl-NL', { day:'numeric', month:'long' });
+
+    if (dateKey !== lastDate) {
+      const lbl = document.createElement('div');
+      lbl.className = 'chat-date-label';
+      lbl.textContent = dateKey;
+      fragment.appendChild(lbl);
+      lastDate = dateKey;
+    }
+
+    const isMine = msg.sender_id === currentUser.userId;
+
+    if (chatMode === 'group' && !isMine && msg.sender_name) {
+      const nameEl = document.createElement('div');
+      nameEl.className = 'chat-sender-name';
+      nameEl.textContent = msg.sender_name;
+      fragment.appendChild(nameEl);
+    }
+
+    const bubble = document.createElement('div');
+    bubble.className = `chat-bubble chat-bubble--${isMine ? 'mine' : 'theirs'}`;
+    bubble.innerHTML = `${escHtml(msg.content)}<div class="chat-time">${d.toLocaleTimeString('nl-NL',{hour:'2-digit',minute:'2-digit'})}</div>`;
+    fragment.appendChild(bubble);
+  }
+
+  container.appendChild(fragment);
+  container.dataset.lastDate = lastDate || '';
+  container.scrollTop = container.scrollHeight;
+}
+
+async function sendChatMessage() {
+  const input   = document.getElementById('chat-input');
+  const content = input.value.trim();
+  if (!content) return;
+  input.value = '';
+
+  let res;
+  if (chatMode === 'group') {
+    if (!chatGroupId) return;
+    res = await api(`/api/groups/${chatGroupId}/chat`, { method: 'POST', body: { content } });
+  } else {
+    if (!chatUserId) return;
+    res = await api(`/api/buddies/chat/${chatUserId}`, { method: 'POST', body: { content } });
+  }
+  if (!res.ok) { input.value = content; return; }
+  const msg = await res.json();
+  if (msg.id <= chatLastId) return; // SSE already rendered it
+  chatLastId = msg.id;
+  renderChatMessages([msg], false);
+}
+
+/* ── Kalender — Potjes overzicht ──────────────────────────── */
+let calYear   = new Date().getFullYear();
+let calMonth  = new Date().getMonth() + 1; // 1-12
+let calFilter = 'all'; // 'all' | 'mine'
+let calData   = {};    // { "YYYY-MM-DD": [booking, ...] }
 
 async function loadCalendar() {
-  const res = await api(`/api/availability?year=${calYear}&month=${calMonth}`);
+  const mineParam = calFilter === 'mine' ? '&mine=1' : '';
+  const res = await api(`/api/bookings/calendar?year=${calYear}&month=${calMonth}${mineParam}`);
   if (!res.ok) return;
-  const { dates } = await res.json();
-  calData = dates;
+  const bookings = await res.json();
+
+  // Groepeer per datum
+  calData = {};
+  for (const b of bookings) {
+    if (!calData[b.date]) calData[b.date] = [];
+    calData[b.date].push(b);
+  }
+
   renderCalendar();
 }
 
@@ -1302,81 +2658,162 @@ function renderCalendar() {
     .toLocaleDateString('nl-NL', { month: 'long', year: 'numeric' });
   label.textContent = monthName;
 
-  // Eerste dag van de maand (0=zo, 1=ma … 6=za → omrekenen naar Ma=0)
   const firstWeekday = (new Date(calYear, calMonth - 1, 1).getDay() + 6) % 7;
   const daysInMonth  = new Date(calYear, calMonth, 0).getDate();
 
-  const today = new Date();
+  const today    = new Date();
   const todayStr = `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}-${String(today.getDate()).padStart(2,'0')}`;
 
   let html = '';
 
-  // Lege cellen vóór dag 1
   for (let i = 0; i < firstWeekday; i++) {
     html += '<div class="cal-day cal-day--empty"></div>';
   }
 
   for (let d = 1; d <= daysInMonth; d++) {
-    const dateStr = `${calYear}-${String(calMonth).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
-    const info    = calData[dateStr];
-    const isToday = dateStr === todayStr;
-    const isPast  = dateStr < todayStr;
-    const isMe    = info?.me;
-    const count   = info?.count || 0;
+    const dateStr  = `${calYear}-${String(calMonth).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+    const potjes   = calData[dateStr] || [];
+    const isToday  = dateStr === todayStr;
+    const isPast   = dateStr < todayStr;
+    const hasPotje  = potjes.length > 0;
+    const isOrgDay  = potjes.some(b => b.created_by === currentUser.userId);
+    const isJoinDay = !isOrgDay && potjes.some(b => b.user_joined);
 
     let cls = 'cal-day';
-    if (isPast)  cls += ' cal-day--past';
-    if (isToday) cls += ' cal-day--today';
-    if (isMe)    cls += ' cal-day--me';
+    if (isPast)             cls += ' cal-day--past';
+    if (isToday)            cls += ' cal-day--today';
+    if (isOrgDay)           cls += ' cal-day--organizer';
+    else if (isJoinDay)     cls += ' cal-day--joined';
+    else if (hasPotje)      cls += ' cal-day--has-potje';
 
-    const countHtml = count > 0
-      ? `<span class="cal-day-count">${count}</span>`
+    // Bolletjes: oranje=beheerder, blauw=deelnemer, grijs=open potje
+    const dots = potjes.slice(0, 3).map(b => {
+      const isOrg    = b.created_by === currentUser.userId;
+      const isJoined = !!b.user_joined && !isOrg;
+      const dotCls   = isOrg ? 'cal-day-dot--organizer' : isJoined ? 'cal-day-dot--joined' : '';
+      const count    = b.player_count || 0;
+      // Badgekleur op basis van bezetting relatief aan max
+      const maxP     = b.max_players || 4;
+      const badgeMod = count >= maxP           ? 'cal-day-dot-badge--red'
+                     : count >= maxP - 1       ? 'cal-day-dot-badge--orange'
+                     :                           'cal-day-dot-badge--green';
+      const badge = count > 0 ? `<span class="cal-day-dot-badge ${badgeMod}">${count}</span>` : '';
+      return `<span class="cal-day-dot-wrap"><span class="cal-day-dot ${dotCls}"></span>${badge}</span>`;
+    }).join('');
+    const dotsHtml = dots ? `<span class="cal-day-dots">${dots}</span>` : '';
+
+    const clickHandler = hasPotje || !isPast
+      ? `onclick="openCalDay('${dateStr}')"`
       : '';
 
-    html += `<div class="${cls}" onclick="toggleAvailability('${dateStr}', ${isPast})">
+    html += `<div class="${cls}" ${clickHandler}>
       <span class="cal-day-num">${d}</span>
-      ${countHtml}
+      ${dotsHtml}
     </div>`;
   }
 
   grid.innerHTML = html;
 }
 
-async function toggleAvailability(dateStr, isPast) {
-  if (isPast) return;
-  const info   = calData[dateStr];
-  const isMe   = info?.me;
-  const method = isMe ? 'DELETE' : 'POST';
+let currentCalDayDate = null;
 
-  const res = await api(`/api/availability/${dateStr}`, { method });
-  if (!res.ok) return;
-  const { available } = await res.json();
+function openCalDay(dateStr) {
+  currentCalDayDate = dateStr;
+  const potjes = calData[dateStr] || [];
+  const [y, m, d] = dateStr.split('-');
+  const label = new Date(+y, +m - 1, +d)
+    .toLocaleDateString('nl-NL', { weekday: 'long', day: 'numeric', month: 'long' });
 
-  // Update lokale state
-  if (available) {
-    if (!calData[dateStr]) {
-      calData[dateStr] = { count: 0, me: false, users: [] };
-    }
-    if (!calData[dateStr].me) {
-      calData[dateStr].me = true;
-      calData[dateStr].count++;
-      calData[dateStr].users.push({
-        id: currentUser.userId,
-        display_name: currentUser.display_name,
-        avatar: currentUser.avatar,
-        level: currentUser.level,
-      });
-    }
+  document.getElementById('cal-day-title').textContent = label;
+
+  const today    = new Date();
+  const todayStr = `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}-${String(today.getDate()).padStart(2,'0')}`;
+  const isPast   = dateStr < todayStr;
+
+  if (potjes.length === 0) {
+    document.getElementById('cal-day-body').innerHTML = `
+      <div class="empty-state" style="padding:32px 0">
+        <div class="empty-icon"><svg width="52" height="52" viewBox="0 0 52 52" fill="none" stroke="#C6C6C8" stroke-width="1.5" style="display:block;margin:0 auto"><ellipse cx="26" cy="20" rx="15" ry="17"/><line x1="26" y1="3" x2="26" y2="37"/><line x1="11" y1="20" x2="41" y2="20"/><rect x="22" y="37" width="8" height="12" rx="4"/></svg></div>
+        <p class="empty-title">Geen potjes</p>
+        ${!isPast ? `<p class="empty-sub">Er zijn nog geen potjes op deze dag.</p>
+        <button class="btn btn-primary" onclick="hideCalDayModal(); showNewBookingModalForDate('${dateStr}')">Potje aanmaken</button>` : ''}
+      </div>`;
   } else {
-    if (calData[dateStr]) {
-      calData[dateStr].me = false;
-      calData[dateStr].count = Math.max(0, calData[dateStr].count - 1);
-      calData[dateStr].users = calData[dateStr].users.filter(u => u.id !== currentUser.userId);
-      if (calData[dateStr].count === 0) delete calData[dateStr];
-    }
+    const items = potjes.map(b => {
+      const joined = !!b.user_joined;
+      const isOrg  = b.created_by === currentUser.userId;
+
+      if (isPast) {
+        const badgeClass = joined ? 'cal-potje-badge--joined' : 'cal-potje-badge--past';
+        const badgeText  = joined ? 'Jij hebt meegedaan' : `${b.player_count} speler${b.player_count !== 1 ? 's' : ''}`;
+        const canOpen    = joined || isOrg;
+        return `<div class="field-row cal-potje-row${canOpen ? ' cal-potje-row--past' : ' cal-potje-row--past'}"${canOpen ? ` onclick="hideCalDayModal(); showDetailModal(${b.id})"` : ''} style="${canOpen ? 'cursor:pointer' : ''}">
+          <div style="flex:1;min-width:0">
+            <div class="cal-potje-meta">${b.start_time.slice(0,5)} – ${b.end_time.slice(0,5)}</div>
+            <span class="cal-potje-badge ${badgeClass}">${badgeText}</span>
+          </div>
+          ${canOpen ? `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="color:var(--text-3);flex-shrink:0"><path d="M9 18l6-6-6-6"/></svg>` : ''}
+        </div>`;
+      }
+
+      const spots    = (b.max_players || 4) - b.player_count;
+      const isFull   = spots <= 0;
+      let badgeClass = 'cal-potje-badge--open';
+      let badgeText  = `${spots} plek${spots !== 1 ? 'ken' : ''} vrij`;
+      if (isOrg)       { badgeClass = 'cal-potje-badge--joined'; badgeText = 'Jij organiseert'; }
+      else if (joined) { badgeClass = 'cal-potje-badge--joined'; badgeText = 'Jij doet mee'; }
+      else if (isFull) { badgeClass = 'cal-potje-badge--full';   badgeText = 'Vol'; }
+
+      // Mini avatars
+      const parts = (b.participants_info || '').split('||').filter(Boolean);
+      const miniAvatars = parts.slice(0, 4).map(info => {
+        const sepIdx = info.indexOf('::');
+        const uid = info.slice(0, sepIdx);
+        const avatarData = info.slice(sepIdx + 2);
+        if (uid === '0') {
+          return `<div class="cal-mini-avatar" title="Gast">G</div>`;
+        }
+        if (avatarData && avatarData.startsWith('data:')) {
+          return `<div class="cal-mini-avatar"><img src="${avatarData}" alt="" /></div>`;
+        }
+        return `<div class="cal-mini-avatar">?</div>`;
+      }).join('');
+      const avatarsHtml = miniAvatars ? `<div class="cal-mini-avatars">${miniAvatars}</div>` : '';
+
+      return `<div class="field-row cal-potje-row" onclick="hideCalDayModal(); showDetailModal(${b.id})">
+        <div style="flex:1;min-width:0">
+          <div class="cal-potje-meta">${b.start_time.slice(0,5)} – ${b.end_time.slice(0,5)}</div>
+          <span class="cal-potje-badge ${badgeClass}">${badgeText}</span>
+        </div>
+        ${avatarsHtml}
+      </div>`;
+    }).join('');
+
+    document.getElementById('cal-day-body').innerHTML =
+      `<div class="field-group">${items}</div>`;
   }
 
-  renderCalendar();
+  document.getElementById('cal-day-modal').classList.remove('hidden');
+}
+
+function hideCalDayModal() {
+  document.getElementById('cal-day-modal').classList.add('hidden');
+}
+
+function showNewBookingModalForDate(dateStr) {
+  showNewBookingModal();
+  // Vul datum alvast in
+  setTimeout(() => {
+    const el = document.getElementById('b-date');
+    if (el) el.value = dateStr;
+  }, 50);
+}
+
+function setCalFilter(filter, btn) {
+  calFilter = filter;
+  document.querySelectorAll('.cal-filter-bar .seg-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  loadCalendar();
 }
 
 function calPrevMonth() {
