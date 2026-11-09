@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <title>PadelPotje</title>
-  <link rel="stylesheet" href="/css/style.css?v=25" />
+  <link rel="stylesheet" href="/css/style.css?v=26" />
 </head>
 <body>
 
@@ -13,7 +13,14 @@
 ══════════════════════════════════════════════ -->
 <div id="auth-screen" class="screen">
   <div class="auth-card">
-    <div class="auth-logo">🎾</div>
+    <div class="auth-logo">
+      <svg width="52" height="52" viewBox="0 0 52 52" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <ellipse cx="26" cy="20" rx="15" ry="17" fill="#34C759"/>
+        <line x1="26" y1="3" x2="26" y2="37" stroke="rgba(255,255,255,0.4)" stroke-width="1.5"/>
+        <line x1="11" y1="20" x2="41" y2="20" stroke="rgba(255,255,255,0.4)" stroke-width="1.5"/>
+        <rect x="22" y="37" width="8" height="12" rx="4" fill="#248A3D"/>
+      </svg>
+    </div>
     <h1 class="auth-title">PadelPotje</h1>
     <p class="auth-subtitle">Plan samen je padel potjes</p>
 
@@ -90,13 +97,25 @@
 ══════════════════════════════════════════════ -->
 <div id="welcome-screen" class="screen hidden">
   <div class="auth-card">
-    <div class="auth-logo">🎾</div>
-    <h1 class="auth-title">Welkom bij PadelPotje!</h1>
-    <p class="auth-subtitle">Voeg een profielfoto toe zodat je mede-spelers je herkennen</p>
+    <div class="auth-logo">
+      <svg width="52" height="52" viewBox="0 0 52 52" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <ellipse cx="26" cy="20" rx="15" ry="17" fill="#34C759"/>
+        <line x1="26" y1="3" x2="26" y2="37" stroke="rgba(255,255,255,0.4)" stroke-width="1.5"/>
+        <line x1="11" y1="20" x2="41" y2="20" stroke="rgba(255,255,255,0.4)" stroke-width="1.5"/>
+        <rect x="22" y="37" width="8" height="12" rx="4" fill="#248A3D"/>
+      </svg>
+    </div>
+    <h1 class="auth-title">Welkom bij PadelPotje</h1>
+    <p class="auth-subtitle">Voeg een foto toe zodat je mede-spelers je herkennen</p>
 
     <div class="welcome-avatar-wrap" onclick="document.getElementById('welcome-avatar-input').click()">
       <div class="welcome-avatar-preview" id="welcome-avatar-preview"></div>
-      <div class="welcome-avatar-overlay">📷</div>
+      <div class="welcome-avatar-overlay">
+        <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.9)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
+          <circle cx="12" cy="13" r="4"/>
+        </svg>
+      </div>
     </div>
     <input type="file" id="welcome-avatar-input" accept="image/*" style="display:none" onchange="handleWelcomeAvatarChange(event)">
 
@@ -112,7 +131,14 @@
 ══════════════════════════════════════════════ -->
 <div id="community-screen" class="screen hidden">
   <div class="auth-card">
-    <div class="auth-logo">🏓</div>
+    <div class="auth-logo">
+      <svg width="52" height="52" viewBox="0 0 52 52" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <ellipse cx="26" cy="20" rx="15" ry="17" fill="#34C759"/>
+        <line x1="26" y1="3" x2="26" y2="37" stroke="rgba(255,255,255,0.4)" stroke-width="1.5"/>
+        <line x1="11" y1="20" x2="41" y2="20" stroke="rgba(255,255,255,0.4)" stroke-width="1.5"/>
+        <rect x="22" y="37" width="8" height="12" rx="4" fill="#248A3D"/>
+      </svg>
+    </div>
     <h1 class="auth-title">Kies je speelgroep</h1>
     <p class="auth-subtitle">Sluit je aan bij minimaal één speelgroep om door te gaan</p>
 
@@ -168,9 +194,16 @@
 
     <div class="scroll-area">
       <div id="bookings-empty" class="empty-state hidden">
-        <div class="empty-icon">🎾</div>
+        <div class="empty-icon">
+          <svg width="56" height="56" viewBox="0 0 52 52" fill="none" stroke="#C6C6C8" stroke-width="1.5" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" style="display:block;margin:0 auto">
+            <ellipse cx="26" cy="20" rx="15" ry="17"/>
+            <line x1="26" y1="3" x2="26" y2="37"/>
+            <line x1="11" y1="20" x2="41" y2="20"/>
+            <rect x="22" y="37" width="8" height="12" rx="4"/>
+          </svg>
+        </div>
         <p class="empty-title">Geen potjes gevonden</p>
-        <p class="empty-sub">Maak de eerste boeking aan!</p>
+        <p class="empty-sub">Maak een boeking aan</p>
         <button class="btn btn-primary" onclick="showNewBookingModal()">Nieuwe boeking</button>
       </div>
       <div id="bookings-list" class="cards-list"></div>

@@ -48,7 +48,7 @@ body {
   align-items: center;
   justify-content: center;
   padding: 24px 16px;
-  background: linear-gradient(160deg, #1a4731 0%, #2e7d52 50%, #4cae72 100%);
+  background: #162e1e;
 }
 
 .auth-card {
@@ -60,7 +60,7 @@ body {
   box-shadow: 0 20px 60px rgba(0,0,0,.25);
 }
 
-.auth-logo     { font-size: 3.2rem; text-align: center; margin-bottom: 8px; }
+.auth-logo     { display: flex; align-items: center; justify-content: center; margin-bottom: 8px; }
 .auth-title    { font-size: 1.75rem; font-weight: 700; letter-spacing: -.02em; text-align: center; }
 .auth-subtitle { color: var(--text-2); font-size: .9rem; text-align: center; margin: 4px 0 24px; }
 
@@ -204,8 +204,6 @@ body {
   font-size: .78rem;
   font-weight: 600;
   color: var(--text-2);
-  text-transform: uppercase;
-  letter-spacing: .05em;
   padding: 0 4px 6px;
   margin: 8px 0 4px;
 }
@@ -477,7 +475,9 @@ body {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 8px;
+  padding-bottom: 10px;
+  margin-bottom: 10px;
+  border-bottom: 1px solid rgba(52, 199, 89, 0.12);
 }
 .card-title {
   font-size: 1rem;
@@ -714,7 +714,7 @@ body {
   width: 56px;
   height: 56px;
   border-radius: 50%;
-  background: linear-gradient(135deg, var(--green) 0%, var(--green-dark) 100%);
+  background: var(--green-dark);
   color: #fff;
   display: flex;
   align-items: center;
@@ -767,7 +767,7 @@ body {
   width: 80px;
   height: 80px;
   border-radius: 50%;
-  background: linear-gradient(135deg, var(--green) 0%, var(--green-dark) 100%);
+  background: var(--green-dark);
   color: #fff;
   display: flex;
   align-items: center;
@@ -809,7 +809,7 @@ body {
   width: 110px;
   height: 110px;
   border-radius: 50%;
-  background: linear-gradient(135deg, var(--green) 0%, var(--green-dark) 100%);
+  background: var(--green-dark);
   color: #fff;
   display: flex;
   align-items: center;
@@ -1143,8 +1143,6 @@ body {
   font-weight: 600;
   color: var(--text-2);
   padding: 4px 0;
-  text-transform: uppercase;
-  letter-spacing: .04em;
 }
 
 .cal-grid {
@@ -1723,7 +1721,7 @@ body {
   align-items: center;
   justify-content: center;
   padding: 24px 16px;
-  background: linear-gradient(160deg, #1a4731 0%, #2e7d52 50%, #4cae72 100%);
+  background: #162e1e;
 }
 
 .community-skip-hint {
@@ -1868,7 +1866,7 @@ body {
   body { background: var(--bg); }
 
   #auth-screen, #welcome-screen, #community-screen {
-    background: linear-gradient(160deg, #0d2b1e 0%, #1a4731 50%, #2e7d52 100%);
+    background: #0d2b1e;
   }
 
   .auth-card { background: #2C2C2E; }
