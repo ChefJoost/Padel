@@ -1098,9 +1098,10 @@ async function showDetailModal(id) {
         : '';
       return `<div class="field-row"><span class="p-player"><span class="guest-icon">👤</span> ${escHtml(p.display_name)}<span class="guest-badge">Gast</span></span>${removeBtn}</div>`;
     }
+    const initials = escHtml((p.display_name || '?').charAt(0).toUpperCase());
     const icon = p.avatar
       ? `<span class="p-avatar" style="background-image:url('${escAttr(p.avatar)}')"></span>`
-      : `🎾`;
+      : `<span class="p-avatar" style="background:var(--green-dark);display:inline-flex;align-items:center;justify-content:center;font-size:.6rem;font-weight:700;color:#fff;flex-shrink:0">${initials}</span>`;
     const isSelf = p.user_id === currentUser.userId;
     const clickAttr = isSelf ? '' : `onclick="showPlayerProfile(${p.user_id})" style="cursor:pointer"`;
     return `<div class="field-row" ${clickAttr}><span class="p-player">${icon} ${escHtml(p.display_name)}</span>${isSelf ? '' : '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14" style="color:var(--text-3);flex-shrink:0;margin-left:auto"><path d="M9 18l6-6-6-6"/></svg>'}</div>`;
@@ -1796,7 +1797,13 @@ async function showAdminDetailModal(id) {
   `;
 
   const playerRows = b.participants.map(p => {
-    const name = p.is_guest ? `👤 ${escHtml(p.display_name)} <span class="guest-badge">Gast</span>` : `🎾 ${escHtml(p.display_name)}`;
+    const pInitials = escHtml((p.display_name || '?').charAt(0).toUpperCase());
+    const pAvatar = p.avatar
+      ? `<span class="p-avatar" style="background-image:url('${escAttr(p.avatar)}')"></span>`
+      : `<span class="p-avatar" style="background:var(--green-dark);display:inline-flex;align-items:center;justify-content:center;font-size:.6rem;font-weight:700;color:#fff;flex-shrink:0">${pInitials}</span>`;
+    const name = p.is_guest
+      ? `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="rgba(60,60,67,0.5)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg> ${escHtml(p.display_name)} <span class="guest-badge">Gast</span>`
+      : `${pAvatar} ${escHtml(p.display_name)}`;
     return `<div class="field-row">
       <span class="p-player">${name}</span>
       <button class="admin-btn-sm admin-btn-delete" onclick="adminRemoveParticipant(${b.id}, ${p.id}, ${p.is_guest ? 1 : 0})">Verwijder</button>
@@ -2375,14 +2382,15 @@ async function handleNotifClick(id, url) {
   await refreshBuddyBadge();
 }
 function notifIcon(type) {
+  const s = 'width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="rgba(60,60,67,0.55)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"';
   const icons = {
-    buddy_request:  '👋',
-    buddy_accepted: '🤝',
-    booking_joined: '🎾',
-    booking_left:   '📋',
-    chat_message:   '💬',
+    buddy_request:  `<svg ${s}><circle cx="9" cy="7" r="4"/><path d="M3 21v-2a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v2"/><line x1="19" y1="8" x2="19" y2="14"/><line x1="16" y1="11" x2="22" y2="11"/></svg>`,
+    buddy_accepted: `<svg ${s}><circle cx="9" cy="7" r="4"/><path d="M3 21v-2a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v2"/><polyline points="16 11 18 13 22 9"/></svg>`,
+    booking_joined: `<svg ${s}><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/><path d="M8 14h.01M12 14h.01M16 14h.01"/></svg>`,
+    booking_left:   `<svg ${s}><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/><line x1="9" y1="14" x2="15" y2="14"/></svg>`,
+    chat_message:   `<svg ${s}><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>`,
   };
-  return icons[type] || '🔔';
+  return icons[type] || `<svg ${s}><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>`;
 }
 function updateNotifBadge(count) {
   const badge = document.getElementById('notif-bell-badge');
@@ -2725,7 +2733,7 @@ function openCalDay(dateStr) {
   if (potjes.length === 0) {
     document.getElementById('cal-day-body').innerHTML = `
       <div class="empty-state" style="padding:32px 0">
-        <div class="empty-icon">🎾</div>
+        <div class="empty-icon"><svg width="52" height="52" viewBox="0 0 52 52" fill="none" stroke="#C6C6C8" stroke-width="1.5" style="display:block;margin:0 auto"><ellipse cx="26" cy="20" rx="15" ry="17"/><line x1="26" y1="3" x2="26" y2="37"/><line x1="11" y1="20" x2="41" y2="20"/><rect x="22" y="37" width="8" height="12" rx="4"/></svg></div>
         <p class="empty-title">Geen potjes</p>
         ${!isPast ? `<p class="empty-sub">Er zijn nog geen potjes op deze dag.</p>
         <button class="btn btn-primary" onclick="hideCalDayModal(); showNewBookingModalForDate('${dateStr}')">Potje aanmaken</button>` : ''}
